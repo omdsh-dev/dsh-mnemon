@@ -3,12 +3,6 @@ import { IconChevronDownOutlineRegular, Menu, Switch } from '@deepseek-ai/dsh-cl
 import css from './MnemonSettingsCard.module.css'
 import { Reveal, TARGET } from './feedback.tsx'
 
-/**
- * The configuration's class names that Memory Spaces' own settings use, so they
- * draw as the shipped settings do. They are API: an installed Memory Spaces,
- * older or newer than this Starter, looks its classes up by these names, so
- * renaming or removing one unstyles it.
- */
 export const MEMORY_SETTINGS_CLASS_NAMES = [
   'configFeedback', 'editor', 'editorHeading', 'editorNote', 'embeddingFillOutcome', 'embeddingSpaceCount',
   'embeddingSpaceName', 'embeddingSpaceState', 'embeddingSpaces', 'embeddingTest', 'error', 'fieldGrid',
@@ -22,13 +16,10 @@ export const MEMORY_SETTINGS_CLASS_NAMES = [
 ] as const
 export type MemorySettingsClass = typeof MEMORY_SETTINGS_CLASS_NAMES[number]
 
-/** The configuration's class map, by the names in MEMORY_SETTINGS_CLASS_NAMES. */
 export const memorySettingsStyles = css as Readonly<Record<MemorySettingsClass, string>>
 
-/** Marks a row as the place a component's state shows, so the page can point at it. */
 const targetOf = (target: string | undefined) => target === undefined ? {} : { [TARGET]: target }
 
-/** One option of a settings selector; the detail explains it in the menu and under the row title. */
 export interface SettingOption<T extends string> {
   value: T
   label: string
@@ -36,10 +27,6 @@ export interface SettingOption<T extends string> {
   disabled?: boolean
 }
 
-/**
- * A DSH preference row: title and hint on the left, one control on the right.
- * Shared by Mnemon Settings and the Plugins page composition.
- */
 export function SettingRow(props: { title: string; titleId?: string | undefined; badge?: ReactNode; hint?: ReactNode; htmlFor?: string | undefined; children?: ReactNode; stacked?: boolean | undefined; target?: string | undefined }): JSX.Element {
   const title = props.htmlFor === undefined
     ? <strong id={props.titleId}>{props.title}</strong>
@@ -55,7 +42,6 @@ export function SettingRow(props: { title: string; titleId?: string | undefined;
   </div>
 }
 
-/** The DSH settings selector: a gray button that opens a Menu of the options. */
 export function SettingSelect<T extends string>(props: { labelledBy: string; value: T; options: readonly SettingOption<T>[]; disabled?: boolean | undefined; onChange: (value: T) => void }): JSX.Element {
   const [open, setOpen] = useState(false)
   const valueId = useId()
@@ -80,7 +66,6 @@ export function SettingSelect<T extends string>(props: { labelledBy: string; val
   />
 }
 
-/** A row whose control is a selector; the chosen option's detail doubles as the hint. */
 export function SelectRow<T extends string>(props: { id: string; label: string; hint?: string | undefined; value: T; options: readonly SettingOption<T>[]; disabled?: boolean | undefined; target?: string | undefined; onChange: (value: T) => void }): JSX.Element {
   const titleId = `${props.id}-title`
   const detail = props.options.find(option => option.value === props.value)?.detail
@@ -89,10 +74,6 @@ export function SelectRow<T extends string>(props: { id: string; label: string; 
   </SettingRow>
 }
 
-/**
- * A row whose control is the DSH Switch. A note under the hint states what the
- * switch depends on and offers what resolves it; it slides in and out.
- */
 export function ToggleRow(props: { id: string; label: string; titleId?: string | undefined; badge?: ReactNode; hint: string; checked: boolean; disabled: boolean; ariaLabel?: string | undefined; note?: ReactNode; target?: string | undefined; onChange: (value: boolean) => void }): JSX.Element {
   const title = <strong id={props.titleId}>{props.label}</strong>
   return <div className={css.toggleRow} id={props.id} {...targetOf(props.target)}>
@@ -107,12 +88,6 @@ export function ToggleRow(props: { id: string; label: string; titleId?: string |
   </div>
 }
 
-/**
- * Smoothly animated collapsible disclosure for advanced or secondary settings.
- * Unmounts its body while collapsed so hidden controls are never focusable or
- * editable via keyboard navigation, while parent `useStaged` state preserves
- * unsaved edits across collapse/expand and section deep-links auto-expand it.
- */
 export function AdvancedSection(props: {
   title: ReactNode
   hint?: ReactNode

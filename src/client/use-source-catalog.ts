@@ -29,8 +29,6 @@ function bindSourceManagementClient(client: MnemonClient, instance: MemorySource
       operations: instance.assistance,
       execute: async (operation: string, input: JsonValue, options: { expectedRevision: string; confirmed: boolean }) => {
         assertCurrent()
-        // These clean task-Agent workflows follow the inspected Sidebar root;
-        // normal Source edits keep their existing session-aware write path.
         const task = ['agent-search', 'supervise', 'body-create', 'body-metadata-maintain'].includes(operation)
         return write(() => (task ? taskClient : client).assistSource(instance.sourceInstanceKey, operation, input, options.expectedRevision, options.confirmed))
       },
@@ -52,7 +50,6 @@ function bindSourceManagementClient(client: MnemonClient, instance: MemorySource
       }
       entry.waiters += 1
       const result = await entry.promise
-      // Clone only when concurrent callers share one in-flight response object.
       return entry.waiters > 1 ? structuredClone(result) : result
     },
     mutate: (operation, input, options) => write(() => client.mutateSourceManagement(
@@ -62,22 +59,10 @@ function bindSourceManagementClient(client: MnemonClient, instance: MemorySource
       options.expectedRevision ?? instance.revision,
       options.confirmed,
     )),
-    // The catalog a page offers as a per-run choice is the task Agent's own
-    // directory, asked through the task-scoped client so a session's route is
-    // reported from the conversation that will actually run the work.
     models: async () => { assertCurrent(); return taskClient.taskAgentModels(true) },
   }
 }
 
-/**
- * The Source instances that run in one view context, read again whenever `revision` moves: a management client
- * bound to each, the registered pages whose Source runs, and the Source types the descriptor-driven management
- * page shows, those without a page of their own or with configuration fields.
- *
- * `scopeContextKey` omits `sessionId` so switching conversations within the same storage scope and workspace
- * retains the catalog in place without unmounting active Source pages while `viewContextKey` still fences stale
- * session-bound writes.
- */
 export function useSourceCatalog(
   client: MnemonClient,
   taskClient: MnemonClient,
@@ -123,8 +108,6 @@ export function useSourceCatalog(
     const reusable = previous?.client === client && previous.taskClient === taskClient && previous.context === viewContextKey && previous.generation === sourceCatalog?.generationId
     const values = new Map<string, { signature: string; management: MnemonSourceManagementClient }>()
     for (const source of sourceInstances) {
-      // Re-reading an unchanged catalog must not restart every Source page. Include
-      // the whole descriptor so revisions, authority hints and extension changes count.
       const signature = JSON.stringify(source)
       const prior = reusable ? previous.values.get(source.sourceInstanceKey) : undefined
       values.set(source.sourceInstanceKey, prior?.signature === signature ? prior : { signature, management: bindSourceManagementClient(client, source, taskClient, () => {

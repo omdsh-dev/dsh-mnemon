@@ -9,25 +9,16 @@ import type { MnemonClientContext } from './dsh-context.ts'
 import { useMnemonSessionId, type MnemonSessionBinding } from './session-binding.ts'
 
 interface MnemonSettingsHostProps extends Omit<MnemonSettingsCardProps, 'sessionId' | 'workspaceId' | 'workspaceLabel' | 'language' | 'componentSettings'>, Partial<PropsRenderSlots<typeof MNEMON_COMPONENT_SETTINGS_SLOT>> {
-  /** The DSH Plugins page renders a bundle's configuration as its `page` view only. */
   view: PluginConfigViewProps['view']
   currentSession: MnemonSessionBinding
   localeRuntime: LocaleRuntime
   sessions: MnemonClientContext['sessions']
   workspaces: MnemonClientContext['workspaces']
-  /** The components that contributed settings to their pages. */
   componentSettingsDirectory?: ComponentSettingsDirectory
-  /** What the page lends the shipped components whose settings dsh-mnemon used to draw. */
   componentHost?: ComponentHosts
-  /**
-   * Renders a contribution on a page that does not own the settings region,
-   * such as DSH's row page, or the configuration when a shell draws it
-   * without DSH's renderSlot.
-   */
   renderContributed?: (packageName: string, props: MemoryComponentSettingsProps) => ReactNode
 }
 
-/** The dsh-mnemon bundle page body; root-slot injection is cached, so session and workspace stay live here. */
 export function MnemonSettingsHost({ view, currentSession, sessions, workspaces, localeRuntime, componentSettingsDirectory, componentHost, renderSlot, renderContributed, ...props }: MnemonSettingsHostProps): JSX.Element | null {
   const sessionId = useMnemonSessionId(currentSession)
   const subscribeSessions = useCallback((listener: () => void) => sessions.list.subscribe(listener), [sessions.list])
@@ -46,8 +37,6 @@ export function MnemonSettingsHost({ view, currentSession, sessions, workspaces,
   const subscribeDirectory = useCallback((listener: () => void) => componentSettingsDirectory?.subscribe(listener) ?? (() => {}), [componentSettingsDirectory])
   const getDirectory = useCallback(() => componentSettingsDirectory?.getSnapshot(), [componentSettingsDirectory])
   const contributed = useSyncExternalStore(subscribeDirectory, getDirectory, getDirectory)
-  // Each component's page renders the settings it registered, keyed by its package name:
-  // through the region where this page declares it, otherwise as registered.
   const componentSettings = useMemo<ComponentSettingsSource | undefined>(() => (renderSlot === undefined && renderContributed === undefined) || contributed === undefined ? undefined : {
     has: packageName => contributed.has(packageName),
     render: (entry, page) => {
@@ -77,11 +66,6 @@ export function MnemonSettingsHost({ view, currentSession, sessions, workspaces,
   />
 }
 
-/**
- * DSH's page for one component row: the component's page alone. The settings
- * region is declared by the bundle's configuration, so contributions render as
- * they were registered rather than through a slot of this entry.
- */
 export function MnemonComponentRowHost(props: Omit<MnemonSettingsHostProps, 'renderSlot' | '__renders'> & { component: string }): JSX.Element | null {
   return <MnemonSettingsHost {...props} />
 }

@@ -4,31 +4,20 @@ import { MnemonClient } from './api.ts'
 import type { MnemonChangeSignal } from './change-signal.ts'
 import type { MemoryComponentConfigurationSnapshot, MemoryComponentHost } from './component-ui.tsx'
 
-/** What dsh-mnemon serves a shipped component whose settings it used to draw itself. */
 interface Lent {
-  /** Configuration keys its settings read. */
   reads: readonly string[]
-  /** The ones it owns and may write. */
   owns: readonly string[]
-  /** Host operations on the read and write channels, by the names the Host serves them under. */
   read: readonly MnemonRpcEndpoint<typeof MNEMON_READ_CHANNEL>[]
   write: readonly MnemonRpcEndpoint<typeof MNEMON_WRITE_CHANNEL>[]
-  /**
-   * Reads the settings make on their own, which a later mount may join while the same one is
-   * under way at the same configuration revision. A read the user asks for is never joined.
-   */
   join: readonly string[]
 }
 
 const LENT: Readonly<Record<string, Lent>> = {
-  // Memory Spaces' Providers, Space policy, recall parameters and the embedding runtime only Mnemon
-  // Native reads. Where memory is stored scopes a Provider, and a read-only Mnemon takes no fill.
   'dsh-mnemon-source-memory-spaces': {
     reads: ['embedding', 'persistenceStrategy', 'defaultRecallLimit', 'recallQuality', 'timeoutMs', 'storageScope', 'writeEnabled'],
     owns: ['embedding', 'persistenceStrategy', 'defaultRecallLimit', 'recallQuality', 'timeoutMs'],
     read: ['status-summary', 'embedding-status', 'provider-services'],
     write: ['embedding-fill', 'provider-service-update'],
-    // An embedding test checks the connection as it is now, so it always asks the Host.
     join: ['status-summary', 'provider-services'],
   },
 }
@@ -39,14 +28,12 @@ export interface ComponentHostServices {
   componentChanges?: Pick<MnemonChangeSignal, 'bump'> | undefined
 }
 
-/** The host one component's settings get on a page opened for a conversation and workspace, or none. */
 export type ComponentHosts = (packageName: string, sessionId?: string, workspaceId?: string) => MemoryComponentHost | undefined
 
 function configurationOf(scope: ClientSettingsScope<Config>, lent: Lent): MemoryComponentHost['configuration'] {
   let source: ClientSettingsSnapshot<Config> | undefined
   let snapshot: MemoryComponentConfigurationSnapshot = { status: 'loading', writable: false }
   return {
-    // A snapshot that has not changed reads as the same object, as React's external stores require.
     getSnapshot() {
       const current = scope.getSnapshot()
       if (current === source) return snapshot
@@ -67,16 +54,8 @@ function configurationOf(scope: ClientSettingsScope<Config>, lent: Lent): Memory
   }
 }
 
-// The page binds every operation to its own conversation and workspace; a component cannot name others.
 const SCOPE_FIELDS = ['sessionId', 'workspaceId']
 
-/**
- * The hosts a page lends shipped components, one per component, conversation
- * and workspace, so a component's effects see the same object on every render
- * and what its settings retain survives their mounting again. The client keeps
- * them while it runs, as it keeps one settings scope: one small object for each
- * conversation and workspace the page was opened for.
- */
 export function createComponentHosts(services: ComponentHostServices): ComponentHosts {
   const configurations = new Map<string, MemoryComponentHost['configuration']>()
   const hosts = new Map<string, MemoryComponentHost>()
@@ -101,10 +80,6 @@ export function createComponentHosts(services: ComponentHostServices): Component
       if (named.length > 0) return Promise.reject(new Error(`${operation} runs in the page's conversation and workspace; it takes no ${named.join(' or ')}`))
       return client!.componentOperation(mode, endpoint, input ?? {})
     }
-    // A read the settings start while the same one is under way joins it, as when the
-    // component's own settings replace dsh-mnemon's while those still load. Only one started
-    // at the configuration's current revision: an older one answers for a configuration that
-    // has since changed, such as another storage scope.
     const reading = new Map<string, Promise<unknown>>()
     const read = (operation: string, input: MemoryJsonValue | undefined): Promise<unknown> => {
       if (!lent.join.includes(operation)) return call('read', lent.read, operation, input)

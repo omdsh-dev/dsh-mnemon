@@ -9,12 +9,9 @@ import css from './MnemonSettingsCard.module.css'
 import { message } from './page-kit.tsx'
 import { failureText, reasonOf, runtimeArchiveNotice, when } from './sync-view.ts'
 
-/** How many backups one page of the branch history holds. */
 const HISTORY_PAGE = 20
-/** How many conflicting pairs the comparison lists before it only counts them. */
 const SHOWN_CONFLICTS = 5
 
-/** One component's item count as a reader reads it. */
 export function componentCount(t: MnemonTranslate, component: MnemonPackComponent, count: number): string {
   if (component === 'runtime') return t('config.syncCountRuntime', { count })
   if (component === 'documents') return t('config.syncCountDocuments', { count })
@@ -32,7 +29,6 @@ function clip(value: string, max: number): string {
   return text.length <= max ? text : text.slice(0, max - 1) + '…'
 }
 
-/** The commit message a sync writes on its own, which says nothing a backup's time does not. */
 const AUTOMATIC_MESSAGE = /^Mnemon sync \d{4}-\d{2}-\d{2}T[\d:.]+Z$/u
 
 function summaryLine(t: MnemonTranslate, summary: readonly MnemonPackComponentSummary[]): string {
@@ -42,22 +38,15 @@ function summaryLine(t: MnemonTranslate, summary: readonly MnemonPackComponentSu
 interface SyncDialogProps {
   client: MnemonClient
   repoUrl: string
-  /** The credential the Host offers the repository, which a refusal is then said to be about. */
   credential: MnemonSyncCredentialSource
   t: MnemonTranslate
   onClose: () => void
 }
 
-/**
- * The versions the repository holds, newest first: when each was synced, from
- * which computer, and what it held. A page is read at a time; the commit is a
- * quiet tag, because the time and the computer are what a reader looks for.
- */
 export function SyncHistoryDialog({ client, repoUrl, credential, t, onClose }: SyncDialogProps): JSX.Element {
   const [history, setHistory] = useState<MnemonSyncBackupList | null>(null)
   const [busy, setBusy] = useState(true)
   const [failed, setFailed] = useState<string | null>(null)
-  // The Host reads a bounded window of the branch; a page that adds nothing is its end.
   const [capped, setCapped] = useState(false)
 
   const load = useCallback(async (limit?: number): Promise<void> => {
@@ -104,27 +93,16 @@ export function SyncHistoryDialog({ client, repoUrl, credential, t, onClose }: S
 }
 
 interface SyncCompareDialogProps extends SyncDialogProps {
-  /** Whether this Host accepts writes; reading the comparison never needs them. */
   writable: boolean
-  /** Runs the same sync the row's button runs; answers why it did not finish, or null. */
   onSync: () => Promise<string | null>
-  /** A merge ran here and may have written, so the section reads its status again. */
   onChanged: () => void
 }
 
-/**
- * What a sync would do, read before running it: per component whether the two
- * sides differ, and for runtime memory which entries are only on one side, which
- * subjects both wrote differently, which the branch holds that this computer
- * deleted, and which removals the branch recorded. Reading writes nothing; the
- * footer offers the sync itself and a merge that publishes nothing.
- */
 export function SyncCompareDialog({ client, repoUrl, credential, writable, t, onClose, onSync, onChanged }: SyncCompareDialogProps): JSX.Element {
   const [preview, setPreview] = useState<MnemonSyncPreview | null>(null)
   const [difference, setDifference] = useState<MnemonSyncDiff | null>(null)
   const [busy, setBusy] = useState<'read' | 'merge' | 'revive' | 'sync' | null>('read')
   const [failed, setFailed] = useState<string | null>(null)
-  // A branch that holds no backup yet is not a dead end: the first sync is what creates it.
   const [empty, setEmpty] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [showConflicts, setShowConflicts] = useState(false)
@@ -132,8 +110,6 @@ export function SyncCompareDialog({ client, repoUrl, credential, writable, t, on
   const read = useCallback(async (): Promise<void> => {
     setBusy('read'); setFailed(null); setEmpty(false)
     try {
-      // Both reads take the channel's lock, so they run one after the other: the second
-      // would otherwise wait on the first and could give up while it fetches.
       const nextPreview = await client.previewSync()
       const nextDifference = await client.syncDiff()
       setPreview(nextPreview); setDifference(nextDifference)
@@ -157,10 +133,7 @@ export function SyncCompareDialog({ client, repoUrl, credential, writable, t, on
     } catch (reason) {
       failure = failureText(t, reasonOf(reason), message(reason), repoUrl, credential)
     } finally { setBusy(null) }
-    // A merge that failed can have written already: the Host reads Memory Spaces again
-    // after the write, and that read can fail on its own.
     onChanged()
-    // Reading the comparison again clears this dialog's line, so a failure is said after it.
     await read()
     if (failure !== null) setFailed(failure)
   }
@@ -171,7 +144,6 @@ export function SyncCompareDialog({ client, repoUrl, credential, writable, t, on
     const failure = await onSync()
     setBusy(null)
     if (failure === null) { onClose(); return }
-    // The row's own line sits behind this dialog, so the failure is said here too.
     await read()
     setFailed(failure)
   }
@@ -186,15 +158,11 @@ export function SyncCompareDialog({ client, repoUrl, credential, writable, t, on
   const conflicted = new Set(conflicts.flatMap(conflict => [conflict.target + '\u0000' + conflict.local.content, conflict.target + '\u0000' + conflict.remote.content]))
   const heldBack = difference?.heldBack ?? 0
   const removals = difference?.remoteTombstones.length ?? 0
-  // Each entry is counted once, in the kind a merge treats it as: the branch's entries this
-  // computer deleted stay out of "only on the remote", and the entries the branch's removals
-  // will take away stay out of "only here"; both are said apart below.
   const remoteOnly = difference === null ? 0 : Math.max(difference.remoteOnly.filter(entry => !conflicted.has(entry.target + '\u0000' + entry.content)).length - heldBack, 0)
   const localOnly = difference === null ? 0 : Math.max(difference.localOnly.filter(entry => !conflicted.has(entry.target + '\u0000' + entry.content)).length - removals, 0)
   const differs = (component: MnemonPackComponent): boolean => preview?.components.find(entry => entry.component === component)?.changed === true
   const runtimeDiffers = remoteOnly + localOnly + conflicts.length > 0
   const anything = runtimeDiffers || removals + heldBack > 0 || differs('documents') || differs('memory-spaces')
-  // A merge writes something only where the branch brings an entry, a wording or a removal in.
   const mergeable = remoteOnly + conflicts.length + removals > 0 || differs('documents') || differs('memory-spaces')
   const ready = preview !== null && difference !== null
   const machine = difference?.remote.machine === undefined ? t('config.syncHistoryUnknownMachine') : difference.remote.machine.label.trim() || difference.remote.machine.id
@@ -254,7 +222,6 @@ export function SyncCompareDialog({ client, repoUrl, credential, writable, t, on
   </MnemonDialog>
 }
 
-/** A short question before an action whose consequence is easy to miss. */
 export function SyncConfirmDialog(props: { title: string; body: string; confirm: string; busy?: boolean; error?: string | null; t: MnemonTranslate; onConfirm: () => void; onClose: () => void }): JSX.Element {
   return <MnemonDialog title={props.title} closeLabel={props.t('common.close')} busy={props.busy === true} onClose={props.onClose}
     footer={<>

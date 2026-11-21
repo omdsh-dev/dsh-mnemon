@@ -4,25 +4,12 @@ import type { MnemonTranslate } from './locales.ts'
 import css from './MnemonSettingsCard.module.css'
 import { message } from './page-kit.tsx'
 
-/**
- * The two ways a group of settings saves. A choice (switch or selector)
- * applies when it is made; edits that need checking, or that move data, wait
- * for their group's Apply. No group joins another group's save.
- */
-
-// Typed by shape: `dsh-mnemon/client` exports this module, and declarations that
-// reach the Host protocol bring the SDK's cordis Context augmentation into the
-// client's types, which splits Context in a plugin's standalone typecheck.
 export function useScope<S>(scope: { getSnapshot(): S; subscribe(listener: () => void): () => void }): S {
   const subscribe = useMemo(() => scope.subscribe.bind(scope), [scope])
   const getSnapshot = useMemo(() => scope.getSnapshot.bind(scope), [scope])
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
-/**
- * One group's staged edits, applied together with its own button. Edits that
- * come back to the saved values leave nothing to apply.
- */
 export function useStaged<D>(value: D, write: (draft: D) => Promise<void>) {
   const [draft, setDraft] = useState(value)
   const [edited, setDirty] = useState(false)
@@ -50,10 +37,6 @@ export function useStaged<D>(value: D, write: (draft: D) => Promise<void>) {
   }
 }
 
-/**
- * A choice that saves when it is made: it shows the chosen value at once, and
- * the saved one again if the write fails.
- */
 export function useLive<T>(saved: T, write: (value: T) => Promise<void>) {
   const [pending, setPending] = useState<{ value: T } | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
@@ -72,18 +55,10 @@ export function useLive<T>(saved: T, write: (value: T) => Promise<void>) {
   }
 }
 
-/**
- * A failed write, beside the controls that made it. `t` is the translation the
- * settings use: the configuration page sets none around a component's settings.
- */
 export function WriteFailure(props: { error: string | null; t: MnemonTranslate }): JSX.Element | null {
   return props.error === null ? null : <p className={css.panelError} role="alert">{props.t('config.saveFailed', { error: props.error })}</p>
 }
 
-/**
- * Discard and Apply for one group, shown while it has edits; `note` says what
- * applying does. `t` is the translation the settings use, as for WriteFailure.
- */
 export function PanelActions(props: { dirty: boolean; saving: boolean; invalid: string | null; failed: string | null; applied: boolean; disabled: boolean; note?: string; t: MnemonTranslate; onDiscard: () => void; onApply: () => void }): JSX.Element | null {
   const { t } = props
   if (!props.dirty) return props.applied ? <p className={css.panelNote} role="status">{t('config.ready')}</p> : null

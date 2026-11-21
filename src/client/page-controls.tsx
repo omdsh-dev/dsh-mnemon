@@ -4,18 +4,10 @@ import { useT } from './page-kit.tsx'
 import type { MnemonKey, MnemonTranslate } from './locales.ts'
 import css from './PageControls.module.css'
 
-/**
- * Controls every memory page shares, so a search, a choice or a write receipt
- * looks and behaves the same on each page: the DSH input and its search icon,
- * the DSH selector and its menu, and one receipt for a task Agent's write.
- */
-
-/** A search box: the DSH input with its search icon. */
 export function SearchField({ label, className, ...input }: { label: string; className?: string | undefined } & InputHTMLAttributes<HTMLInputElement>): JSX.Element {
   return <Input {...input} aria-label={label} icon={<IconSearchOutlineRegular size={16} />} className={[css.search, className].filter(Boolean).join(' ')} />
 }
 
-/** One choice of a {@link SelectField}; the detail explains it in the menu. */
 export interface FieldOption<T extends string> {
   value: T
   label: string
@@ -23,34 +15,20 @@ export interface FieldOption<T extends string> {
   disabled?: boolean | undefined
 }
 
-/** A labelled choice: the DSH selector, opening a menu of the options. */
 export function SelectField<T extends string>(props: {
   label: string
   value: T
   options: readonly FieldOption<T>[]
   disabled?: boolean | undefined
-  /** Keep the label for assistive technology only, when the row already says it. */
   hideLabel?: boolean | undefined
-  /** `sm` for compact toolbars and headers, as the DSH small button. */
   size?: 'md' | 'sm' | undefined
-  /** Label beside the selector instead of above it. */
   inline?: boolean | undefined
-  /** A fuller name for assistive technology than the visible label. */
   ariaLabel?: string | undefined
   className?: string | undefined
-  /**
-   * Repeat the chosen option's detail under its name in the selector itself, as
-   * the menu shows it. Off by default: most fields have no room for a second line.
-   */
   triggerDetail?: boolean | undefined
   onChange: (value: T) => void
 }): JSX.Element {
   const [open, setOpen] = useState(false)
-  /**
-   * Which way the menu opens. A menu taller than the room below its anchor is
-   * pushed up by the portal until it covers the button, so the selector decides
-   * the side itself once it knows how much room is left and how much is above.
-   */
   const [side, setSide] = useState<'bottom' | 'top'>('bottom')
   const labelId = useId()
   const nameId = useId()
@@ -88,7 +66,6 @@ export function SelectField<T extends string>(props: {
             setOpen(false)
             return
           }
-          // 4px for the menu's gap and 12px for the portal's viewport margin.
           const rect = event.currentTarget.getBoundingClientRect()
           const below = Math.floor(window.innerHeight - rect.bottom - 4 - 12)
           const above = Math.floor(rect.top - 4 - 12)
@@ -111,7 +88,6 @@ export function SelectField<T extends string>(props: {
   </span>
 }
 
-/** How a task Agent's write ended, as the receipt names it. */
 export type WriteOutcome = 'written' | 'updated' | 'pending' | 'skipped' | 'partial' | 'unfinished'
 
 const OUTCOMES: Readonly<Record<string, WriteOutcome>> = {
@@ -122,7 +98,6 @@ const OUTCOMES: Readonly<Record<string, WriteOutcome>> = {
   partial: 'partial',
 }
 
-/** Map a write action from a receipt to what the user reads. */
 export function writeOutcome(action: string): WriteOutcome {
   return OUTCOMES[action] ?? 'unfinished'
 }
@@ -135,22 +110,11 @@ const LABELS: Readonly<Record<WriteOutcome, MnemonKey>> = {
   skipped: 'receipt.skipped', partial: 'receipt.partial', unfinished: 'receipt.unfinished',
 }
 
-/**
- * What a task Agent did with a candidate: the outcome, the Agent's own
- * summary, and, when something was written, a way to see it. A memory saved
- * without a vector says so on a line of its own (#388).
- */
 export function WriteReceipt(props: {
   action?: string | undefined
   summary?: string | undefined
   error?: string | undefined
   unembedded?: boolean | undefined
-  /**
-   * Whether DSH manages the Mnemon Native embedding settings. Left at their
-   * default (`false`), they set up no embedding service, so a memory without a
-   * vector gets a neutral note; managed, or when this is omitted, it gets the
-   * caution that embedding did not succeed.
-   */
   embeddingManaged?: boolean | undefined
   t?: MnemonTranslate | undefined
   onView?: (() => void) | undefined
@@ -176,7 +140,6 @@ export function WriteReceipt(props: {
   </div>
 }
 
-/** Whether a task Agent can take a write now. */
 export function TaskAgentTag(props: { available: boolean; t?: MnemonTranslate | undefined }): JSX.Element {
   const shared = useT()
   const t = props.t ?? shared

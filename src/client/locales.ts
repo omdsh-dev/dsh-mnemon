@@ -1,5 +1,3 @@
-/** Mnemon workspace copy, synchronized with DSH's global locale service. */
-
 export const zh = {
   'composer.expand': '展开输入框',
   'composer.collapse': '收起输入框',
@@ -787,7 +785,6 @@ export const zh = {
   'config.syncMachineNameInvalid': '名称最多 120 个字符，且只能占一行',
   'config.syncMachineRenameNote': '保存后，之后的同步使用新名称；已有的版本保留原来的名称',
   'config.syncAdvancedSaved': '已保存高级设置。',
-  // Review proposals: an agent reads merged memory, a person decides what changes.
   'config.reconcileTitle': '记忆整理',
   'config.reconcileDescription': '模型读合并后的记忆，只提出建议，等你审查后才写入',
   'review.reconcile': '整理记忆',
@@ -1724,7 +1721,6 @@ const coreEn = {
   'config.syncMachineNameInvalid': 'Up to 120 characters on one line',
   'config.syncMachineRenameNote': 'After saving, later syncs use the new name; earlier versions keep theirs',
   'config.syncAdvancedSaved': 'Saved the advanced settings.',
-  // Review proposals: an agent reads merged memory, a person decides what changes.
   'config.reconcileTitle': 'Memory reconciliation',
   'config.reconcileDescription': 'A model reads the merged memory and proposes changes; nothing is written until you review it',
   'review.reconcile': 'Reconcile',

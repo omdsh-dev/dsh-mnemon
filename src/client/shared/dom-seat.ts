@@ -1,9 +1,5 @@
 import { ExternalStore } from './store.ts'
 
-/**
- * Token-fenced single-owner seat: offering a newer value supersedes the old
- * one, and a late disposer from an older owner never clears the newer value.
- */
 export class HeldSeat<T> extends ExternalStore<T | undefined> {
   private owner: symbol | undefined
 
@@ -24,19 +20,12 @@ export class HeldSeat<T> extends ExternalStore<T | undefined> {
 }
 
 export interface RafCoalescer {
-  /** Schedule `run` on the next animation frame; multiple calls in one frame coalesce into one. */
   schedule(): void
-  /** Run immediately and clear any pending frame. */
   flush(): void
-  /** Cancel any scheduled animation frame without running. */
   cancel(): void
   readonly pending: boolean
 }
 
-/**
- * Coalesces high-frequency DOM / resize callbacks onto a single animation frame
- * so streaming chat mutations never trigger redundant layout or DOM queries.
- */
 export function createRafCoalescer(run: () => void): RafCoalescer {
   let frameId: number | undefined
   let microtaskToken: object | undefined

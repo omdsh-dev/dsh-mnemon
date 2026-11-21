@@ -1,10 +1,3 @@
-/*
- * The dsh-mnemon configuration on its DSH Plugins page, between the plugin's
- * description and its components. Groups follow the page's own sections,
- * rows follow the DSH preference row, the Provider list follows the DSH model
- * provider cards, and controls are the DSH Switch, the Menu-backed selector
- * and the settings-form fields.
- */
 .page {
   box-sizing: border-box;
   display: flex;
@@ -16,9 +9,6 @@
   font-family: inherit;
 }
 
-/* Every root the settings draw in: the page, and each component page, which
-   DSH's Modal renders outside it. Element resets carry no weight, so every
-   control class below wins. */
 .surface { color: var(--dsw-alias-label-primary); }
 :where(.page, .surface) *, :where(.page, .surface) *::before, :where(.page, .surface) *::after { box-sizing: border-box; }
 :where(.page, .surface) :where(button, input, select, textarea) { color: inherit; font: inherit; }
@@ -45,12 +35,9 @@
 .sectionHeading p { grid-column: 1; max-width: 66ch; margin: 2px 0 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
 .sectionHeading .miniSpinner { grid-column: 2; grid-row: 1; }
 .sectionHeading > .boardLinks { grid-column: 1; padding-top: 6px; }
-/* About DSH's component list below the configuration, where the Starter's group row cannot be switched. */
 .componentListNote { max-width: 72ch; margin: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
-/* Groups whose controls write at once, unlike the staged groups saved from the bar below. */
 .appliesNow { grid-column: 2; grid-row: 1; align-self: center; border: .5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-xs); padding: 1px 6px; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; white-space: nowrap; }
 
-/* Preference rows: title and hint on the left, one control on the right, hairline between rows. */
 .rows { display: flex; min-width: 0; flex-direction: column; }
 .settingRow,
 .toggleRow {
@@ -72,7 +59,6 @@
 .settingCopy strong,
 .settingCopy label { color: var(--dsw-alias-label-primary); font-size: 14px; font-weight: 400; line-height: 22px; }
 .settingCopy small { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
-/* Title paired with an inline status or stage pill (e.g. Experimental, warning state). */
 .rowTitleLine,
 .boardRowTitle { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .rowTitleLine [data-tone],
@@ -81,32 +67,24 @@
 .settingControl { display: flex; min-width: 0; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 8px; }
 .settingRow[data-stacked] .settingControl { flex: 1 1 auto; justify-content: stretch; }
 .switch { flex: none; }
-/* What a switch depends on, with the action that resolves it; the dot carries the tone. */
 .rowNote { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-top: 4px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
 .groupCallout { margin: 8px 0 4px; }
 
-/* The memory composition, operated in place: a status line, the main
-   Strategy as a choice of one, then a switch per Source and enhancement with
-   its state beside it as DSH's component list shows it. */
 .boardSection { container-type: inline-size; }
 .board { display: flex; min-width: 0; flex-direction: column; margin-top: 10px; }
-/* Only a problem speaks: what is wrong with the composition and its one fix. */
 .boardProblem { margin: 0 0 4px; }
 .boardLoading { display: flex; min-height: 40px; align-items: center; gap: 8px; margin: 0; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
 .boardGroup { display: flex; min-width: 0; flex-direction: column; padding-top: 14px; }
 .boardGroupHead { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 8px; }
 .boardGroupHead h3 { margin: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; font-weight: 500; line-height: 18px; }
 .boardGroupHead span { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; white-space: nowrap; }
-/* A component's name opens its page too, underlined on hover; the gear is the visible way in. */
 .pageLink { appearance: none; display: inline-flex; max-width: 100%; align-items: center; border: 0; border-radius: var(--dsw-radius-sm); padding: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
 .pageLink > span { min-width: 0; overflow-wrap: anywhere; }
 .pageLink:hover > span { text-decoration: underline; text-underline-offset: 3px; }
 .settingCopy .pageLink { width: fit-content; color: var(--dsw-alias-label-primary); font-size: 14px; line-height: 22px; }
-/* The gear: a component's settings, on its page. */
 .boardIconButton { display: inline-grid; width: 28px; height: 28px; flex: none; place-items: center; border: 0; border-radius: var(--dsw-radius-sm); padding: 0; color: var(--dsw-alias-label-secondary); background: transparent; cursor: pointer; transition: background-color 120ms ease, color 120ms ease; }
 .boardIconButton:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
 .boardIconButton:active { background: var(--dsw-alias-interactive-bg-active); }
-/* The components a row relates to, named at a glance; each opens its page. */
 .boardLinks { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 4px; padding-top: 4px; }
 .boardLink { appearance: none; display: inline-flex; height: 20px; max-width: 100%; align-items: center; gap: 4px; border: .5px solid var(--dsw-alias-border-l3); border-radius: 999px; corner-shape: round; padding: 0 8px; color: var(--dsw-alias-label-tertiary); background: transparent; font: inherit; font-size: 11px; line-height: 1; white-space: nowrap; cursor: pointer; transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease; }
 .boardLink[data-on] { color: var(--dsw-alias-label-secondary); }
@@ -116,9 +94,6 @@
 .pageLink:focus-visible, .boardIconButton:focus-visible, .boardLink:focus-visible, .detailsBack:focus-visible, .boardSearch:focus-within { outline: none; box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); }
 .boardSearch { display: flex; min-width: 0; align-items: center; gap: 8px; margin: 12px 0 0; border: .5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); padding: 0 10px; color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-bg-base); }
 .boardSearch input { min-width: 0; height: 32px; flex: 1; border: 0; outline: none; color: var(--dsw-alias-label-primary); background: transparent; font: inherit; font-size: 13px; }
-/* A component's page: what it is, how it relates to the others, its options.
-   The dialog stays bounded within the viewport via DSH's modal frame inset
-   while its body scrolls cleanly beneath the pinned title and description. */
 .detailsDialog.detailsDialog { display: flex; width: min(600px, 100%); max-height: min(780px, 100%); flex-direction: column; padding-bottom: 0; overflow: hidden; }
 .detailsDialog > :not(.detailsScroll) { flex-shrink: 0; }
 .detailsScroll.detailsScroll { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; overflow: hidden; padding-bottom: 0; }
@@ -182,15 +157,12 @@
 }
 .detailsName:hover { border-color: var(--dsw-alias-border-l4); color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
 .detailsName:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); }
-/* Back to the page this one was opened from. */
 .detailsBack { appearance: none; display: inline-flex; width: fit-content; align-items: center; gap: 2px; margin: -4px 0 -6px -4px; border: 0; border-radius: var(--dsw-radius-sm); padding: 2px 4px; color: var(--dsw-alias-label-secondary); background: transparent; font: inherit; font-size: 12px; line-height: 18px; cursor: pointer; }
 .detailsBack:hover { color: var(--dsw-alias-label-primary); }
 .detailsMissing { color: var(--dsw-alias-label-secondary); }
 .detailsEffect { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
 .detailsBody .optionsPanel { margin: 0; border-radius: 0; padding: 0; background: transparent; }
-/* A component's page on DSH's own row page, under the title DSH draws. */
 .componentRowPage { display: flex; min-width: 0; flex-direction: column; gap: 16px; }
-/* What a component contributed to its page, after what its declarations give. */
 .detailsContributed { display: flex; min-width: 0; flex-direction: column; gap: 16px; border-top: .5px solid var(--dsw-alias-border-l2); padding-top: 14px; }
 .panelSection { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
 .preferenceSection { display: flex; min-width: 0; flex-direction: column; gap: 0; }
@@ -205,7 +177,6 @@
 .panelActions { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 8px; }
 .panelActions > span { min-width: 0; flex: 1; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
 .panelActions > span.panelError, .panelError { color: var(--dsw-alias-state-error-primary); }
-/* A group's Apply among preference rows reads as one more row. */
 .rows > .panelActions,
 .evolutionGroup > .panelActions { padding: 10px 0; border-bottom: .5px solid var(--dsw-alias-border-l2); }
 .rows > .panelNote,
@@ -217,7 +188,6 @@
 .boardOthersList > .boardRow:last-child { border-bottom: 0; padding-bottom: 4px; }
 .boardMain { padding-top: 12px; }
 .boardEmpty { margin: 0; padding: 12px 0 4px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
-/* Enhancements for other main Strategies, closed until asked for. */
 .boardOthers { display: flex; min-width: 0; flex-direction: column; padding-top: 10px; }
 .boardOthersToggle { display: inline-flex; width: fit-content; align-items: center; gap: 6px; margin-left: -4px; border: 0; border-radius: var(--dsw-radius-sm); padding: 2px 4px; color: var(--dsw-alias-label-secondary); background: transparent; font: inherit; font-size: 12px; font-weight: 500; line-height: 18px; cursor: pointer; }
 .boardOthersToggle:hover { color: var(--dsw-alias-label-primary); }
@@ -225,7 +195,6 @@
 .boardOthersToggle[aria-expanded='true'] > svg { transform: rotate(0deg); }
 .boardOthersList { display: flex; min-width: 0; flex-direction: column; }
 .boardFootnote { margin: 12px 0 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
-/* A component's own options, drawn from the fields it declares. */
 .optionsPanel { display: flex; min-width: 0; flex-direction: column; gap: 14px; margin-top: 12px; border-radius: var(--dsw-radius-lg); padding: 14px 16px; background: var(--dsw-alias-bg-module-platform); }
 .optionField { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
 .optionLabel { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; }
@@ -243,7 +212,6 @@
 .optionEmpty { margin: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
 .confirmDialog.confirmDialog { border-radius: var(--dsw-radius-lg); }
 .confirmCopy { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
-/* The row's state then its control, kept together on desktop and stacked only when narrow. */
 .boardControl { display: flex; min-width: 0; flex: 0 0 auto; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 6px 12px; margin-left: auto; }
 .boardState { display: inline-flex; min-width: 0; align-items: center; gap: 6px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; white-space: nowrap; }
 .boardState > span { display: inline-flex; align-items: center; line-height: 1; }
@@ -256,8 +224,6 @@
   .boardMain .boardControl { width: 100%; justify-content: stretch; }
   .boardMain .boardControl > :last-child { flex: 1; }
 }
-/* A host layout can leave a very narrow content column on phones. Keep each
-   row's name, state and switch; the explanations return at wider sizes. */
 @container (max-width: 180px) {
   .boardSection .sectionHeading p,
   .boardSection .settingCopy small { display: none; }
@@ -267,7 +233,6 @@
   .boardSection .settingCopy strong { overflow-wrap: anywhere; }
   .boardSection .boardControl { justify-self: end; }
 }
-/* Placeholder rows hold a group's height while its state loads. */
 .placeholderRow { display: flex; min-height: 70px; align-items: center; justify-content: space-between; gap: 16px; border-bottom: .5px solid var(--dsw-alias-border-l2); }
 .placeholderRow span { height: 12px; border-radius: 6px; background: var(--dsw-alias-bg-module-platform); animation: placeholder-pulse 1400ms ease-in-out infinite; }
 .placeholderRow span:first-child { width: 38%; }
@@ -278,7 +243,6 @@
   .placeholderRow span { animation: none; }
 }
 
-/* The DSH settings selector: platform fill, chevron, Menu below. */
 .selector {
   appearance: none;
   display: inline-flex;
@@ -372,7 +336,6 @@
 .numberInput:disabled,
 .compactTextInput:disabled { cursor: default; opacity: .45; }
 
-/* Subtle inline equivalent (e.g. 4 KiB beside 4096) and composite unit input box. */
 .inputEquiv {
   display: inline-flex;
   flex: none;
@@ -433,7 +396,6 @@
   pointer-events: none;
 }
 
-/* Crisp subsection kicker inside component settings dialogs. */
 .settingsSubheading {
   margin: 6px 0 2px;
   padding-top: 16px;
@@ -447,13 +409,11 @@
 .rows > .settingsSubheading:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .rows > :has(+ .settingsSubheading) { border-bottom: 0; }
 
-/* A follow-up under the row above it, such as a chosen task model route. */
 .rowDetail { display: flex; min-width: 0; flex-direction: column; gap: 10px; padding: 0 0 14px; border-bottom: .5px solid var(--dsw-alias-border-l2); }
 .settingRow:has(+ .rowDetail) { padding-bottom: 10px; border-bottom: 0; }
 .effectiveRoute { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
 .effectiveRoute code { display: inline-flex; height: 20px; min-width: 0; align-items: center; overflow: hidden; border: .5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-xs); padding: 0 7px; color: var(--dsw-alias-label-secondary); font-family: var(--dsw-font-mono, var(--ds-font-family-code, ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace)); font-size: 11px; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
 .effectiveRoute small { min-width: 0; overflow: hidden; font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
-/* The route and where it comes from read as one value. */
 .routeValue { display: inline-flex; min-width: 0; align-items: center; gap: 8px; }
 .warning { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 
@@ -504,7 +464,6 @@
 .advancedContent > .rows > .toggleRow:last-child { padding-bottom: 6px; border-bottom: 0; }
 @keyframes advanced-expand { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
-/* Conditional subgroup revealed flush beneath an enabling switch (matches native DSH flat rows). */
 .evolutionGroup {
   display: flex;
   min-width: 0;
@@ -513,7 +472,6 @@
 }
 .evolutionGroup > :last-child { border-bottom: 0; }
 
-/* Flush dependent controls under a toggle (e.g. daily auto-adopt quota). */
 .nestedBudgetGroup {
   display: flex;
   min-width: 0;
@@ -552,7 +510,6 @@
 }
 @keyframes settings-spin { to { transform: rotate(360deg); } }
 
-/* Provider cards, as the DSH model provider cards; the editor is the platform-filled block. */
 .providerList { display: flex; min-width: 0; flex-direction: column; gap: 8px; margin-top: 10px; }
 .providerRow {
   overflow: hidden;
@@ -617,21 +574,17 @@ details[open] > summary .providerChevron { transform: rotate(180deg); }
 .embeddingTest { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; }
 .embeddingTest > span { min-width: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 .embeddingTest > span.error { color: var(--dsw-alias-state-error-primary); }
-/* The status line wraps; the button keeps its label on one line. */
 .embeddingTest > button { flex: none; white-space: nowrap; }
-/* Each Mnemon Native space's vectors under the status line (#392). */
 .embeddingSpaces { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
 .embeddingSpaces > small,
 .embeddingSpaces > p { margin: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 .embeddingSpaces > ul { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
-/* The name gives way first; once fewer than about six characters of it would show, the count and the button take a line of their own. */
 .embeddingSpaces li { display: flex; min-width: 0; min-height: 28px; flex-wrap: wrap; align-items: center; gap: 0 12px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 20px; }
 .embeddingSpaceName { min-width: 0; flex: 1 1 6em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .embeddingSpaceState { flex: none; color: var(--dsw-alias-label-tertiary); white-space: nowrap; }
 .embeddingSpaceCount { flex: none; margin-left: auto; font-variant-numeric: tabular-nums; }
 .embeddingSpaces li > button { flex: none; white-space: nowrap; }
 .embeddingSpaces li[data-missing] > .embeddingSpaceCount { color: var(--dsw-alias-state-warn-label, var(--dsw-alias-label-secondary)); }
-/* A space that could not be read keeps its name, with the reason on a line of its own. */
 .embeddingSpaces li[data-failed] > .embeddingSpaceCount { min-width: 0; flex: 1 1 100%; margin-left: 0; color: var(--dsw-alias-state-error-primary); overflow-wrap: anywhere; }
 .embeddingFillOutcome { margin: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 .embeddingFillOutcome.error { color: var(--dsw-alias-state-error-primary); }
@@ -641,7 +594,6 @@ details[open] > summary .providerChevron { transform: rotate(180deg); }
 .providerLocationField { padding-top: 2px; }
 .nativeLocation { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
 
-/* Default or custom location, as the DSH SegmentedControl. */
 .inlineChoices {
   --dsh-segment-count: 2;
   --dsh-segment-index: 0;
@@ -683,7 +635,6 @@ details[open] > summary .providerChevron { transform: rotate(180deg); }
 .inlineChoices input:focus-visible + span { box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); }
 .inlineChoices input:disabled + span { cursor: default; opacity: .4; }
 
-/* Stacked fields, as the DSH settings form: label above a 34px input. */
 .fieldGrid,
 .providerSettingsGrid { display: grid; min-width: 0; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px; }
 .providerSettingsGrid,
@@ -712,10 +663,6 @@ details[open] > summary .providerChevron { transform: rotate(180deg); }
 .fieldGrid input::placeholder,
 .providerFieldControl input::placeholder { color: var(--dsw-alias-label-dimmed); }
 
-/* Selects inside editors use the DSH model editor's select: the OS arrow is
-   replaced by a 12px chevron inset on the right. THEME-DEPENDENT: data-URI SVGs
-   cannot resolve CSS variables, so the chevron gray #81858C (the caption gray
-   shared by both themes, as in DSH) is hardcoded here. */
 .fieldGrid select,
 .providerFieldControl select {
   appearance: none;
@@ -768,9 +715,7 @@ details[open] > summary .providerChevron { transform: rotate(180deg); }
   white-space: nowrap;
 }
 
-/* Where memory lives: the path, after a label when it needs one. */
 .location { display: flex; min-width: 0; align-items: baseline; gap: 6px; }
-/* The data directory: default or custom, and the field for a custom one. */
 .locationRow { gap: 10px; padding: 14px 0; border-bottom: .5px solid var(--dsw-alias-border-l2); }
 .rowActions { display: flex; flex: none; align-items: center; gap: 8px; }
 .packRow { display: flex; min-width: 0; flex-direction: column; gap: 8px; padding-bottom: 14px; }
@@ -799,9 +744,6 @@ details[open] > summary .providerChevron { transform: rotate(180deg); }
 .readOnlyNotice { margin: 0 0 -20px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
 .packSuccess { color: var(--dsw-alias-state-success-primary); }
 
-/* Git repository sync: a switch row, then a card of preference rows once it
-   is on, the way a Provider row opens into its editor. Editors inside the card
-   use the editor block, the field grid and the segmented choice. */
 .syncRow { display: flex; min-width: 0; flex-direction: column; gap: 8px; padding-bottom: 14px; }
 .syncRow > .settingRow,
 .syncRow > .toggleRow { padding-bottom: 6px; border-bottom: 0; }
@@ -884,9 +826,7 @@ details[open] > summary .providerChevron { transform: rotate(180deg); }
 .syncConflict { display: grid; min-width: 0; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 8px; border-radius: var(--dsw-radius-sm); padding: 8px 10px; background: var(--dsw-alias-bg-layer-1); }
 .syncConflict > span { display: grid; min-width: 0; gap: 2px; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 .syncConflict > span > small { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
-/* The account and the repository list span the field grid, above the addresses they fill in. */
 
-/* Review proposals: one entry per reconciliation, with the opinions left on it. */
 .reviewList { display: grid; gap: 8px; }
 .reviewEntry { display: flex; min-width: 0; flex-direction: column; gap: 6px; border-radius: var(--dsw-radius-md); padding: 10px 12px; background: var(--dsw-alias-bg-module-platform); }
 .reviewEntry > header { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
@@ -906,7 +846,6 @@ details[open] > summary .providerChevron { transform: rotate(180deg); }
 .reviewOpinionForm > input { flex: 1 1 auto; min-width: 0; box-sizing: border-box; height: 34px; border: .5px solid var(--dsw-alias-border-l4); border-radius: var(--dsw-radius-md); outline: none; padding: 0 12px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-3); font: inherit; font-size: 13px; line-height: 20px; }
 .reviewOpinionForm > input:focus-visible { border-color: var(--dsw-alias-state-business-primary); }
 .reviewOpinionForm > input:disabled { cursor: default; opacity: .5; }
-/* How the reconciliation area runs: a short list, not another control. */
 .reviewGuidance { display: grid; gap: 4px; }
 .reviewGuidance > label { color: var(--dsw-alias-label-secondary); font-size: 12px; font-weight: 500; line-height: 18px; }
 .reviewGuidance > input { box-sizing: border-box; width: 100%; height: 34px; border: .5px solid var(--dsw-alias-border-l4); border-radius: var(--dsw-radius-md); outline: none; padding: 0 12px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-3); font: inherit; font-size: 13px; line-height: 20px; }
@@ -923,14 +862,7 @@ details[open] > summary .providerChevron { transform: rotate(180deg); }
 .reviewDetails { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
 .reviewDetails > p { margin: 0; font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
 .reviewOperationCheckbox { font-size: 12px; line-height: 18px; }
-/* A position that already ran is shown for reading, not as a choice. */
 .reviewOperations > li[data-applied='true'] { opacity: .55; }
-
-/* The branch's history and the entry-level difference: read-only answers, not state. */
-
-/* Inside the dialog the panels are the content, so they lose their own chrome and
-   the diff states its conflicts one subject at a time, side by side. */
-/* Where a conflict is answered: the review row below this dialog, named rather than copied. */
 
 .selector:focus-visible {
   outline: none;

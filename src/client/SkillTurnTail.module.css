@@ -1,5 +1,3 @@
-/* The turn's skills line, under the turn's memory bar and drawn like it: a quiet DSH process row. */
-
 .root {
   display: flex;
   min-width: 0;
@@ -32,7 +30,6 @@
   overflow: hidden;
 }
 
-/* A skill the turn used, or what its review left; each opens the Skills page. */
 .item {
   min-width: 0;
   max-width: 220px;

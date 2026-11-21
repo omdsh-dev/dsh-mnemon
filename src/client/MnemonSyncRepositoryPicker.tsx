@@ -8,7 +8,6 @@ import css from './MnemonSettingsCard.module.css'
 import { SyncConfirmDialog } from './MnemonSyncDialogs.tsx'
 import { reasonOf, repositoryNameValid } from './sync-view.ts'
 
-/** How many repositories the picker lists before it asks for a narrower search. */
 const SHOWN_REPOSITORIES = 50
 
 interface RepositoryPickerProps {
@@ -23,11 +22,6 @@ interface RepositoryPickerProps {
   onSignInAgain: () => void
 }
 
-/**
- * The account's repositories, searched by name. A name that matches none can be
- * created on the spot, private; a public repository is used only after the
- * reader confirms that anyone can then read the memory.
- */
 export function RepositoryPicker({ client, login, current, disabled, creating, t, onChoose, onCreate, onSignInAgain }: RepositoryPickerProps): JSX.Element {
   const [repositories, setRepositories] = useState<MnemonSyncGitHubRepository[] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -49,7 +43,6 @@ export function RepositoryPicker({ client, login, current, disabled, creating, t
 
   const needle = query.trim().toLowerCase()
   const matches = (repositories ?? []).filter(repository => needle === '' || repository.fullName.toLowerCase().includes(needle))
-  // A name is taken only under the account it would be created in; another owner's repository of that name is not.
   const exact = (repositories ?? []).some(repository => repository.name.toLowerCase() === needle && (login === undefined || repository.owner.toLowerCase() === login.toLowerCase()))
   const creatable = needle !== '' && !exact && repositoryNameValid(query) && !query.includes('/')
 

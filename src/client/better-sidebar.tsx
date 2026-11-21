@@ -5,7 +5,6 @@ import type { MnemonBetterSidebarSeat, MnemonWorkspaceScope } from './better-sid
 import { MemoryIcon } from './memory-icon.tsx'
 import css from './MnemonWorkspace.module.css'
 
-/** Stable type id exposed to Better Sidebar and its persisted tab state. */
 export const MNEMON_BETTER_SIDEBAR_TAB_ID = 'dsh-mnemon:memory'
 
 interface BetterSidebarTabProps {
@@ -30,7 +29,6 @@ interface BetterSidebarMemoryTabProps extends BetterSidebarTabProps {
   seat: MnemonBetterSidebarSeat
 }
 
-/** Better Sidebar supplies a DOM seat; the DSH renderer remains the owner. */
 function BetterSidebarMemoryTab(props: BetterSidebarMemoryTabProps): JSX.Element {
   const target = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -40,13 +38,6 @@ function BetterSidebarMemoryTab(props: BetterSidebarMemoryTabProps): JSX.Element
   return <div ref={target} className={css.betterSidebarSeat} data-dsh-mnemon-better-sidebar-seat />
 }
 
-/**
- * Register Mnemon through Better Sidebar's documented optional service.
- *
- * The service is deliberately a soft dependency. Watching Cordis service
- * changes makes installation order and HMR irrelevant while preserving the
- * standalone Mnemon sidebar on profiles that do not install Better Sidebar.
- */
 export function mountBetterSidebarTab(
   ctx: MnemonClientContext,
   t: MnemonTranslate,

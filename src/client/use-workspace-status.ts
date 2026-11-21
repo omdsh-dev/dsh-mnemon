@@ -11,11 +11,6 @@ interface WorkspaceStatusState {
   error: string | null
 }
 
-/**
- * The Memory System's status for one view context and the read that loads it: the summary first, then the full
- * status only while the Status page is open and the summary still waits for a space or the CLI version. Another view
- * context starts empty, and only the latest read answers.
- */
 export function useWorkspaceStatus(client: MnemonClient, viewContextKey: string, active = true): {
   status: StatusView | null
   statusLoading: boolean
@@ -52,7 +47,6 @@ export function useWorkspaceStatus(client: MnemonClient, viewContextKey: string,
     try {
       const summary = await client.statusSummary()
       if (!isCurrent()) return
-      // A full status also reads the CLI version, which the summary has only after one did.
       const needsDeepStatus = summary.memoryBodies?.some(body => body.statusLoading === true) === true
         || summary.commandFound === true && summary.version === undefined
       const resolveFull = typeof includeFull === 'function' ? includeFull() : includeFull

@@ -10,11 +10,9 @@ import { IconChevronDownOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-
 import { MemoryIcon } from './memory-icon.tsx'
 
 interface MnemonTurnTailProps {
-  /** Engine-owned closing Turn boundary (TurnLocation on the wire). */
   turn: unknown
   seq: number
   openFile: (path: string) => void
-  /** Injected by the slot host: the session this tail belongs to. */
   sessionId?: string
   connection: ClientConnectionHandle
   localeRuntime: Pick<MnemonClientContext['locale'], 'getSnapshot' | 'subscribe'>
@@ -30,29 +28,24 @@ function isClosedTurn(turn: unknown): boolean {
   return (turn as { status?: unknown } | null)?.status === 'closed'
 }
 
-/** Route a settled tool name to the workbench page its row in the tool table names; a tool without a row, or whose row names no page, opens Memory Spaces. */
 export function memoryPageForTool(name: string): MnemonAnchorPage {
   return memoryTool(name)?.page ?? 'memory-spaces/spaces'
 }
 
-/** One chip per tool, in the order the turn first used it, with how many times it did. */
 export function turnTools(names: readonly string[]): Array<{ name: string; count: number }> {
   const counts = new Map<string, number>()
   for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1)
   return [...counts].map(([name, count]) => ({ name, count }))
 }
 
-/** A memory the turn read or wrote, named as people read it, with the page that shows it. */
 export interface TurnItem {
   key: string
   text: string
-  /** The Memory Space that holds a recalled or saved memory. */
   place?: string
   page: MnemonAnchorPage
   seed?: string
 }
 
-/** Open a document by id, a memory by recalling its text, a runtime entry by its text. */
 function itemTarget(toolName: string, sourceTypeId: string | undefined, operationId: string, item: MemoryActivityItem, text: string): Pick<TurnItem, 'page' | 'seed'> {
   if (sourceTypeId === 'documents') return { page: 'documents/library', seed: item.id }
   if (sourceTypeId === 'runtime') return { page: 'runtime/entries', seed: text }
@@ -60,11 +53,9 @@ function itemTarget(toolName: string, sourceTypeId: string | undefined, operatio
   return { page: memoryPageForTool(toolName) }
 }
 
-/** What each tool read or wrote this turn; an item known only by its id is left out. */
 export function turnItems(activity: Partial<Pick<TurnMemoryActivity, 'retrieved' | 'writebacks'>>): Map<string, TurnItem[]> {
   const byTool = new Map<string, TurnItem[]>()
   const add = (toolName: string, sourceTypeId: string | undefined, operationId: string, item: MemoryActivityItem, key: string): void => {
-    // Memory Spaces title an item with its space and carry the memory itself as the excerpt.
     const memory = sourceTypeId === 'memory-spaces' && item.excerpt !== undefined
     const text = memory ? item.excerpt! : item.title
     if (text === item.id) return
@@ -80,7 +71,6 @@ export function turnItems(activity: Partial<Pick<TurnMemoryActivity, 'retrieved'
 
 const ITEMS_PER_TOOL = 3
 
-/** One-line memory-activity bar under a completed turn; hides when the turn touched no memory. */
 export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, seq, sessionId, connection, localeRuntime, t }: MnemonTurnTailProps): JSX.Element | null {
   const subscribeLocale = useCallback((listener: () => void) => localeRuntime.subscribe(listener), [localeRuntime])
   const getLocale = useCallback(() => localeRuntime.getSnapshot(), [localeRuntime])
@@ -88,7 +78,6 @@ export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, seq, sessionI
   const [activity, setActivity] = useState<TurnMemoryActivity | null | undefined>(undefined)
   const [open, setOpen] = useState(false)
   const number = turnNumber(turn)
-  // The turn-tail list renders every entry, so the entry itself waits for the closing Turn.
   const closed = isClosedTurn(turn)
 
   useEffect(() => {

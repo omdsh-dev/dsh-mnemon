@@ -1,9 +1,3 @@
-/**
- * Compile-time boundary against the public DSH browser contracts.
- *
- * Keep version-sensitive declaration merging in one place so a future DSH
- * upgrade fails here instead of being papered over by local copies of slots.
- */
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
@@ -28,19 +22,16 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 
   interface SlotMap {
-    /** Optional Source-specific pages owned by the canonical Mnemon workspace. */
     'mnemon.source.page': {
       kind: 'list'
       scope: 'root'
       owner: MnemonSourcePageOwnerProps
     }
-    /** A component's own settings on its page, keyed by the component's package name. */
     'mnemon.component.settings': {
       kind: 'keyed'
       scope: 'root'
       owner: MemoryComponentSettingsProps
     }
-    /** A component's card on the Memory System's Status page, keyed by the component's package name. */
     'mnemon.component.status': {
       kind: 'keyed'
       scope: 'root'
@@ -72,11 +63,6 @@ interface MnemonWorkspaceListState {
   [key: string]: unknown
 }
 
-/**
- * DSH client Context as Mnemon's apply receives it. The session and workspace
- * controller packages are not dependencies, so their list states are narrowed
- * locally to the fields Mnemon reads.
- */
 export type MnemonClientContext = Context & {
   connection: ConnectionHandle
   locale: LocaleRuntime

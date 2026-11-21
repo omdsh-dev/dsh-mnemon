@@ -13,20 +13,13 @@ import { MNEMON_SOURCE_PAGE_SLOT, type MemorySourcePageDirectory } from './sourc
 import { MnemonWorkspaceHost } from './workspace-mount.tsx'
 import css from './MnemonWorkspace.module.css'
 
-/** The sidebar panel 技能管理 opens as, when it has an entry of its own. */
 export const SKILLS_PANEL_ID = 'mnemon-skills' as MainPanelId
-/** 技能管理's Source type, which its pages are named after. */
 export const SKILLS_SOURCE_TYPE = 'skills'
 
-/** Whether a Memory System page belongs to 技能管理. */
 export function isSkillsPage(page: string): boolean {
   return page.split('/')[0] === SKILLS_SOURCE_TYPE
 }
 
-/**
- * Whether 技能管理 has its own sidebar entry right now. The Memory System
- * leaves its page out while it does, and its links open the entry instead.
- */
 export class SkillsPanelSeat extends ExternalStore<boolean> {
   constructor() {
     super(false)
@@ -37,7 +30,6 @@ export class SkillsPanelSeat extends ExternalStore<boolean> {
   }
 }
 
-/** A page that fails renders nothing and leaves the panel around it working. */
 class PageBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   override state = { failed: false }
   static getDerivedStateFromError(): { failed: boolean } { return { failed: true } }
@@ -49,11 +41,6 @@ class PageBoundary extends Component<{ children: ReactNode }, { failed: boolean 
 
 type SourcePageRenderer = NonNullable<Parameters<typeof MnemonWorkspaceHost>[0]['renderSlot']>
 
-/**
- * Render a Source page this panel does not declare, as DSH's row page renders
- * a component's settings: the Memory System declares the page region, and a
- * region has one declaring entry.
- */
 function pageRenderer(ctx: MnemonClientContext): SourcePageRenderer {
   const render = (_slot: string, props: unknown, options?: { only?: string }): ReactNode => {
     const entry = ctx.slots.entriesOfSlot(MNEMON_SOURCE_PAGE_SLOT).find(candidate => candidate.options.id === options?.only)
@@ -82,7 +69,6 @@ function SkillsSidebarIcon({ size }: Pick<PropsRuntime<'sidebar.panellist'>, 'si
 
 type UsePanelInfoHook = <T>(selector: (info: { activePanelId: string | null }) => T) => T
 
-/** The panel: the Memory System workbench focused on 技能管理, its title the window's top edge. */
 function SkillsMainPanel(props: SkillsPanelServices & { render: SourcePageRenderer; navigation: { open(): void; close(): void }; usePanelInfo?: UsePanelInfoHook }): JSX.Element {
   const title = props.t('skills.label')
   const active = props.usePanelInfo === undefined ? true : props.usePanelInfo(info => info.activePanelId === SKILLS_PANEL_ID)
@@ -96,14 +82,8 @@ function SkillsMainPanel(props: SkillsPanelServices & { render: SourcePageRender
   </div>
 }
 
-/**
- * 技能管理 as a DSH sidebar panel of its own, after the Memory System. A layout
- * without native panel seats keeps 技能管理 in the Memory System instead.
- * Links to a skills page open this panel while it lasts.
- */
 export function mountSkillsPanel(ctx: MnemonClientContext, services: SkillsPanelServices, seat: SkillsPanelSeat): () => void {
   const render = pageRenderer(ctx)
-  // Back to the conversation, as the Memory System's panel goes: "Use" and the header's back both take it.
   const navigation = { open: () => ctx.layout.selectPanel(SKILLS_PANEL_ID), close: () => ctx.layout.selectPanel(null) }
   const openFromAnchor = (event: Event): void => {
     const anchor = (event as CustomEvent<MnemonAnchor>).detail

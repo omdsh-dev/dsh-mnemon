@@ -39,7 +39,6 @@ function versionState(component: VersionComponentStatus): 'missing' | 'unknown' 
   if (component.restartRequired) return 'restart'
   if (component.current === undefined || component.latest === undefined || component.checkError !== undefined) return 'unknown'
   if (component.outdated) return 'available'
-  // A local or prerelease build can be ahead of the published release.
   return component.current.replace(/^v/, '') === component.latest.replace(/^v/, '') ? 'current' : 'local'
 }
 
@@ -87,7 +86,6 @@ function dshInstallLabel(t: MnemonTranslate, component: VersionComponentStatus):
 export function VersionDialog(props: {
   client: MnemonClient
   writeEnabled: boolean
-  /** The Starter update this page started before DSH swapped in this client, which reopened the dialog. */
   resumedUpdate?: StarterUpdateRecord | undefined
   onClose: () => void
   onRefreshStatus: () => void
@@ -136,7 +134,6 @@ export function VersionDialog(props: {
     setUpdating(component.id)
     setError(null)
     setResult(null)
-    // DSH swaps in the new client once the Starter's files change; that client reopens this dialog from the record.
     if (component.id === 'dsh-mnemon') recordStarterUpdate({ from: component.current, to: component.latest })
     try {
       const next = await props.client.updateVersion(component.id)
@@ -157,8 +154,6 @@ export function VersionDialog(props: {
   }
   const updatingBusy = updating !== null
   const controlsBusy = checking || updatingBusy
-  // The update's own reply went to the client DSH replaced. The Host keeps how it ended; a Host
-  // from before it kept that leaves only its pending restart to go by.
   const resumed = props.resumedUpdate
   const starter = snapshot?.components.find(component => component.id === 'dsh-mnemon')
   const outcome = result === null && error === null && resumed !== undefined && snapshot?.lastUpdate?.component === 'dsh-mnemon'

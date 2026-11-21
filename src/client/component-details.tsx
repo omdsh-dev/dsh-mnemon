@@ -8,7 +8,6 @@ import { ComponentOptions } from './component-options.tsx'
 import type { MnemonTranslate } from './locales.ts'
 import css from './MnemonSettingsCard.module.css'
 
-/** A component's state as its row shows it. */
 export interface ComponentState {
   tone?: StateDotState | undefined
   text: string
@@ -21,44 +20,26 @@ export interface ComponentDetailsProps {
   name: (entry: MemoryPluginEntryView) => string
   hint: string
   state: ComponentState | undefined
-  /** The row's own control: its switch, or for a main Strategy the choice of it. */
   control: ReactNode
-  /** Whether the options can be written now. */
   writable: boolean
-  /** While this component's options cross the wire. */
   applying: boolean
   language: string
   t: MnemonTranslate
-  /** The settings the component contributed, rendered after what its declarations give. */
   settings?: ReactNode | undefined
-  /** Optional target section inside the component's settings when deep-linked. */
   section?: string | undefined
-  /** The page this one was opened from, to go back to. */
   back?: { name: string; go: () => void } | undefined
-  /** The page's container already heads it with the component's name, package and description, as DSH's row page does. */
   headed?: boolean | undefined
-  /** Open a related component's page in place of this one. */
   onOpen: (entry: MemoryPluginEntryView) => void
-  /** Save the options; resolves whether they were saved. The page stays open. */
   onApply: (config: Record<string, MemoryJsonValue>) => Promise<boolean>
   onClose: () => void
 }
 
-/** A component's page in a dialog over the configuration, the way the board opens it. */
 export function ComponentDetails(props: ComponentDetailsProps): JSX.Element {
   return <Modal open onClose={props.onClose} title={props.name(props.entry)} description={props.hint} closeLabel={props.t('common.close')} className={css.detailsDialog ?? ''} contentClassName={css.detailsScroll ?? ''}>
     <ComponentPage {...props} />
   </Modal>
 }
 
-/**
- * Everything one component brings, in one place: what it is and where it
- * came from, how it relates to the other components installed and what its
- * switch would move, the options it declares and the settings it contributed.
- * Relations and options are drawn from the component's own declarations, so an
- * installed extension gets the same page as a shipped component. The same
- * page shows in a dialog over the configuration and on DSH's own row page.
- */
 export function ComponentPage(props: Omit<ComponentDetailsProps, 'onClose'>): JSX.Element {
   const { entry, dashboard, name, t } = props
   const bodyRef = useRef<HTMLDivElement | null>(null)
@@ -86,8 +67,6 @@ export function ComponentPage(props: Omit<ComponentDetailsProps, 'onClose'>): JS
       return true
     }
     if (reveal()) return
-    // A section loaded asynchronously (for example default models or market sources)
-    // may mount right after the initial dialog render; observe briefly until it appears.
     if (typeof MutationObserver === 'undefined') return
     const observer = new MutationObserver(() => {
       if (reveal()) {
@@ -104,7 +83,6 @@ export function ComponentPage(props: Omit<ComponentDetailsProps, 'onClose'>): JS
   }, [props.section, entry.entryId])
   const relations = relationsOf(dashboard, entry)
   const names = (entries: readonly MemoryPluginEntryView[]): string => nameList(entries.map(name), t)
-  // What the switch would move beyond the component itself.
   const plan = entry.roles.includes('strategy') ? undefined : switchPlan(dashboard, entry, !entry.enabled)
   const others = plan?.changes?.filter(change => change.entry !== entry) ?? []
   const on = names(others.filter(change => change.enabled).map(change => change.entry))
@@ -114,7 +92,6 @@ export function ComponentPage(props: Omit<ComponentDetailsProps, 'onClose'>): JS
       : on === '' && off === '' ? undefined : off === '' ? t('details.effectOn', { names: on }) : on === '' ? t('details.effectOnReplace', { names: off }) : t('details.effectOnMixed', { on, off })
   const needs = relations.needs.filter(need => need.providers.length > 0 || !need.met)
   const hasRelations = needs.length > 0 || relations.neededBy.length > 0 || relations.conflictsWith.length > 0 || effect !== undefined
-  // Every component named here opens its own page, as the names on the board do.
   const link = (other: MemoryPluginEntryView, on: boolean): JSX.Element => <button key={other.entryId} type="button" className={css.detailsName} onClick={() => props.onOpen(other)}>
     <StateDot state={on ? 'done' : 'idle'} /><span>{name(other)}</span>
   </button>
@@ -165,7 +142,6 @@ export function ComponentPage(props: Omit<ComponentDetailsProps, 'onClose'>): JS
   </div>
 }
 
-/** The choice of a main Strategy inside its page: the current one says so, another offers to switch. */
 export function MainChoice(props: { selected: boolean; disabled: boolean; t: MnemonTranslate; onChoose: () => void }): JSX.Element {
   return props.selected
     ? <Tag tone="solid">{props.t('details.currentMain')}</Tag>

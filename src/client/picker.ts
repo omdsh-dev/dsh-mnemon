@@ -1,7 +1,6 @@
 import type { MnemonClientContext } from './dsh-context.ts'
 import { isRemoteConnection } from './remote-rpc.ts'
 
-/** The optional legacy public DSH workspace UI service; cancellation returns null. */
 interface DirectoryPickerService {
   pickDirectory?(): Promise<string | null>
 }
@@ -27,7 +26,6 @@ type RemoteCallOutcome<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: { readonly message?: string; readonly code?: string } }
 
-/** Official DSH 0.2.1+ `ctx.remote.directoryPicker` Typert service (plus optional `pickNative` / `mode` helpers). */
 export interface RemoteDirectoryPicker {
   mode?(): Promise<RemoteCallOutcome<DirectoryPickerMode>> | DirectoryPickerMode
   pick?(signal?: AbortSignal): Promise<RemoteCallOutcome<string | null | { path?: string | null; cancelled?: boolean }>>
@@ -66,17 +64,12 @@ function normalizeNativePickResult(result: string | null | { path?: string | nul
   return typeof result.path === 'string' ? result.path : null
 }
 
-/**
- * Resolve DSH 0.2.1+ `remote.directoryPicker` first when present, falling back
- * to `uiWorkspace.pickDirectory` or legacy `mnemon/picker` RPC on `0.2.0-rc.2`.
- */
 export function directoryPicker(ctx: PickerContext): MnemonDirectoryPicker {
   const directRemotePicker = (): RemoteDirectoryPicker | undefined => {
     try {
       const fromCtx = ctx.remote?.directoryPicker
       if (fromCtx !== undefined) return fromCtx
     } catch {
-      // Cordis 4 context proxies throw when reading un-injected service properties; fall through to ctx.get('remote').
     }
     return (ctx.connection as { remote?: { directoryPicker?: RemoteDirectoryPicker } } | undefined)?.remote?.directoryPicker
   }

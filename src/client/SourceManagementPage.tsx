@@ -11,7 +11,6 @@ import { useT, message, short, PageHeader } from './page-kit.tsx'
 
 const EMPTY_SOURCE_MANAGEMENT_FIELDS: NonNullable<MemorySourceManagementInstance['management']['fields']> = []
 
-/** Fixed descriptor-driven baseline; custom Source pages can only add to it. */
 export function SourceManagementPage(props: {
   instance: MemorySourceManagementInstance
   instances: readonly MemorySourceManagementInstance[]

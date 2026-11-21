@@ -33,7 +33,6 @@
 }
 
 .nativeWorkspace {
-  /* Keep the page above decorative body layers and below DSH window chrome. */
   position: relative;
   z-index: 2;
 }
@@ -43,7 +42,6 @@
   padding-block-start: var(--dsh-frame-top-clearance, 0px);
 }
 
-/* Covers the clearance above, which has no height where DSH reserves none. */
 .windowDragBand {
   position: absolute;
   inset: 0 0 auto;
@@ -54,12 +52,6 @@
   display: none;
 }
 
-/*
- * The fallback entry, used when the layout offers no native panel seat, copies
- * DSH's own panel row (dsh-client-ui-sidebar .panelRow, identical in 0.2.0-rc.2
- * and 0.2.1-rc.1) so it lines up with built-in and plugin rows (#318). The width
- * leaves the row's 2px side margins inside the sidebar column.
- */
 .entry {
   box-sizing: border-box;
   display: flex;
@@ -80,7 +72,6 @@
   cursor: pointer;
 }
 
-/* Like the native row, hover and the open workspace share one highlight. */
 .entry:hover,
 .entry[data-active] {
   background: var(--dsw-alias-interactive-bg-hover);
@@ -98,7 +89,6 @@
   justify-content: center;
 }
 
-/* DSH draws panel glyphs at 16px in the wide sidebar and 18px on the rail. */
 .entryIcon svg {
   display: block;
   width: 16px;
@@ -111,7 +101,6 @@
   text-overflow: ellipsis;
 }
 
-/* The native DSH frame exposes collapse state without a skin's data-dsh-frame. */
 [data-sidebar-collapsed] .entry {
   width: 36px;
   height: 36px;

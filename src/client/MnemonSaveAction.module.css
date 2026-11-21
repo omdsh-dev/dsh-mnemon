@@ -1,5 +1,3 @@
-/* Save-to-memory assistant action: DSH-sized icon button + centered native modal. */
-
 .wrap {
   position: relative;
   display: inline-flex;
@@ -97,7 +95,6 @@
   font-weight: 500;
   line-height: 20px;
 }
-/* The DSH settings-form field: hairline stroke, 12px radius, sans text. */
 .candidate textarea {
   display: block;
   box-sizing: border-box;
@@ -121,7 +118,6 @@
   border-color: var(--mn-accent, var(--dsw-alias-state-business-primary));
 }
 
-/* Where the candidate goes: the task Agent, or a place the user names. */
 .destination {
   margin-top: 12px;
 }
@@ -134,7 +130,6 @@
   line-height: 18px;
 }
 
-/* What a working-memory place says before it takes the text. */
 .placeNote {
   display: block;
   margin-top: 6px;

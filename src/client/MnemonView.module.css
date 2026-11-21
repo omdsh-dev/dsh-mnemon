@@ -1,13 +1,6 @@
-/*
- * Shared view styles. Values come from the DSH theme (--dsw-*) and follow the
- * primitives in @deepseek-ai/dsh-client-ui-primitives: Button, Tag, StateDot,
- * Input, Switch and Modal. Class names are part of the Source SDK contract.
- */
 .shell {
   --mn-bg: var(--dsw-alias-bg-base);
   --mn-backdrop: var(--dsw-alias-bg-overlay, var(--mn-bg));
-  /* Paint the canvas over its backing so transparent skins keep their surface
-     without replacing the official theme's opaque base with a floating layer. */
   --mn-surface: linear-gradient(var(--mn-bg), var(--mn-bg)), linear-gradient(var(--mn-backdrop), var(--mn-backdrop)) var(--mn-bg);
   --mn-layer-1: var(--dsw-alias-bg-layer-1);
   --mn-layer-2: var(--dsw-alias-bg-layer-2);
@@ -49,8 +42,6 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* DSH keeps width handles mounted across views. Scope suppression to this
-   Builtin's owning conversation; retain the resident composer and peer views. */
 :has(> [data-conversation-scroll] > [data-slot='conversation.session'] > * > [data-slot='conversation.view'] > .shell[data-mnemon-surface='builtin']) > [data-width-handle] {
   visibility: hidden;
   pointer-events: none;
@@ -58,10 +49,6 @@
 
 .shell *,
 .shell *::before, .shell *::after { box-sizing: border-box; }
-/* Element resets carry no weight, so every control class below wins. At class
-   weight they tie with the DSH primitives' own button rules and the winner is
-   whichever bundle the bundler emitted last: inside a dialog that made a primary
-   button inherit the dialog text colour and render black on black. */
 :where(.shell) :where(button, input, select, textarea) { color: inherit; font: inherit; }
 :where(.shell) :where(button, select) { touch-action: manipulation; }
 .shell button:focus-visible,
@@ -72,11 +59,9 @@
   outline: var(--dsw-focus-ring-width, 2px) solid var(--mn-focus);
   outline-offset: 2px;
 }
-/* Text fields show focus on their own stroke, as the DSH Input does. */
 .shell :is(textarea, input:not([type='checkbox'], [type='radio'], [type='file'])):focus-visible { outline: none; }
 .shell code { font-family: var(--mn-code); font-size: .92em; }
 
-/* Header: title row and the tab strip below it, as in the DSH conversation header. */
 .masthead {
   display: flex;
   min-height: 48px;
@@ -86,7 +71,6 @@
   padding: 10px 24px 4px;
   background: var(--mn-surface);
 }
-/* Collapsed macOS sidebar leaves traffic-light controls over the main column's leading edge. */
 .masthead[data-window-drag] {
   padding-left: calc(24px + var(--dsh-frame-leading-clearance, 0px));
 }
@@ -122,9 +106,7 @@
 .alert[role="status"] { color: var(--dsw-alias-state-warn-label, var(--mn-text)); background: var(--dsw-alias-state-warn-tertiary, color-mix(in srgb, var(--mn-warn) 12%, transparent)); }
 .noticeGroup, .noticeContents { display: flex; flex: 0 0 auto; flex-direction: column; }
 .noticeToggle { display: none; }
-/* How memory is composed, above the pages; it slides in and out. */
 .notice { flex: 0 0 auto; margin: 8px 24px 0; }
-/* The connection, then the main Strategy composing memory; hover shows each layer. */
 .compositionStatus { display: inline-flex; min-width: 0; align-items: center; gap: 6px; border: 0; border-radius: var(--dsw-radius-sm); padding: 2px 6px; color: inherit; background: transparent; font: inherit; cursor: pointer; transition: background-color 120ms ease, color 120ms ease; }
 .compositionStatus:hover:not(:disabled) { background: var(--mn-hover); }
 .compositionStatus:active:not(:disabled) { background: var(--mn-pressed); }
@@ -163,7 +145,6 @@
 .compositionLayers { display: flex; flex-wrap: wrap; gap: 6px; }
 .compositionHint { color: var(--mn-faint); }
 @media (prefers-reduced-motion: reduce) { .compositionSummary { transition: none; } }
-/* Warning chip, as the DSH connection indicator. */
 .workspaceMismatch { display: inline-flex; min-width: 0; min-height: 28px; flex: 0 0 auto; align-items: center; gap: 6px; padding: 0 3px 0 10px; border: .5px solid color-mix(in srgb, var(--dsw-alias-state-warn-label, var(--mn-warn)) 20%, transparent); border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-state-warn-label, var(--mn-text)); background: var(--dsw-alias-state-warn-tertiary, color-mix(in srgb, var(--mn-warn) 12%, transparent)); font-size: 12px; font-weight: 500; line-height: 18px; white-space: nowrap; }
 .workspaceMismatch > button { min-height: 22px; padding: 0 8px; border: 0; border-radius: var(--dsw-radius-xs); color: inherit; background: color-mix(in srgb, currentColor 10%, transparent); font-size: 12px; cursor: pointer; }
 .workspaceMismatch > button:hover { background: color-mix(in srgb, currentColor 16%, transparent); }
@@ -190,7 +171,6 @@
 .nav button[data-layer-disabled]:not([data-active]) { color: var(--mn-caption); }
 .nav .layerDisabledBadge { display: inline-flex; height: 18px; align-items: center; padding: 0 6px; border: .5px solid var(--mn-field-line); border-radius: 999px; corner-shape: round; color: var(--mn-faint); font-size: 11px; font-style: normal; font-weight: 500; line-height: 1; }
 
-/* The canonical DSH conversation view owns one plugin-local scrollport. */
 .canvas { min-width: 0; flex: 1; overflow: auto; overscroll-behavior-x: contain; overscroll-behavior-y: auto; scroll-behavior: auto; -webkit-overflow-scrolling: touch; background: var(--mn-surface); }
 .page { width: 100%; min-height: 100%; margin: 0 auto; padding: 20px 24px 32px; animation: mnemon-page-fade 140ms cubic-bezier(.22, 1, .36, 1) both; }
 @keyframes mnemon-page-fade { from { opacity: 0; } }
@@ -200,12 +180,10 @@
 .pageHeader h2 { margin: 0; font-size: 16px; font-weight: 500; line-height: 24px; }
 .pageHeader p { max-width: 72ch; margin: 2px 0 0; color: var(--mn-muted); font-size: 13px; line-height: 20px; }
 .pageHeaderMeta { display: flex; min-width: 0; flex: 0 0 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
-/* Meta reads as a quiet DSH Tag. */
 .pageHeaderMeta > code { display: inline-flex; height: 22px; align-items: center; padding: 0 8px; border: .5px solid var(--mn-field-line); border-radius: 999px; corner-shape: round; color: var(--mn-faint); font: 500 11px/1 var(--mn-sans); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pageSpinner { display: inline-grid; width: 20px; height: 20px; flex: 0 0 auto; place-items: center; color: var(--mn-faint); }
 .pageSpinner > i { width: 14px; height: 14px; border: 2px solid color-mix(in srgb, currentColor 25%, transparent); border-top-color: currentColor; border-radius: 50%; corner-shape: round; animation: mnemon-spin .9s linear infinite; }
 
-/* Buttons follow the DSH Button: primary, outline, ghost; 32px page actions. */
 .primaryButton,
 .secondaryButton,
 .ghostButton,
@@ -232,7 +210,6 @@
 .secondaryButton { border: .5px solid var(--mn-line-strong); }
 .secondaryButton:hover:not(:disabled), .ghostButton:hover:not(:disabled) { background: var(--mn-hover); }
 .secondaryButton:active:not(:disabled), .ghostButton:active:not(:disabled) { background: var(--mn-pressed); }
-/* Destructive row action, as the DSH model card delete: error text without a stroke. */
 .dangerButton { color: var(--mn-danger); }
 .dangerButton:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover-danger, color-mix(in srgb, var(--mn-danger) 8%, transparent)); }
 .dangerSolidButton { color: var(--dsw-static-neutral-00, #fff); background: var(--mn-danger); }
@@ -274,7 +251,6 @@
 .inlineError { margin: 0 0 12px; }
 .loading { padding: 16px 0; color: var(--mn-faint); font-size: 13px; }
 
-/* Fields follow the DSH Input: 32px, .5px l4 stroke, 12px radius. */
 .bodyEdit { display: grid; gap: 12px; padding-top: 2px; }
 .bodyEdit label, .formGrid > label { display: grid; gap: 6px; color: var(--mn-muted); font-size: 12px; font-weight: 500; line-height: 18px; }
 .bodyEdit input,
@@ -322,13 +298,9 @@
 .compactListProgress { display: grid; justify-items: stretch; gap: 8px; margin-top: 8px; padding: 10px 2px 2px; border-top: .5px solid var(--mn-line); color: var(--mn-faint); font-size: 12px; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
 .compactListProgress button { width: 100%; }
 
-/* Dialogs follow the DSH Modal: panel radius, layer-2 fill, prominent elevation.
-   They sit on DSH's modal layer (z 1000), so DSH menus, tooltips and toasts (z 1100) open above them. */
 .modalPortal { position: fixed; z-index: 1000; inset: 0; isolation: isolate; pointer-events: none; }
 .modalTheme.modalTheme.modalTheme { position: absolute; inset: 0; display: block; width: auto; height: auto; min-width: 0; min-height: 0; overflow: visible; color: var(--mn-text); background: transparent; pointer-events: none; }
 .modalBackdrop { position: fixed; z-index: 0; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; overscroll-behavior: contain; padding: max(24px, var(--dsh-frame-overlay-top, var(--dsh-frame-top-clearance, 24px))) 24px; background: var(--dsw-alias-bg-mask-1); backdrop-filter: var(--dsw-mask-blur); touch-action: none; pointer-events: auto; animation: mnemon-dialog-backdrop-enter 180ms ease-out both; }
-/* Match the host Modal's layer-2 fill; the canvas backs translucent skins.
-   The footer carries the same opaque backing so scrolled fields never bleed behind actions. */
 .modal { display: flex; box-sizing: border-box; width: min(640px, 100%); min-height: 0; max-height: min(860px, calc(100vh - 32px)); max-height: min(860px, calc(100dvh - 32px)); flex-direction: column; overflow: hidden; border: 0; border-radius: var(--dsw-radius-panel); background: linear-gradient(var(--mn-layer-2), var(--mn-layer-2)), var(--mn-surface); box-shadow: var(--dsw-elevation-prominent); touch-action: auto; transform-origin: 50% 100%; animation: mnemon-dialog-enter 200ms cubic-bezier(.2, .75, .2, 1) both; }
 .modal[data-dragging],
 .modal[data-closing] { will-change: transform, opacity; }
@@ -352,9 +324,6 @@
 @keyframes mnemon-metadata-sweep { to { transform: translateX(120%); } }
 @keyframes mnemon-metadata-refreshed { 0% { border-color: color-mix(in srgb, var(--mn-accent) 60%, var(--mn-card-line)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--mn-accent) 14%, transparent); } 100% { border-color: var(--mn-card-line); box-shadow: 0 0 0 0 transparent; } }
 
-/* Status overview: one card for the engine and one per Source component in a
-   balanced responsive grid so wide desktop fits all cards evenly and narrower
-   widths wrap into uniform columns without orphan stretching. */
 .healthStrip { position: relative; display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 10px; margin-bottom: 16px; }
 .asyncStatusBlock { position: relative; min-width: 0; min-height: 36px; }
 .healthStrip article { display: flex; min-width: 0; min-height: 76px; box-sizing: border-box; align-items: flex-start; gap: 10px; padding: 13px 14px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); background: var(--mn-surface); transition: border-color 140ms ease, background-color 140ms ease; }
@@ -376,7 +345,6 @@
 .healthIndicator { width: 6px; height: 6px; flex: 0 0 auto; margin-top: 6px; border-radius: 50%; corner-shape: round; }
 .healthGood { background: var(--mn-success); }
 .healthMuted { background: var(--mn-idle); }
-/* Provider rows follow the DSH plugin list: 36px mark, 14px title, tertiary detail. */
 .providerHealth { margin-bottom: 16px; padding: 16px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); transition: border-color 120ms ease, background-color 120ms ease; }
 .providerHealth:hover { border-color: var(--mn-line-strong); }
 .providerHealthList { margin-top: 8px; }
@@ -428,10 +396,8 @@
 .statusSectionHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .statusSectionHeader h3 { margin: 0; font-size: 14px; font-weight: 500; line-height: 22px; }
 .statusSectionHeader p { max-width: 640px; margin: 2px 0 0; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
-/* DSH Tag, neutral tone. */
 .phaseBadge { display: inline-flex; height: 22px; flex: 0 0 auto; align-items: center; padding: 0 8px; border-radius: 999px; corner-shape: round; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .statusHeaderActions { display: flex; align-items: center; gap: 8px; }
-/* Single shrinkable columns: a long install path truncates instead of widening the dialog. */
 .versionDialogBody { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .versionChecking { display: flex; min-height: 112px; align-items: center; justify-content: center; gap: 10px; color: var(--mn-muted); font-size: 13px; }
 .versionChecking span { width: 14px; height: 14px; border: 2px solid color-mix(in srgb, currentColor 25%, transparent); border-top-color: currentColor; border-radius: 50%; corner-shape: round; animation: mnemon-spin .9s linear infinite; }
@@ -563,14 +529,11 @@
   }
 }
 
-/* Short viewports (landscape phones, small windows): never force the shell taller than its host slot,
-   otherwise the fixed-height DSH view area clips the canvas bottom and nests two competing scrollports. */
 @media (max-width: 1000px) and (max-height: 760px) {
   .shell { min-height: 0; }
   .masthead { min-height: 44px; }
 }
 
-/* iOS Safari auto-zooms into focused fields smaller than 16px, which displaces the whole layout. */
 @media (max-width: 760px) and (pointer: coarse) {
   .shell input,
 .shell select, .shell textarea { font-size: 16px !important; }
@@ -587,11 +550,9 @@
   .modalBackdrop, .modal { animation: none !important; }
 }
 
-/* Hosted Source content reuses one outer frame at every viewport, including through renderer wrappers. */
 .page[data-source-page] > .workspacePicker { margin-bottom: 16px; }
 .page[data-source-page] .page { width: 100%; min-height: 0; margin: 0; padding: 0; animation: none; }
 
-/* Use the panel width: a narrow desktop sidebar needs the same chrome as a phone. */
 @container mnemon-workbench (max-width: 927px) {
   .healthStrip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
@@ -627,10 +588,6 @@
   .noticeGroup[data-expanded] .noticeToggle > svg { transform: rotate(90deg); }
 }
 
-/* Coarse pointers: a phone has no hover and no pointer precision, so the navigation tabs,
-   header controls and form fields that were sized for a mouse become 44px hit areas
-   without changing their visual weight. The canvas also keeps its scroll instead of
-   handing the gesture to the page behind it. */
 @media (pointer: coarse) {
   .masthead :is(button, select), .noticeToggle { min-height: 44px; }
   .nav button { min-height: 44px; }
@@ -640,7 +597,6 @@
   .canvas { overscroll-behavior: contain; }
 }
 
-/* The official composer chain keeps the resident editor mounted under this small control. */
 .composerNotice { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 16px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .composerToggle { flex: 0 0 auto; padding: 5px 9px; border: .5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); font: inherit; font-size: 12px; cursor: pointer; }
 .composerToggle:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }

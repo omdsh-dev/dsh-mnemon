@@ -3,7 +3,6 @@ export interface MnemonLogoProps {
   title?: string
 }
 
-/** Official Mnemon mark from mnemon-dev/mnemon (Apache-2.0). */
 export function MnemonLogo({ className, title = 'Mnemon' }: MnemonLogoProps): JSX.Element {
   return (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label={title}>

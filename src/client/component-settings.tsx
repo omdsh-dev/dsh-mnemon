@@ -24,32 +24,19 @@ import { PanelActions, useLive, useScope, useStaged, WriteFailure } from './sett
 import { SKILLS_PACKAGE, SkillsSettings } from './skills-settings.tsx'
 import { TaskAgentModelRows, useTaskAgentModel } from './task-agent-model.tsx'
 
-/** The packages whose own settings dsh-mnemon supplies, through the same region an installed component uses. */
 export const RUNTIME_PACKAGE = 'dsh-mnemon-source-runtime'
 export const DOCUMENTS_PACKAGE = 'dsh-mnemon-source-documents'
 export const MEMORY_SPACES_PACKAGE = 'dsh-mnemon-source-memory-spaces'
 export const THREE_TIER_PACKAGE = 'dsh-mnemon-strategy-default-three-tier'
 
-/** What a shipped component's settings read and write: dsh-mnemon's own settings and Host connection. */
 export interface ShippedSettingsServices {
   scope: ClientSettingsScope<Config>
-  /** 技能管理's own group of settings. */
   skillsScope?: ClientSettingsScope<SkillsConfig>
   connection?: ClientConnectionHandle
   directoryPicker?: MnemonDirectoryPicker
   t: MnemonTranslate
 }
 
-/**
- * Register the settings dsh-mnemon keeps for its shipped components, the way
- * an installed component registers its own: Runtime Memory carries where its
- * user profile lives and its capacities, Project Documents its active capacity,
- * and the Layered strategy the background tasks it drives.
- * Memory Spaces brings its Providers and embedding itself. Its settings show
- * here, as a fallback, whenever its own client registers none: while it is
- * off, while its client loads, if that client fails, and beside a Memory
- * Spaces of 0.5.21 or earlier.
- */
 export function installShippedComponentSettings(ctx: MemoryComponentUIContext & { locale?: ComponentProps<typeof MemorySpacesSettings>['locale'] }, services: ShippedSettingsServices): () => void {
   const { locale } = ctx
   const disposers = [
@@ -64,8 +51,6 @@ export function installShippedComponentSettings(ctx: MemoryComponentUIContext & 
   ]
   return () => { for (const dispose of disposers.reverse()) dispose() }
 }
-
-// ---- Runtime Memory: user profile scope, child inheritance and file capacities ----
 
 const RUNTIME_LIMITS = ['userLimitBytes', 'memoryLimitBytes'] as const
 type RuntimeLimits = Record<typeof RUNTIME_LIMITS[number], string>
@@ -108,7 +93,6 @@ function formatTokenBadge(tokens: number | undefined): string | undefined {
   return `${tokens} tok`
 }
 
-/** Runtime Memory's scope applies immediately; its byte limits and maintenance token ceiling wait for Apply. */
 export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryComponentSettingsProps }): JSX.Element {
   const { scope, page, t } = props
   const baseId = useId()
@@ -225,9 +209,6 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
   </>
 }
 
-// ---- Project Documents: active document byte capacity ----
-
-/** Project Documents' active capacity limit, staged with Apply. */
 export function DocumentsSettings(props: ShippedSettingsServices & { page: MemoryComponentSettingsProps }): JSX.Element {
   const { scope, page, t } = props
   const baseId = useId()
@@ -287,12 +268,9 @@ export function DocumentsSettings(props: ShippedSettingsServices & { page: Memor
   </>
 }
 
-// ---- Layered strategy: the background tasks it drives ----
-
 type ReviewChoice = Pick<ResolvedIdleReviewConfig, 'enabled' | 'silent' | 'runtimeMemory' | 'persistWatermark' | 'provider' | 'fallback' | 'agentTeams'>
 type ReviewLimits = Pick<ResolvedIdleReviewConfig, 'minIntervalMs' | 'maxPerSession' | 'maxContextChars' | 'maxTokens'>
 
-/** Each limit as the page shows it: the interval in seconds, the others as stored. */
 const LIMITS: ReadonlyArray<{ key: keyof ReviewLimits; min: number; max: number; scale: number; unit: string }> = [
   { key: 'minIntervalMs', min: 5_000, max: 86_400_000, scale: 1_000, unit: 's' },
   { key: 'maxPerSession', min: 0, max: 200, scale: 1, unit: 'x' },
@@ -308,33 +286,22 @@ const choiceOf = (review: ResolvedIdleReviewConfig): ReviewChoice => ({ enabled:
 const limitsOf = (review: ResolvedIdleReviewConfig): Record<keyof ReviewLimits, string> =>
   Object.fromEntries(LIMITS.map(limit => [limit.key, String(review[limit.key] / limit.scale)])) as Record<keyof ReviewLimits, string>
 
-/** The value a limit stores, or undefined when the Host would refuse it. */
 function limitValue(limit: typeof LIMITS[number], text: string): number | undefined {
   if (text.trim() === '') return undefined
   const value = Math.round(Number(text) * limit.scale)
   return Number.isInteger(value) && value >= limit.min && value <= limit.max ? value : undefined
 }
 
-/**
- * The idle review is written whole, as the Host stores it: what is configured
- * now plus what changed, so a setting never set keeps inheriting its default.
- */
 function reviewWrite<T extends Partial<ResolvedIdleReviewConfig>>(configured: Config['idleReview'], next: T, before: T): SettingsOperation[] {
   const changed = (Object.keys(next) as Array<keyof T & string>).filter(key => next[key] !== before[key])
   if (changed.length === 0) return []
   return [{ op: 'set', path: ['idleReview'], value: { ...configured, ...Object.fromEntries(changed.map(key => [key, next[key]])) } }]
 }
 
-/**
- * The Layered strategy's own settings: the model its background task Agents use,
- * and the idle review that keeps its layers in shape. Choices apply at once;
- * the review limits are typed and wait for their Apply.
- */
 export function ThreeTierSettings(props: ShippedSettingsServices & { page: MemoryComponentSettingsProps }): JSX.Element {
   const { scope, connection, page, t } = props
   const snapshot = useScope(scope)
   const savedReview = reviewOf(snapshot.value)
-  // The page belongs to one conversation, so the route it states is the one that conversation's tasks take.
   const taskAgent = useTaskAgentModel({ scope, connection, sessionId: page.sessionId, workspaceId: page.workspace?.id })
   const configured = snapshot.value?.idleReview
   const choice = useLive(choiceOf(savedReview), async next => {
@@ -387,7 +354,6 @@ function IdleReviewRows(props: {
         { value: 'spawn', label: t('config.reviewSpawn'), detail: t('config.reviewSpawnHint') },
         { value: 'fork', label: t('config.reviewFork'), detail: t('config.reviewForkHint') },
       ]} />
-      {/* Only a forked review can find its context unavailable and need another way to run. */}
       {choice.provider === 'fork' && <SelectRow id="mnemon-review-fallback" label={t('config.reviewFallback')} value={choice.fallback} disabled={props.disabled} onChange={fallback => props.onChoice({ fallback })} options={[
         { value: 'spawn', label: t('config.reviewSpawn') },
         { value: 'skip', label: t('config.reviewSkip') },

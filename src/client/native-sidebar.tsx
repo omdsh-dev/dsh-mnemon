@@ -14,12 +14,10 @@ export const MNEMON_MAIN_PANEL_ID = 'mnemon' as MainPanelId
 
 type UsePanelInfoHook = <T>(selector: (info: { activePanelId: string | null }) => T) => T
 
-/** The native Sidebar owns the surrounding button, label, tooltip and state. */
 function MnemonSidebarIcon({ size }: Pick<PropsRuntime<'sidebar.panellist'>, 'size'>): JSX.Element {
   return <MemoryIcon size={size} data-dsh-plugin="dsh-mnemon" data-dsh-part="sidebar-icon" />
 }
 
-/** DSH selects this seat; the shell registration retains Source render authority. */
 function MnemonMainPanel({ seat, controller, usePanelInfo }: { seat: MnemonNativeSidebarSeat; controller: MnemonWorkspaceController; usePanelInfo?: UsePanelInfoHook }): JSX.Element {
   const parent = useRef<HTMLDivElement>(null)
   const panelActive = usePanelInfo === undefined ? true : usePanelInfo(info => info.activePanelId === MNEMON_MAIN_PANEL_ID)
@@ -29,8 +27,6 @@ function MnemonMainPanel({ seat, controller, usePanelInfo }: { seat: MnemonNativ
     controller.open()
     return () => { controller.close(); detach() }
   }, [seat, controller, panelActive])
-  // The top clearance this seat keeps is the window's title bar on DSH Desktop; marking it
-  // lets the window move from there, as from DSH's own pages.
   return <div ref={parent} className={css.nativeWorkspace} data-dsh-mnemon-main-seat>
     <div className={css.windowDragBand} data-window-drag aria-hidden="true" />
   </div>
@@ -41,7 +37,6 @@ interface LayoutPanelInfo {
   subscribe(listener: () => void): () => void
 }
 
-/** Use the published panel contract, with a fallback for replacement layouts. */
 export function mountMnemonSidebarNavigation(
   ctx: MnemonClientContext,
   t: MnemonTranslate,
@@ -96,7 +91,6 @@ export function mountMnemonSidebarNavigation(
         }
       })
     }
-    // Replacement shells may not declare the native panel seats; the fallback entry covers them.
     stopNative = ctx.slots.inject('main', () => ctx.slots.inject('sidebar.panellist', () => {
       const stopMain = ctx.slots.register({
         name: 'main', key: MNEMON_MAIN_PANEL_ID, inject: () => ({ seat, controller }),

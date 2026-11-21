@@ -99,7 +99,6 @@ function releaseDragCapture(drag: DragSession): void {
       drag.captureTarget.releasePointerCapture?.(drag.pointerId)
     }
   } catch {
-    // Pointer capture can already be gone after a native cancellation or app switch.
   }
 }
 
@@ -117,7 +116,6 @@ function waitForAnimations(animations: Animation[], duration: number): Promise<v
   })
 }
 
-/** Shared top-layer dialog behavior for every Mnemon workspace action surface. */
 export function MnemonDialog(props: MnemonDialogProps): JSX.Element | null {
   const titleId = useId()
   const descriptionId = useId()
@@ -306,7 +304,7 @@ export function MnemonDialog(props: MnemonDialogProps): JSX.Element | null {
       window.removeEventListener('blur', cancelOnBlur)
       document.removeEventListener('visibilitychange', cancelWhenHidden)
     }
-    try { event.currentTarget.setPointerCapture?.(event.pointerId) } catch { /* Global pointer listeners keep the gesture alive. */ }
+    try { event.currentTarget.setPointerCapture?.(event.pointerId) } catch { }
   }
 
   useLayoutEffect(() => {
@@ -341,9 +339,6 @@ export function MnemonDialog(props: MnemonDialogProps): JSX.Element | null {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      // A menu portaled out of the dialog owns the keyboard while it is open: it
-      // closes itself on Escape and moves its own focus on Tab, so the dialog
-      // must not steal either one.
       if (event.key === 'Escape') {
         if (event.defaultPrevented) return
         event.preventDefault()
