@@ -103,9 +103,11 @@ function runtimeArea(root: string, userRoot: string = root): StorageAreaInventor
   }
 }
 
-function memorySpacesArea(root: string): StorageAreaInventory {
-  const path = join(root, MEMORY_SPACES_DIRECTORY)
-  if (!existsSync(path)) return missing('memory-bodies', path)
+function memorySpacesArea(root: string, targetRoot: string = root): StorageAreaInventory {
+  const resolvedTarget = canonical(targetRoot)
+  const sharedGlobal = resolvedTarget !== root
+  const path = join(resolvedTarget, MEMORY_SPACES_DIRECTORY)
+  if (!existsSync(path)) return { ...missing('memory-bodies', path), ...(sharedGlobal ? { details: { sharedGlobal: true } } : {}) }
   try {
     const registryPath = join(path, MEMORY_SPACE_REGISTRY_FILE)
     const registry = existsSync(registryPath) ? summarizeMemorySpaceRegistry(readJson(registryPath)) : undefined
@@ -116,28 +118,30 @@ function memorySpacesArea(root: string): StorageAreaInventory {
       kind: 'memory-bodies', path,
       status: invalidRegistry ? 'invalid' : databaseCount === 0 && registered === 0 ? 'empty' : 'ready',
       bytes: safeBytes(path), itemCount: Math.max(registered, databaseCount),
-      details: { registeredBodies: registered, activeBodies: registry?.active ?? 0, databases: databaseCount, registry: registry !== undefined },
+      details: { registeredBodies: registered, activeBodies: registry?.active ?? 0, databases: databaseCount, registry: registry !== undefined, ...(sharedGlobal ? { sharedGlobal: true } : {}) },
       ...(invalidRegistry ? { issue: 'memory-space registry is invalid' } : {}),
     }
   } catch (error) {
-    return { kind: 'memory-bodies', path, status: 'invalid', bytes: safeBytes(path), itemCount: 0, details: {}, issue: error instanceof Error ? error.message : String(error) }
+    return { kind: 'memory-bodies', path, status: 'invalid', bytes: safeBytes(path), itemCount: 0, details: sharedGlobal ? { sharedGlobal: true } : {}, issue: error instanceof Error ? error.message : String(error) }
   }
 }
 
-function documentsArea(root: string): StorageAreaInventory {
-  const path = join(root, DOCUMENTS_DIRECTORY)
+function documentsArea(root: string, targetRoot: string = root): StorageAreaInventory {
+  const resolvedTarget = canonical(targetRoot)
+  const sharedGlobal = resolvedTarget !== root
+  const path = join(resolvedTarget, DOCUMENTS_DIRECTORY)
   const indexPath = join(path, DOCUMENTS_INDEX_FILE)
-  if (!existsSync(indexPath)) return missing('documents', path)
+  if (!existsSync(indexPath)) return { ...missing('documents', path), ...(sharedGlobal ? { details: { sharedGlobal: true } } : {}) }
   try {
     const index = summarizeDocumentIndex(readJson(indexPath))
     if (!index.valid) throw new Error('index.json is not a valid Documents index')
     return {
       kind: 'documents', path, status: index.documents === 0 ? 'empty' : 'ready',
       bytes: safeBytes(path), itemCount: index.documents,
-      details: { activeDocuments: index.active, archivedDocuments: index.archived, index: DOCUMENTS_INDEX_FILE },
+      details: { activeDocuments: index.active, archivedDocuments: index.archived, index: DOCUMENTS_INDEX_FILE, ...(sharedGlobal ? { sharedGlobal: true } : {}) },
     }
   } catch (error) {
-    return { kind: 'documents', path, status: 'invalid', bytes: safeBytes(path), itemCount: 0, details: {}, issue: error instanceof Error ? error.message : String(error) }
+    return { kind: 'documents', path, status: 'invalid', bytes: safeBytes(path), itemCount: 0, details: sharedGlobal ? { sharedGlobal: true } : {}, issue: error instanceof Error ? error.message : String(error) }
   }
 }
 
@@ -169,15 +173,26 @@ function stateArea(root: string): StorageAreaInventory {
   }
 }
 
-function inspect(kind: StorageScopeKind, rawRoot: string | undefined, activeRoot: string, userRoot?: string): StorageScopeInventory {
+interface SplitRoots {
+  userRoot?: string
+  documentsRoot?: string
+  memorySpacesRoot?: string
+}
+
+function inspect(kind: StorageScopeKind, rawRoot: string | undefined, activeRoot: string, split?: SplitRoots): StorageScopeInventory {
   if (rawRoot === undefined) return { kind, configured: false, active: false, available: false, totalBytes: 0, areas: [], issue: 'scope is not configured' }
   const root = canonical(rawRoot)
-  const areas = [runtimeArea(root, userRoot ?? root), memorySpacesArea(root), documentsArea(root), stateArea(root)]
+  const areas = [
+    runtimeArea(root, split?.userRoot ?? root),
+    memorySpacesArea(root, split?.memorySpacesRoot ?? root),
+    documentsArea(root, split?.documentsRoot ?? root),
+    stateArea(root),
+  ]
   const exists = existsSync(root)
   const available = exists && (() => { try { return statSync(root).isDirectory() } catch { return false } })()
   return {
     kind, root, configured: true, active: root === activeRoot, available,
-    totalBytes: areas.reduce((total, area) => total + area.bytes, 0), areas,
+    totalBytes: areas.reduce((total, area) => total + (area.details.sharedGlobal === true ? 0 : area.bytes), 0), areas,
     ...(exists && !available ? { issue: 'storage root is not a directory' } : {}),
   }
 }
@@ -186,7 +201,7 @@ function inspect(kind: StorageScopeKind, rawRoot: string | undefined, activeRoot
 export class StorageScopeInspector {
   constructor(
     private readonly runner: Pick<StorageRoot, 'effectiveDataDir'>,
-    private readonly config: Pick<ResolvedConfig, 'dataDir' | 'storageScope'> & Partial<Pick<ResolvedConfig, 'runtimeUserScope'>>,
+    private readonly config: Pick<ResolvedConfig, 'dataDir' | 'storageScope'> & Partial<Pick<ResolvedConfig, 'runtimeUserScope' | 'documentsScope' | 'memorySpacesScope'>>,
   ) {}
 
   catalog(workspaceRoot?: string): StorageScopeCatalog {
@@ -197,15 +212,19 @@ export class StorageScopeInspector {
     const activeKind: StorageScopeKind = this.config.storageScope
     const custom = configuredDataDir !== undefined && configuredDataDir !== global && configuredDataDir !== workspace ? configuredDataDir : undefined
     const workspaces = workspace === undefined ? undefined : createStorageRoot({ ...this.config, storageScope: 'workspaces' }, workspaceRoot).effectiveDataDir()
-    const sharedUserRoot = this.config.runtimeUserScope === 'global' ? global : undefined
+    const split: SplitRoots = {
+      ...(this.config.runtimeUserScope === 'global' ? { userRoot: global } : {}),
+      ...(this.config.documentsScope === 'global' ? { documentsRoot: global } : {}),
+      ...(this.config.memorySpacesScope === 'global' ? { memorySpacesRoot: global } : {}),
+    }
     return {
       activeKind,
       activeRoot,
       scopes: [
         inspect('global', activeKind === 'global' ? activeRoot : global, activeRoot),
-        inspect('workspace', activeKind === 'workspace' ? activeRoot : workspace, activeRoot, activeKind === 'workspace' ? sharedUserRoot : undefined),
-        inspect('custom', activeKind === 'custom' ? activeRoot : custom, activeRoot, activeKind === 'custom' ? sharedUserRoot : undefined),
-        inspect('workspaces', activeKind === 'workspaces' ? activeRoot : workspaces, activeRoot, activeKind === 'workspaces' ? sharedUserRoot : undefined),
+        inspect('workspace', activeKind === 'workspace' ? activeRoot : workspace, activeRoot, activeKind === 'workspace' ? split : undefined),
+        inspect('custom', activeKind === 'custom' ? activeRoot : custom, activeRoot, activeKind === 'custom' ? split : undefined),
+        inspect('workspaces', activeKind === 'workspaces' ? activeRoot : workspaces, activeRoot, activeKind === 'workspaces' ? split : undefined),
       ].map(scope => ({ ...scope, active: scope.kind === activeKind })),
       generatedAt: new Date().toISOString(),
     }

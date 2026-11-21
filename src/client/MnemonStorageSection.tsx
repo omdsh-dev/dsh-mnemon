@@ -146,6 +146,12 @@ export function MnemonStorageSection(props: MnemonStorageSectionProps): JSX.Elem
   const sync = useLive(props.value?.syncEnabled === true, async value => {
     await props.scope.mutate([{ op: 'set', path: ['syncEnabled'], value }])
   })
+  const documentsScope = useLive<'storage' | 'global'>(props.value?.documentsScope === 'global' ? 'global' : 'storage', async value => {
+    await props.scope.mutate([{ op: 'set', path: ['documentsScope'], value }])
+  })
+  const memorySpacesScope = useLive<'storage' | 'global'>(props.value?.memorySpacesScope === 'global' ? 'global' : 'storage', async value => {
+    await props.scope.mutate([{ op: 'set', path: ['memorySpacesScope'], value }])
+  })
   const { draft } = storage
   const problem = storageProblem(t, draft)
   const canPick = props.target?.nativeDirectoryPicker === true && props.directoryPicker?.available() === true
@@ -234,6 +240,18 @@ export function MnemonStorageSection(props: MnemonStorageSectionProps): JSX.Elem
           <PageLink label={t('storage.runtimeSettings')} onOpen={() => props.onOpen(runtime, 'user-scope')} />
         </SettingRow>
       )}
+      {saved.scope !== 'global' && <>
+        <p className={css.panelNote}>{t('config.componentScopeSwitchHint')}</p>
+        <SelectRow id="mnemon-documents-scope" label={t('config.documentsScopeTitle')} value={documentsScope.value} disabled={props.disabled} onChange={documentsScope.set} options={[
+          { value: 'storage', label: t('config.componentScopeStorage'), detail: t('config.documentsScopeStorageHint') },
+          { value: 'global', label: t('config.componentScopeGlobal'), detail: t('config.documentsScopeGlobalHint') },
+        ]} />
+        <SelectRow id="mnemon-memory-spaces-scope" label={t('config.memorySpacesScopeTitle')} value={memorySpacesScope.value} disabled={props.disabled} onChange={memorySpacesScope.set} options={[
+          { value: 'storage', label: t('config.componentScopeStorage'), detail: t('config.memorySpacesScopeStorageHint') },
+          { value: 'global', label: t('config.componentScopeGlobal'), detail: t('config.memorySpacesScopeGlobalHint') },
+        ]} />
+        <WriteFailure error={documentsScope.failed ?? memorySpacesScope.failed} t={t} />
+      </>}
       <AdvancedSection title={t('workspace.excludeTitle')} hint={t('workspace.excludeHint')}
         badge={excludedCount > 0 ? t('workspace.excludeCount', { count: excludedCount }) : t('workspace.excludeNone')}
         defaultOpen={excludedCount > 0} section="exclusions">

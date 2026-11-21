@@ -272,6 +272,78 @@ describe('live runtime routing and workspace persistence', () => {
       expect(() => f.live.forAgent(agent('missing-cwd', ''))).toThrow('no workspace')
       expect(() => f.live.forWorkspaceId('../../other')).toThrow('unavailable')
     })
+
+    it('shares global Documents and Memory Spaces across workspaces while keeping MEMORY.md isolated (issue 374)', async () => {
+      const central = directory(), globalRoot = directory(), one = directory(), two = directory()
+      vi.stubEnv('MNEMON_DATA_DIR', globalRoot)
+      const workspaces = [{ id: 'one', path: one, title: 'One' }, { id: 'two', path: two, title: 'Two' }]
+      const f = await compositionFixture({
+        storageScope: 'workspaces',
+        dataDir: central,
+        runtimeUserScope: 'global',
+        documentsScope: 'global',
+        memorySpacesScope: 'global',
+      }, {
+        workspaceRegistry: { get: id => workspaces.find(workspace => workspace.id === id), list: () => workspaces },
+      })
+      fixtures.push(f)
+      const first = f.live.forWorkspaceId('one'), second = f.live.forWorkspaceId('two')
+      await first.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Workspace One local fact' })
+      await first.source('runtime').mutate('mutate', { action: 'add', target: 'user', content: 'Global profile rule' })
+      await first.source('documents').mutate('mutate', { action: 'create', title: 'Shared Handbook', content: '# Shared across workspaces' })
+      const spaces = first.source('memory-spaces')
+      await spaces.mutate('provider-service-update', { providerId: 'holographic', settings: {}, enabled: true })
+      const catalog = await spaces.read<{ items: Array<{ id: string; provider: { id: string } }> }>('body-directory')
+      const body = catalog.items.find(item => item.provider.id === 'holographic')!
+      expect(body).toBeDefined()
+      await spaces.mutate('remember', { memoryBodyId: body.id, content: 'Shared durable insight' })
+
+      // Workspace Two keeps MEMORY.md isolated, while sharing USER.md, Documents, and Memory Spaces from globalRoot.
+      const secondRuntime = await second.source('runtime').read<RuntimeMemorySnapshot>('snapshot')
+      expect(secondRuntime.entries.map(entry => entry.content)).toEqual(['Global profile rule'])
+      expect((await second.source('documents').read<{ activeCount: number; documents: Array<{ title: string }> }>('snapshot'))).toMatchObject({
+        activeCount: 1,
+        documents: [expect.objectContaining({ title: 'Shared Handbook' })],
+      })
+      expect((await second.source('memory-spaces').read<{ items: Array<{ id: string }> }>('body-directory')).items.some(item => item.id === body.id)).toBe(true)
+      await expect(second.source('memory-spaces').read('list', { memoryBodyIds: [body.id] })).resolves.toMatchObject({
+        items: [expect.objectContaining({ content: 'Shared durable insight' })],
+      })
+      const active = first.storage.catalog(one).scopes.find(scope => scope.active)!
+      expect(active.areas).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: 'runtime', status: 'ready', details: expect.objectContaining({ userEntries: 1, memoryEntries: 1, projectionsHealthy: true }) }),
+        expect.objectContaining({ kind: 'documents', path: join(globalRoot, 'documents'), itemCount: 1 }),
+        expect.objectContaining({ kind: 'memory-bodies', path: join(globalRoot, 'data'), details: expect.objectContaining({ sharedGlobal: true }) }),
+      ]))
+      expect(existsSync(join(globalRoot, 'documents', 'index.json'))).toBe(true)
+      expect(existsSync(join(globalRoot, 'state', 'memory-providers.json'))).toBe(true)
+      expect(existsSync(join(first.directory, 'documents', 'index.json'))).toBe(false)
+      expect(existsSync(join(first.directory, 'state', 'memory-providers.json'))).toBe(false)
+
+      f.live.swap(createRuntimeGraph(resolveConfig({ ...f.config, documentsScope: 'storage' }), one, f.extensions))
+      const localDocuments = f.live.forWorkspaceId('one').source('documents')
+      await expect(localDocuments.read('snapshot')).resolves.toMatchObject({ activeCount: 0 })
+      await localDocuments.mutate('mutate', { action: 'create', title: 'Local Handbook', content: '# Workspace One only' })
+      await expect(f.live.forWorkspaceId('two').source('documents').read('snapshot')).resolves.toMatchObject({ activeCount: 0 })
+      await expect(f.live.forWorkspaceId('two').source('memory-spaces').read('list', { memoryBodyIds: [body.id] })).resolves.toMatchObject({
+        items: [expect.objectContaining({ content: 'Shared durable insight' })],
+      })
+
+      f.live.swap(createRuntimeGraph(resolveConfig({ ...f.config, memorySpacesScope: 'storage' }), one, f.extensions))
+      const isolated = f.live.forWorkspaceId('two')
+      await expect(isolated.source('documents').read('snapshot')).resolves.toMatchObject({
+        activeCount: 1,
+        documents: [expect.objectContaining({ title: 'Shared Handbook' })],
+      })
+      const isolatedSpaces = await isolated.source('memory-spaces').read<{ items: Array<{ id: string }> }>('body-directory')
+      expect(isolatedSpaces.items.some(item => item.id === body.id)).toBe(false)
+
+      f.live.swap(createRuntimeGraph(f.config, one, f.extensions))
+      await expect(f.live.forWorkspaceId('two').source('memory-spaces').read('list', { memoryBodyIds: [body.id] })).resolves.toMatchObject({
+        items: [expect.objectContaining({ content: 'Shared durable insight' })],
+      })
+      expect(existsSync(join(first.directory, 'documents', 'index.json'))).toBe(true)
+    })
   })
 })
 

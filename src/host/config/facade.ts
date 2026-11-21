@@ -115,7 +115,7 @@ function assertInitializableDirectory(directory: string): void {
  */
 export function validateRuntimeComposition(config: ResolvedConfig, extensions: RuntimeCompositionSource): void {
   assertInitializableDirectory(createStorageRoot(config, undefined).effectiveDataDir())
-  if (config.runtimeUserScope === 'global') {
+  if (config.runtimeUserScope === 'global' || config.documentsScope === 'global' || config.memorySpacesScope === 'global') {
     assertInitializableDirectory(resolveGlobalDataDir())
   }
   validateMemoryGraphComposition(
@@ -409,7 +409,7 @@ function descriptor(settings: HostSettingsService, namespace: string) {
 }
 
 const MUTABLE_FIELDS = [
-  'storageScope', 'runtimeUserScope', 'excludedWorkspaces', 'cliPath', 'dataDir', 'customPackId', 'customPacks', 'store', 'timeoutMs', 'defaultRecallLimit',
+  'storageScope', 'runtimeUserScope', 'documentsScope', 'memorySpacesScope', 'excludedWorkspaces', 'cliPath', 'dataDir', 'customPackId', 'customPacks', 'store', 'timeoutMs', 'defaultRecallLimit',
   'documents', 'runtimeMemory',
   'embedding',
   'recallQuality',
@@ -477,6 +477,15 @@ export function createSettingsHandler(settings: HostSettingsService, credentials
         if (op.op === 'unset') return { op: 'unset' as const, path }
         if (op.op !== 'set') throw new Error(`unsupported settings operation: ${String(op.op)}`)
         if (path[0] === 'memoryTopology' && typeof op.value !== 'boolean') throw new Error('memory layer enabled must be boolean')
+        if (
+          namespace === MNEMON_SETTINGS_NAMESPACE
+          && path.length === 1
+          && (path[0] === 'runtimeUserScope' || path[0] === 'documentsScope' || path[0] === 'memorySpacesScope')
+          && op.value !== 'storage'
+          && op.value !== 'global'
+        ) {
+          throw new Error(`${path[0]} must be "storage" or "global"`)
+        }
         if (namespace === MNEMON_SETTINGS_NAMESPACE && path[0] === 'documents') {
           requirePayloadObject(op.value)
           DocumentsSchema(op.value as never)

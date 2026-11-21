@@ -130,6 +130,10 @@ export interface Config {
   storageScope?: StorageScopeKind
   /** Whether USER.md follows the selected storage root or stays in the global root. */
   runtimeUserScope?: 'storage' | 'global'
+  /** Whether Project Documents follow the selected storage root or share the global root. */
+  documentsScope?: 'storage' | 'global'
+  /** Whether Memory Spaces and provider connections follow the selected storage root or share the global root. */
+  memorySpacesScope?: 'storage' | 'global'
   excludedWorkspaces?: string[]
   cliPath?: string
   dataDir?: string
@@ -219,6 +223,8 @@ export interface InteractionConfig {
 export interface ResolvedConfig {
   storageScope: StorageScopeKind
   runtimeUserScope: 'storage' | 'global'
+  documentsScope: 'storage' | 'global'
+  memorySpacesScope: 'storage' | 'global'
   excludedWorkspaces: string[]
   cliPath?: string
   dataDir?: string

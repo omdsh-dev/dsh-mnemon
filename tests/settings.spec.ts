@@ -58,6 +58,28 @@ describe('Mnemon settings bridge', () => {
     await expect(handler('mutate', { ops: [{ op: 'unset', path: ['displayMode'] }] })).resolves.toMatchObject({ ok: true })
   })
 
+  it('validates per-component storage scope mutations and rejects invalid values', async () => {
+    const mutate = vi.fn(async () => {})
+    const settings = {
+      writable: true,
+      register: vi.fn(),
+      mutate,
+      describe: () => [{ ns: 'mnemon', value: {}, revision: 1, applies: 'live' as const }],
+    } as unknown as HostSettingsService
+    const handler = createSettingsHandler(settings)
+    const ops = [
+      { op: 'set', path: ['documentsScope'], value: 'global' },
+      { op: 'set', path: ['memorySpacesScope'], value: 'global' },
+    ]
+    await expect(handler('mutate', { ops, expectedRevision: 1 })).resolves.toMatchObject({ ok: true })
+    expect(mutate).toHaveBeenCalledWith('mnemon', ops, 1)
+
+    await expect(handler('mutate', { ops: [{ op: 'unset', path: ['documentsScope'] }, { op: 'unset', path: ['memorySpacesScope'] }] })).resolves.toMatchObject({ ok: true })
+    await expect(handler('mutate', { ops: [{ op: 'set', path: ['documentsScope'], value: 'workspace' }] })).resolves.toMatchObject({ ok: false, error: { code: 'settings-rejected' } })
+    await expect(handler('mutate', { ops: [{ op: 'set', path: ['memorySpacesScope'], value: 'invalid' }] })).resolves.toMatchObject({ ok: false, error: { code: 'settings-rejected' } })
+    expect(mutate).toHaveBeenCalledTimes(2)
+  })
+
   it('rejects unsupported settings fields', async () => {
     const settings = {
       writable: true,

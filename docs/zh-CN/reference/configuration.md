@@ -100,6 +100,8 @@ mnemon:
 |---|---:|---|---|
 | `storageScope` | `global` | `global` / `workspace` / `custom` / `workspaces` | 统一控制 Runtime、Documents、Memory Spaces 和预留 state 根目录 |
 | `runtimeUserScope` | `storage` | `storage` / `global` | 让 USER.md 跟随当前存储根，或叠加全局 USER.md，同时保持项目 MEMORY.md 与其他层使用所选范围 |
+| `documentsScope` | `storage` | `storage` / `global` | 让项目档案跟随当前存储根，或所有工作区共用全局项目档案库 |
+| `memorySpacesScope` | `storage` | `storage` / `global` | 让记忆空间与 Provider 连接跟随当前存储根，或所有工作区共用全局记忆空间存储 |
 | `excludedWorkspaces` | `[]` | 已存在目录的绝对路径列表 | 让指定工作区及其子代理不参与记忆，不删除已有数据 |
 | `dataDir` | 未设置 | 绝对路径、`~` 或 `~/...` | `custom` 时必填；`workspaces` 时为可选集中根目录；旧配置只设置它时自动解析为 `custom` |
 | `cliPath` | 自动发现 | 可执行路径 | 显式指定 Mnemon CLI |
@@ -340,10 +342,12 @@ mnemon:
 mnemon:
   storageScope: workspaces
   dataDir: ~/central-memory # 可选；默认 MNEMON_DATA_DIR 或 ~/.mnemon
-  runtimeUserScope: global # 可选；只共享 USER.md
+  runtimeUserScope: global # 可选；全局共享 USER.md
+  documentsScope: global # 可选；全局共享项目档案库
+  memorySpacesScope: global # 可选；全局共享记忆空间与 Provider 连接
 ```
 
-四个 area（`runtime`、`data`、`documents`、`state`）都保存在 `<集中根>/workspaces/<规范工作区路径的 SHA-256>/`。现存符号链接别名解析到同一 ID，不同工作区路径相互隔离。移动或重命名会选择新 ID，不会自动迁移。侧栏跟随所选的已登记工作区，会话标签页和 Headless 跟随所属会话 cwd。即使集中根为自定义目录，全局 USER.md 仍使用 `MNEMON_DATA_DIR` 或 `~/.mnemon`。
+除非单独通过 `runtimeUserScope: global`、`documentsScope: global` 或 `memorySpacesScope: global` 开启全局共享，四个 area（`runtime`、`data`、`documents`、`state`）都保存在 `<集中根>/workspaces/<规范工作区路径的 SHA-256>/`。现存符号链接别名解析到同一 ID，不同工作区路径相互隔离。移动或重命名会选择新 ID，不会自动迁移。侧栏跟随所选的已登记工作区，会话标签页和 Headless 跟随所属会话 cwd。即使集中根为自定义目录，设为 `global` 的组件仍使用 `MNEMON_DATA_DIR` 或 `~/.mnemon`。
 
 工作区身份解析允许尚未创建的目录后代，包括 Unicode 名称和符号链接别名下的后代。若路径位于现存文件之下，所有平台（包括 Windows）都会在计算存储 ID 之前以 `ENOTDIR` 拒绝。有效 ID 保持不变，既有存储不会被移动、改写或删除。
 

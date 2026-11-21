@@ -79,7 +79,7 @@ follow an exact cold reference when full text is required
         +-- git/                  # 同步分支的可丢弃 Git 镜像；不属于任何数据组件
 ```
 
-`storageScope` 选择的是整个根，而不只是 Mnemon 数据库；每个范围解析到哪个根，见[存储范围](./configuration.md#存储范围)。显式启用的 `runtimeUserScope=global` 是唯一的分根例外：Runtime 从全局根读取 USER.md，MEMORY.md 与其他所有组件仍留在所选根。工作台任务使用查看工作区；对话工具与生命周期使用所属会话的 cwd 和已固定的 View。Host 解析目录时不创建文件，也不修改旧根。
+`storageScope` 选择的是整个根，而不只是 Mnemon 数据库；每个范围解析到哪个根，见[存储范围](./configuration.md#存储范围)。显式启用的分组件范围开关允许在保持 `MEMORY.md` 按工作区隔离的同时，按需共享全局根：`runtimeUserScope=global` 从全局根读取 `USER.md`，`documentsScope=global` 共享全局项目档案库，`memorySpacesScope=global` 共享全局记忆空间数据库与 Provider 注册表。Mnemon Pack 与 Git 同步仍面向单个所选存储根，不会暗中混入独立的全局根。工作台任务使用查看工作区；对话工具与生命周期使用所属会话的 cwd 和已固定的 View。Host 解析目录时不创建文件，也不修改旧根。
 
 `state/` 下的文件：
 
