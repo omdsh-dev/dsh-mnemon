@@ -1,12 +1,13 @@
-// The release plan and its publication steps: --check (read-only), --pack, --publish-plugins, --verify-plugins, --publish-starter, --verify-release.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual, promisify } from 'node:util'
+import { gunzipSync } from 'node:zlib'
 import semver from 'semver'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -16,6 +17,11 @@ const manifestName = 'release-manifest.json'
 const starterName = 'dsh-mnemon'
 const internalName = /^dsh-mnemon-(?:source|strategy|provider)-[a-z0-9-]+$/u
 const releaseVersion = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(alpha|beta|rc)\.(?:0|[1-9]\d*))?$/u
+const fullRevisionPattern = /^[0-9a-f]{40}$/u
+const starterReadmeFiles = ['README.md', 'README.zh-CN.md']
+const floatingMainUrlSource = '(https:\\/\\/(?:raw\\.githubusercontent\\.com\\/omdsh-dev\\/dsh-mnemon\\/|github\\.com\\/omdsh-dev\\/dsh-mnemon\\/(?:blob|tree)\\/))main(?=\\/)'
+const floatingMainUrlGlobal = new RegExp(floatingMainUrlSource, 'gu')
+const floatingMainUrlTest = new RegExp(floatingMainUrlSource, 'u')
 
 function distTagForVersion(version) {
   const match = releaseVersion.exec(version)
@@ -52,7 +58,6 @@ function buildPluginLayers(plugins, packagesByName) {
   return layers
 }
 
-/** Official distribution only. External plugin repositories own their releases. */
 export function createReleasePlan(packages, { tag, prerelease, baseVersions } = {}) {
   const starter = packages.find(item => item.manifest.name === starterName)
   assert(starter, 'Release must include the default Starter')
@@ -227,9 +232,84 @@ export function assertVersionedPublicationChanges(plan, paths, options) {
 }
 
 async function npm(args, cwd) {
-  // Release publication runs on Linux. No shell expansion or implicit scripts.
   const { stdout } = await execute('npm', args, { cwd, timeout: 300_000, maxBuffer: 16 * 1024 * 1024 })
   return stdout
+}
+
+export function pinPackageReadmeLinks(markdown, revision) {
+  assert.match(revision ?? '', fullRevisionPattern, 'Pinning README links requires a full 40-character commit SHA')
+  return markdown.replace(floatingMainUrlGlobal, `$1${revision}`)
+}
+
+function readTarString(buffer, start, end) {
+  const slice = buffer.subarray(start, end)
+  const nul = slice.indexOf(0)
+  return (nul === -1 ? slice : slice.subarray(0, nul)).toString('utf8')
+}
+
+export function readTarballTextEntries(tarballBytes, entryNames) {
+  const wanted = new Set(entryNames)
+  const tar = gunzipSync(tarballBytes)
+  const entries = new Map()
+  let offset = 0
+  while (offset + 512 <= tar.length) {
+    const header = tar.subarray(offset, offset + 512)
+    if (header.every(byte => byte === 0)) break
+    const name = readTarString(header, 0, 100)
+    const prefix = readTarString(header, 345, 500)
+    const fullName = prefix ? `${prefix}/${name}` : name
+    const rawSize = readTarString(header, 124, 136).trim()
+    const size = rawSize === '' ? 0 : Number.parseInt(rawSize, 8)
+    assert(Number.isSafeInteger(size) && size >= 0, `Invalid tar entry size for ${fullName}`)
+    const typeFlag = header[156]
+    const dataStart = offset + 512
+    const dataEnd = dataStart + size
+    if ((typeFlag === 0 || typeFlag === 48) && wanted.has(fullName)) {
+      entries.set(fullName, tar.subarray(dataStart, dataEnd).toString('utf8'))
+    }
+    offset = dataStart + Math.ceil(size / 512) * 512
+  }
+  return entries
+}
+
+export async function verifyPinnedTarballReadmes(tarballPath, revision, repoDirectory = root) {
+  assert.match(revision ?? '', fullRevisionPattern, 'Verifying tarball READMEs requires a full 40-character commit SHA')
+  const wanted = starterReadmeFiles.map(file => `package/${file}`)
+  const entries = readTarballTextEntries(await readFile(tarballPath), wanted)
+  const pinnedPattern = new RegExp(
+    `https:\\/\\/(?:raw\\.githubusercontent\\.com\\/omdsh-dev\\/dsh-mnemon\\/|github\\.com\\/omdsh-dev\\/dsh-mnemon\\/(?:blob|tree)\\/)${revision}\\/([^\\s)"'<>#?]+)`,
+    'gu',
+  )
+  for (const file of starterReadmeFiles) {
+    const content = entries.get(`package/${file}`)
+    assert(content !== undefined, `${starterName}: packed tarball is missing ${file}`)
+    assert(!floatingMainUrlTest.test(content), `${starterName}: packed ${file} still contains floating /main/ repository links`)
+    const targets = [...content.matchAll(pinnedPattern)].map(match => decodeURIComponent(match[1]))
+    assert(targets.length > 0, `${starterName}: packed ${file} contains no pinned ${revision} repository links`)
+    for (const target of targets) {
+      assert(existsSync(join(repoDirectory, target)), `${starterName}: packed ${file} references missing path ${target}`)
+    }
+  }
+}
+
+async function withPinnedStarterReadmes(directory, revision, action) {
+  const originals = new Map()
+  for (const file of starterReadmeFiles) {
+    const filePath = join(directory, file)
+    if (!existsSync(filePath)) continue
+    const original = await readFile(filePath, 'utf8')
+    originals.set(filePath, original)
+  }
+  try {
+    for (const [filePath, original] of originals) {
+      await writeFile(filePath, pinPackageReadmeLinks(original, revision))
+    }
+    return await action()
+  } finally {
+    for (const [filePath, original] of originals) {
+      await writeFile(filePath, original)
+    }
+  }
 }
 
 async function fileIntegrity(path) {
@@ -244,21 +324,29 @@ async function assertNoPendingReleaseIntents(directory = root) {
   assert.equal(pending.length, 0, `Apply pending changesets in a release pull request first: ${pending.join(', ')}`)
 }
 
-export async function packRelease(plan, destination, run = npm) {
+export async function packRelease(plan, destination, run = npm, { revision } = {}) {
   assert(plan.selectionComputed, 'Packing requires a release selection computed from a base revision')
   assert(plan.releasePackages.length > 0, 'No package version advanced since the base release')
+  if (revision !== undefined) {
+    assert.match(revision, fullRevisionPattern, 'Packing with pinned README links requires a full 40-character commit SHA')
+  }
   await mkdir(destination, { recursive: true })
   const existing = await readdir(destination)
   assert.equal(existing.length, 0, `Release artifact directory must be empty: ${destination}`)
   const artifacts = []
   for (const item of plan.releasePackages) {
-    const output = await run(['pack', '--ignore-scripts', '--json', '--pack-destination', destination], item.directory)
+    const packCommand = () => run(['pack', '--ignore-scripts', '--json', '--pack-destination', destination], item.directory)
+    const pinStarter = item === plan.starter && revision !== undefined
+    const output = pinStarter
+      ? await withPinnedStarterReadmes(item.directory, revision, packCommand)
+      : await packCommand()
     const [artifact] = JSON.parse(output)
     assert.equal(artifact.name, item.manifest.name, 'Unexpected packed package')
     assert.equal(artifact.version, item.manifest.version, `${artifact.name}: unexpected packed version`)
     assert.equal(artifact.filename, basename(artifact.filename), 'Artifact filename must not escape the destination')
     assert(artifact.files.some(file => file.path === 'LICENSE'), `${artifact.name}: packed license is missing`)
     const filename = join(destination, artifact.filename)
+    if (pinStarter) await verifyPinnedTarballReadmes(filename, revision, item.directory)
     const integrity = await fileIntegrity(filename)
     if (artifact.integrity !== undefined) assert.equal(artifact.integrity, integrity, `${artifact.name}: npm pack integrity mismatch`)
     artifacts.push({ name: artifact.name, version: artifact.version, filename, integrity, size: (await stat(filename)).size })
@@ -492,7 +580,7 @@ async function main() {
   const destination = resolve(options.get('--artifacts') ?? await mkdtemp(join(tmpdir(), 'mnemon-release-')))
   const registry = options.get('--registry') ?? defaultRegistry
   if (mode === '--pack') {
-    const artifacts = await packRelease(plan, destination)
+    const artifacts = await packRelease(plan, destination, npm, { revision: RELEASE_REVISION })
     await writeReleaseManifest(plan, artifacts, destination)
     console.log(`Packed ${artifacts.length} selected frozen artifacts in ${destination}`)
     return

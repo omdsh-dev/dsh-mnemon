@@ -4,7 +4,7 @@
 
 dsh-mnemon gives DeepSeek Harness three kinds of memory: **runtime memory** in every turn, **Project Documents** searched when a question needs them, and **Memory Spaces** for durable evidence on the Provider you choose. A main strategy decides how they take part in each turn; you pick it, and any enhancements, on the Plugins page. Start with the default Layered strategy; you never need to manage plugins to use it.
 
-[![The Memory composition board on the dsh-mnemon plugin page](../assets/webui/en/plugin-composition.jpg)](./guides/ui-guide.md#on-the-plugins-page)
+[![The Memory composition board on the dsh-mnemon plugin page](../assets/webui-v0.5.32/en/plugin-composition.jpg)](./guides/ui-guide.md#on-the-plugins-page)
 
 ## Use the system
 
@@ -48,4 +48,4 @@ dsh-mnemon gives DeepSeek Harness three kinds of memory: **runtime memory** in e
 
 [Changelog](../../CHANGELOG.md) · [Release history](./releases/README.md) · [Roadmap](./roadmap.md)
 
-Guides describe the current release. Product media lives under [docs/assets](../assets/README.md) ([WebUI](../assets/webui/README.md), [Skills](../assets/skills/README.md), [Installation](../assets/install/README.md)). Internal Host RPCs are not an external plugin SDK.
+Guides describe the current release. Product media lives under [docs/assets](../assets/README.md) ([WebUI](../assets/webui-v0.5.32/README.md), [Skills](../assets/skills-v0.5.34/README.md), [Installation](../assets/install-v0.5.19/README.md)). Internal Host RPCs are not an external plugin SDK.

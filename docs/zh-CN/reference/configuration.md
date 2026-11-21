@@ -228,7 +228,7 @@ mnemon:
 
 运行时记忆页面显示每个文件的已用大小与上限。
 
-![运行时记忆：USER.md 与 MEMORY.md 及其默认上限](../../assets/webui/zh-CN/memory-runtime-limits.jpg)
+![运行时记忆：USER.md 与 MEMORY.md 及其默认上限](../../assets/webui-v0.5.32/zh-CN/memory-runtime-limits.jpg)
 
 ### Mnemon Native 嵌入
 
@@ -268,7 +268,7 @@ Endpoint 必须是不含凭据、查询参数或片段的 HTTP(S) 绝对 URL。M
 
 配置事务只发布最终 Source 集合，回滚也遵循这一边界，中间的卸载与重载不会改变模型 schema。已有 Agent 在下一次模型请求时收到正常的 DSH 工具目录更新。委派子 Agent 的任务允许列表只包含当前已注册的工具；没有适用的 Runtime 或 Documents 写入目标时，空闲审查会跳过。
 
-![记忆组合：每个记忆来源与增强各有一个开关](../../assets/webui/zh-CN/plugin-composition.jpg)
+![记忆组合：每个记忆来源与增强各有一个开关](../../assets/webui-v0.5.32/zh-CN/plugin-composition.jpg)
 
 关闭是可逆的路由状态，不是删除。它在记忆系统中的页面会保留并标记为**未运行**，不读取数据面；状态页与管理目录仍可查看。重新打开后使用原来的目录与数据。最后一个运行中的 Source 不能关闭。旧版的 `memoryTopology.layers.<id>.enabled` 标记会随 Source 一起恢复，只在读不到组件时使用。
 

@@ -10,7 +10,7 @@ You meet dsh-mnemon in three places. The conversation shows what each turn read 
 | [The Memory System](#the-memory-system) | Check status; browse, search and edit runtime memory, documents and memory spaces; manage skills | **Memory System** in the sidebar, or a session tab |
 | [On the Plugins page](#on-the-plugins-page) | Choose strategies and enhancements; set up components, storage and the interface | **Plugins → dsh-mnemon**, or the gear in the Memory System header |
 
-The recordings and screenshots come from the [v0.5.32 gallery](../../assets/webui/README.md): a real DSH 0.2.1 WebUI in light appearance with a seeded, fictional project, Lumen. The live DeepSeek model wrote every answer, write and receipt; waits for the model play at 4x or 6x, marked in the lower right corner. A local Ollama served embeddings at Mnemon's default endpoint, with the Mnemon Native embedding settings at their default, so every memory has a vector. The Skills screens come from the [v0.5.34 Skills gallery](../../assets/skills/README.md), on the same project with a scripted model.
+The recordings and screenshots come from the [v0.5.32 gallery](../../assets/webui-v0.5.32/README.md): a real DSH 0.2.1 WebUI in light appearance with a seeded, fictional project, Lumen. The live DeepSeek model wrote every answer, write and receipt; waits for the model play at 4x or 6x, marked in the lower right corner. A local Ollama served embeddings at Mnemon's default endpoint, with the Mnemon Native embedding settings at their default, so every memory has a vector. The Skills screens come from the [v0.5.34 Skills gallery](../../assets/skills-v0.5.34/README.md), on the same project with a scripted model.
 
 Two rules hold everywhere. **Switches and selectors apply as soon as you change them**; if a write fails, the control shows the saved value again next to the reason. **Typed values wait for their group's Apply**, which appears once something changed, together with a note on what applying will do.
 
@@ -18,30 +18,30 @@ Runtime settings also offer **Read low-priority memory on demand** (off by defau
 
 ## In a conversation
 
-![Ask a question, expand the turn memory bar, and open the document it read in Project Documents](../../assets/webui/en/recall.gif)
+![Ask a question, expand the turn memory bar, and open the document it read in Project Documents](../../assets/webui-v0.5.32/en/recall.gif)
 
 ### Turn memory bar
 
 A reply that used memory ends with a **Turn memory** line: the Memory System's brain mark, then how many recalls, document searches and writes the turn made. Expanded, it has one row per tool. On the left, the tool says in plain words what it did, such as **Document search** or **Memory Spaces recall ×2**; hover to see the tool's own name. On the right are the items it read or wrote.
 
-![An answer drawn from working memory and Project Documents; the expanded bar lists three documents and one more](../../assets/webui/en/chat-recall.jpg)
+![An answer drawn from working memory and Project Documents; the expanded bar lists three documents and one more](../../assets/webui-v0.5.32/en/chat-recall.jpg)
 
 - Select a tool to open its page in the Memory System.
 - Select an item to open it where it lives: a document is selected in **Project Documents**; a memory runs as a query on the **Recall** page; a runtime entry is highlighted and scrolled to in **Runtime memory**.
 - Each tool lists up to three items and counts the rest; an item known only by its id stays out. On a phone, the items sit below their tool.
 - Turns without memory activity show no bar.
 
-When you correct a fact, the Agent replaces the runtime memory entry and the bar reports the write; select it to see the replaced entry. Here the Agent also updated the checkout LCP investigation in Project Documents, whose latest measurement no longer meets the target, so the bar lists a runtime memory write and a document update. [Watch the correction](../../assets/webui/en/correct.mp4).
+When you correct a fact, the Agent replaces the runtime memory entry and the bar reports the write; select it to see the replaced entry. Here the Agent also updated the checkout LCP investigation in Project Documents, whose latest measurement no longer meets the target, so the bar lists a runtime memory write and a document update. [Watch the correction](../../assets/webui-v0.5.32/en/correct.mp4).
 
 | A correction and its writes | Its runtime item opens the entry, highlighted |
 |---|---|
-| ![The reply to a new checkout target; the turn memory bar lists a runtime memory update with the new target and a document update to the checkout LCP investigation](../../assets/webui/en/chat-correction.jpg) | ![Runtime memory with the replaced checkout target entry highlighted](../../assets/webui/en/memory-runtime.jpg) |
+| ![The reply to a new checkout target; the turn memory bar lists a runtime memory update with the new target and a document update to the checkout LCP investigation](../../assets/webui-v0.5.32/en/chat-correction.jpg) | ![Runtime memory with the replaced checkout target entry highlighted](../../assets/webui-v0.5.32/en/memory-runtime.jpg) |
 
 Temporary progress, guesses and secrets are not written.
 
 ### Save to memory
 
-![Select the brain mark under a reply, edit the candidate, send it to the task Agent, then view the new memory from the receipt](../../assets/webui/en/save.gif)
+![Select the brain mark under a reply, edit the candidate, send it to the task Agent, then view the new memory from the receipt](../../assets/webui-v0.5.32/en/save.gif)
 
 Each finished reply has a brain-shaped **Save to memory** in its action strip, the same mark as the Memory System; the database icon beside it is DSH's usage, not memory. Selecting it reads that reply and opens a dialog:
 
@@ -56,13 +56,13 @@ Each finished reply has a brain-shaped **Save to memory** in its action strip, t
 
 | Edit the candidate | Choose where it goes | The task Agent's receipt |
 |---|---|---|
-| ![Save to memory with Task Agent ready and the candidate cut down to one fact](../../assets/webui/en/chat-save.jpg) | ![Save to open: Let the Agent decide, Working memory (MEMORY.md), User profile (USER.md), and the Lumen project and Team conventions Memory Spaces](../../assets/webui/en/chat-save-target.jpg) | ![Receipt: saved in the Lumen project Memory Space and linked to the earlier note on the synchronous SDK, with View in Memory Spaces](../../assets/webui/en/chat-save-receipt.jpg) |
+| ![Save to memory with Task Agent ready and the candidate cut down to one fact](../../assets/webui-v0.5.32/en/chat-save.jpg) | ![Save to open: Let the Agent decide, Working memory (MEMORY.md), User profile (USER.md), and the Lumen project and Team conventions Memory Spaces](../../assets/webui-v0.5.32/en/chat-save-target.jpg) | ![Receipt: saved in the Lumen project Memory Space and linked to the earlier note on the synchronous SDK, with View in Memory Spaces](../../assets/webui-v0.5.32/en/chat-save-receipt.jpg) |
 
 **Save to memory** at the top of Memory Spaces opens the Memory Spaces dialog, without the conversation's **Save to** choice. The turn memory bar and the Save to memory button are on by default and can be turned off under [Interface](#interface). In the conversation-tab placement, these entries open the Memory System tab of the conversation they came from; with several eligible tabs in split panes, open the intended one yourself.
 
 ### Turn skills line
 
-![A turn that used release-notes, with the Turn skills line: release-notes, suggested 1](../../assets/skills/en/chat-skills.jpg)
+![A turn that used release-notes, with the Turn skills line: release-notes, suggested 1](../../assets/skills-v0.5.34/en/chat-skills.jpg)
 
 A turn that used a skill, or earned a review, ends with a **Turn skills** line: the skills the turn used, then **Reviewing** while self-evolution reviews the conversation, and **suggested** with a count once the review left suggestions. Each item opens on the [Skills page](#skills). The line is on by default; **In the conversation** on Skills' page under Plugins turns it off. See [Skills in a conversation](./skills.md#in-a-conversation).
 
@@ -71,7 +71,7 @@ Skill source directories are expandable groups showing their path and skill coun
 
 ## The Memory System
 
-![Status, runtime memory, a document, the Memory Spaces overview and graph, then an Agent answer with citations](../../assets/webui/en/memory.gif)
+![Status, runtime memory, a document, the Memory Spaces overview and graph, then an Agent answer with citations](../../assets/webui-v0.5.32/en/memory.gif)
 
 The Memory System has five pages, named by the components that provide them: **Status**, **Runtime memory**, **Project Documents**, **Memory Spaces** and **Skills**. An installed Source adds its own page the same way. Turning off a Source or its memory layer hides its tabs; turning it back on restores them. If the open page is turned off, the view returns to Status. The configuration entry stays available, and an enabled Source that fails to run keeps its diagnostic tab. The header shows the connection and the composing main strategy, for example *Connected · Layered strategy*, the storage scope, **Refresh** and a gear that opens the Plugins page. **Refresh** reloads the open page, so pages carry no refresh or sync buttons of their own.
 
@@ -83,7 +83,7 @@ Leaving the panel or hiding its browser tab pauses automatic inspection and poll
 
 ### Status
 
-![Status: the engine, one card per memory component, the running Provider and the storage areas](../../assets/webui/en/memory-status.jpg)
+![Status: the engine, one card per memory component, the running Provider and the storage areas](../../assets/webui-v0.5.32/en/memory-status.jpg)
 
 The top row has one card per component: the engine with its version, then each Source with what it holds. **Memory providers** lists only the running Providers with their spaces' connection state and sums up the rest in one line, *N more Providers are off*, with **Open settings** beside it; the storage areas follow. Regions load independently; one failure never hides the rest.
 
@@ -117,7 +117,7 @@ When the Agent writes the user profile, `branches` must be omitted or empty. For
 
 ### Project Documents
 
-![Project Documents opened from a turn, with “Decision: queue event ingestion” selected](../../assets/webui/en/memory-documents.jpg)
+![Project Documents opened from a turn, with “Decision: queue event ingestion” selected](../../assets/webui-v0.5.32/en/memory-documents.jpg)
 
 Documents hold complete narratives: designs, investigations, procedures and handoffs. Select a DSH workspace first; documents belong to a workspace even when storage is global.
 
@@ -140,11 +140,11 @@ Idle review never edits existing documents. It searches first, skips what is cov
 
 ### Memory Spaces
 
-![The Memory Spaces overview: two active spaces and one inactive](../../assets/webui/en/memory-spaces.jpg)
+![The Memory Spaces overview: two active spaces and one inactive](../../assets/webui-v0.5.32/en/memory-spaces.jpg)
 
 A memory space is one named scope of long-term evidence on one Provider. **Overview** lists the spaces as cards; the switch on a card decides whether dsh-mnemon reads it, and the tag names its Provider, such as Mnemon Native. Clicking a card reconnects only that space. **Save to memory** and **Space policy** sit at the top right, with **Recall**, **Content** and **Entities** beside Overview.
 
-![The graph of the active spaces with the ClickHouse entity selected](../../assets/webui/en/memory-graph.jpg)
+![The graph of the active spaces with the ClickHouse entity selected](../../assets/webui-v0.5.32/en/memory-graph.jpg)
 
 Below the cards, the graph merges what the active spaces can show: memories, entities, and the links between them. Select a space, entity or memory to see its context on the right, here the ClickHouse entity with **Recall**. Layout, dragging and reset only change the picture. The footer counts spaces, memories and entities, and how many elements are drawn. Use **2D / 3D** in the graph toolbar to keep the default 2D SVG view or switch to a zero-dependency 3D `<canvas>` view with orbit drag, scroll/button zoom, keyboard navigation (`Arrow` keys, `+`/`-`, `0`), and camera reset. **Select node** below the 3D view also opens node details using the keyboard; selecting **No node selected** clears them. The 2D / 3D choice is saved locally per browser.
 
@@ -161,7 +161,7 @@ Each space declares what its Provider can really supply. Mnemon Native gives typ
 
 | Search | Ask AI |
 |---|---|
-| ![Direct search across the active spaces, with scores and provenance](../../assets/webui/en/memory-recall.jpg) | ![An Agent answer drawn from five memories, with its citations listed by content](../../assets/webui/en/memory-agent.jpg) |
+| ![Direct search across the active spaces, with scores and provenance](../../assets/webui-v0.5.32/en/memory-recall.jpg) | ![An Agent answer drawn from five memories, with its citations listed by content](../../assets/webui-v0.5.32/en/memory-agent.jpg) |
 
 **Search** returns raw evidence from every active space without an Agent, with each Provider's own score, space and category. **Ask AI** runs the same search, then gives the evidence to a read-only task Agent for an answer. The answer speaks in terms of the evidence, and **Cites** below lists the memories it used by their content, never by id. Providers answer concurrently, so one failure never hides the others. **Related** and **Forget** appear only where the Provider supports them. Opening Recall with a query, from a turn's item, **Recall** or **Related**, runs it right away. Focused questions work better than bare keywords.
 
@@ -169,19 +169,19 @@ Each space declares what its Provider can really supply. Mnemon Native gives typ
 
 | Content | Entities |
 |---|---|
-| ![Content: the memory just saved appears in the list](../../assets/webui/en/memory-content.jpg) | ![Entities: ClickHouse selected, with the memories that mention it](../../assets/webui/en/memory-entities.jpg) |
+| ![Content: the memory just saved appears in the list](../../assets/webui-v0.5.32/en/memory-content.jpg) | ![Entities: ClickHouse selected, with the memories that mention it](../../assets/webui-v0.5.32/en/memory-entities.jpg) |
 
 **Content** lists memories where the Provider can enumerate them; query-only Providers show content once you enter a query. **Entities** uses only real entity indexes, currently Mnemon Native, Hindsight and Holographic. Each entity's count is the number of memories that carry it across the active spaces, and the list shows every entity. Selecting one lists exactly those memories, most important first, at once. Below them, **Related memories** runs recall for the entity among memories that do not carry it. Recall takes longer, so it runs only when asked for: once opened, it stays open for the next entities until you hide it, for the rest of the browser session. When no memory carries a name you entered, related memories show by themselves.
 
 #### Save to memory
 
-![Save to memory on the Memory Spaces page](../../assets/webui/en/memory-remember.jpg)
+![Save to memory on the Memory Spaces page](../../assets/webui-v0.5.32/en/memory-remember.jpg)
 
 **Save to memory** here works like the conversation's dialog with **Auto**: write the content, click **Save**, and view the result under **Content** from the receipt. Open **Advanced options** only when a target, category or importance is genuinely required.
 
 ### Skills
 
-![Skills: every skill by where it lives, one shadowed; release-notes with an improvement waiting](../../assets/skills/en/skills-library.jpg)
+![Skills: every skill by where it lives, one shadowed; release-notes with an improvement waiting](../../assets/skills-v0.5.34/en/skills-library.jpg)
 
 **Skills** is the page of the experimental Skills component, with five tabs of its own: **Skills** to switch, use, edit and restore the DSH skills a workspace loads; **Evolution** for what self-evolution suggests, its drafts and their evidence; **Evals** for every skill's test cases and backtests; **Market** to search skills.sh and install from GitHub repositories, Agent Skills sites and catalogs; **Trash** restores or permanently deletes removed skills. With **Sidebar entry** on, the page becomes a sidebar entry of its own and leaves the Memory System. The [Skills guide](./skills.md) walks through each tab, with a screen for each.
 
@@ -189,17 +189,17 @@ Each space declares what its Provider can really supply. Mnemon Native gives typ
 
 | Conversation | Memory Spaces | Configuration |
 |---|---|---|
-| ![A conversation at 390 px: the turn memory bar's items sit below each tool](../../assets/webui/en/narrow-chat.jpg) | ![The Memory Spaces page at 390 px](../../assets/webui/en/narrow-spaces.jpg) | ![The Memory composition board at 390 px](../../assets/webui/en/narrow-plugin.jpg) |
+| ![A conversation at 390 px: the turn memory bar's items sit below each tool](../../assets/webui-v0.5.32/en/narrow-chat.jpg) | ![The Memory Spaces page at 390 px](../../assets/webui-v0.5.32/en/narrow-spaces.jpg) | ![The Memory composition board at 390 px](../../assets/webui-v0.5.32/en/narrow-plugin.jpg) |
 
 At 390 px the sidebar becomes DSH's icon rail and the pages stack. Long names truncate. These captures do not establish complete phone support; see [known limits](../reference/compatibility.md).
 
 ## On the Plugins page
 
-![Open Plugins, find dsh-mnemon under Installed plugins and open it, open the main strategy menu, visit the Layered strategy's and Memory Spaces' pages, then scroll to Storage and Interface](../../assets/webui/en/plugins.gif)
+![Open Plugins, find dsh-mnemon under Installed plugins and open it, open the main strategy menu, visit the Layered strategy's and Memory Spaces' pages, then scroll to Storage and Interface](../../assets/webui-v0.5.32/en/plugins.gif)
 
 | DSH's Plugins page | The dsh-mnemon page |
 |---|---|
-| ![DSH's Plugins page: built-in plugin settings, experimental plugins, and dsh-mnemon under Installed plugins](../../assets/webui/en/plugins-list.jpg) | ![The dsh-mnemon page under Plugins: header, Memory composition and component rows](../../assets/webui/en/plugin-composition.jpg) |
+| ![DSH's Plugins page: built-in plugin settings, experimental plugins, and dsh-mnemon under Installed plugins](../../assets/webui-v0.5.32/en/plugins-list.jpg) | ![The dsh-mnemon page under Plugins: header, Memory composition and component rows](../../assets/webui-v0.5.32/en/plugin-composition.jpg) |
 
 On DSH 0.2.1, the **Plugins** page lists built-in plugin settings and experimental plugins, then **Installed plugins**, where dsh-mnemon has its switch; DSH 0.2.0 groups plugins as official and installed. The name opens dsh-mnemon's page. DSH keeps a plugin's configuration on its own page under **Plugins**. The `dsh-mnemon` page (可组合记忆 in Chinese) has **Memory composition**, **Storage** and **Interface**, then DSH's list of the components the Starter includes. **Open Memory System** at the top leads back. Each component's own settings live on its own page.
 
@@ -218,7 +218,7 @@ A change saved from another window, or an edit of the profile, shows up without 
 
 ### Memory composition
 
-![The main strategy selector: Layered strategy and General strategy](../../assets/webui/en/plugin-strategy-menu.jpg)
+![The main strategy selector: Layered strategy and General strategy](../../assets/webui-v0.5.32/en/plugin-strategy-menu.jpg)
 
 - **Main strategy** is one selector listing each installed main strategy with its description. The **Layered strategy** keeps runtime memory resident, reads Documents and Memory Spaces on demand and runs the background maintenance. The **General strategy** offers every available source in one budget and lets the model decide, without automatic review or capacity maintenance.
 
@@ -231,13 +231,13 @@ Every switch applies to future turns; a turn that already started keeps its View
 
 ### Component pages
 
-![The Layered strategy's page with its background tasks](../../assets/webui/en/plugin-layered.jpg)
+![The Layered strategy's page with its background tasks](../../assets/webui-v0.5.32/en/plugin-layered.jpg)
 
 The gear on a row, the gear beside **Main strategy**, and a component's name anywhere open its page. It shows the component's state and switch, whether it ships with dsh-mnemon or came from an installed package, what it needs, what depends on it and what cannot run beside it, its declared options and its own settings. A related name opens in place with **Back**. Options are checked against the Host's limits; **Apply** appears once one changes, and **Reset to default** restores one.
 
 <a id="memory-spaces-page"></a>
 
-![Memory Spaces' page with Mnemon Native and the third-party Providers](../../assets/webui/en/plugin-spaces.jpg)
+![Memory Spaces' page with Mnemon Native and the third-party Providers](../../assets/webui-v0.5.32/en/plugin-spaces.jpg)
 
 - **Runtime memory's page**: **User profile scope**, **Capacity limits**, and the folded **Maintenance budget**. *Shared globally* combines a global `USER.md` with workspace or custom `MEMORY.md`, without moving either. Set each capacity in bytes or adjust the maintenance token limit and choose **Apply**, or **Discard** to restore the saved values. Lowering a limit does not delete existing entries; see [Runtime Memory budgets](../reference/configuration.md#runtime-memory-budgets).
 - **Project Documents' page**: **Active capacity limit** (`documents.limitBytes`, default 10 MiB), saved with **Apply**.
@@ -245,7 +245,7 @@ The gear on a row, the gear beside **Main strategy**, and a component's name any
 - **Skills' page**, tagged **Experimental**: **Self-evolution** (with **Suggest new skills**, **Suggest skill improvements**, **Backtest drafts**, automatic adoption, and folded **Review parameters**), **Default models**, **Skill directories**, **Market sources**, **In the conversation** for the line under each turn, and **Sidebar entry**. Switches and default models apply at once, the remaining parameters with **Apply**; see the [Skills guide](./skills.md#settings).
 - **Layered strategy's page**: **Background tasks**. **Task Agent model** chooses the model of the task Agents behind Save to memory, Ask Agent, Tidy names and descriptions, smart selection for new spaces and document archiving, never of the main conversation: **Follow global**, **Follow the conversation** or **Custom**. [Configuration](../reference/configuration.md#background-task-agent-model-route) explains each choice. **Idle review**, **Write runtime memory**, **Keep review limits after reopening** (off by default), its method and Agent Teams compatibility apply at once; **Review limits** apply with **Apply**. With **Write runtime memory** off, review only creates Documents. With persistent limits enabled, the workspace shows attempts for this parent session, restored usage and its next earliest review time. Persistence errors pause automatic review and show recovery guidance; regular conversation and manual actions remain available. Review runs only after turns the Layered strategy composed; see [configuration](../reference/configuration.md#provider-requirements).
 
-![Skills' page under Plugins: Self-evolution, Backtest drafts, Review parameters, In the conversation and Sidebar entry](../../assets/skills/en/plugin-skills.jpg)
+![Skills' page under Plugins: Self-evolution, Backtest drafts, Review parameters, In the conversation and Sidebar entry](../../assets/skills-v0.5.34/en/plugin-skills.jpg)
 
 <details>
 <summary>Mnemon Native embedding</summary>
@@ -260,7 +260,7 @@ Expand the Mnemon Native card. **Manage embedding settings in DSH** makes the sa
 
 ### Storage
 
-![Storage: the scope, the default data directory, backup, and the Interface settings](../../assets/webui/en/plugin-storage.jpg)
+![Storage: the scope, the default data directory, backup, and the Interface settings](../../assets/webui-v0.5.32/en/plugin-storage.jpg)
 
 **Storage** names the components that keep their data in its directory; each name opens that component's page.
 
@@ -270,7 +270,7 @@ Expand the Mnemon Native card. **Manage embedding settings in DSH** makes the sa
 - **Data directory**: **Default** or **Custom**, and the row shows the one directory memory uses. Default is `MNEMON_DATA_DIR` or `~/.mnemon`. Custom opens a field for an absolute path or one starting with `~/`; under Centralized it sets the root. An empty field waits for a path; choosing **Default** is how you return to the default. On hosts with a native DSH chooser, **Choose directory** fills the same draft; cancellation changes nothing, and saving still requires **Apply**. Other hosts keep the manual field.
 - Scope and directory apply together with **Apply**, which states the consequence: memory reads and writes the new location, and existing data is never moved, merged or deleted.
 
-![Backup and migration: an exported ZIP previewed before a safe import](../../assets/webui/en/plugin-backup-preview.jpg)
+![Backup and migration: an exported ZIP previewed before a safe import](../../assets/webui-v0.5.32/en/plugin-backup-preview.jpg)
 
 **Backup and migration** exports the current data directory as a ZIP, with the components Storage names, and never includes third-party Provider data or credentials. Importing first shows a verified preview of what the ZIP contains; **Safe import** merges it into the current directory. See [backup and recovery](./operations.md#backup-and-recovery).
 
@@ -283,11 +283,11 @@ Expand the Mnemon Native card. **Manage embedding settings in DSH** makes the sa
 
 ### DSH's component list
 
-![DSH's component list: each component named as it declares itself](../../assets/webui/en/plugin-rows.jpg)
+![DSH's component list: each component named as it declares itself](../../assets/webui-v0.5.32/en/plugin-rows.jpg)
 
 Below the configuration, DSH lists the components the Starter includes under the names and descriptions they declare. DSH 0.2.1, pictured, lists no row for the Starter's group entry; DSH 0.2.0 adds it as `mnemon-bundle`, shown as `dsh-mnemon/bundle`, and its "Off" state does not affect anything. A component's name opens DSH's page for it, which carries the same component page as the board.
 
-![DSH's own page for the Layered strategy](../../assets/webui/en/plugin-row-page.jpg)
+![DSH's own page for the Layered strategy](../../assets/webui-v0.5.32/en/plugin-row-page.jpg)
 
 ## Inspected and effective workspace
 

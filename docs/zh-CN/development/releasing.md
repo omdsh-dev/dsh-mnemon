@@ -28,7 +28,7 @@
 
 ## 发布到 npm
 
-手动触发的 npm workflow 接收完整 commit SHA，且该 SHA 必须已经等于 `main`。它从 Git 历史确定上一个发布 revision，只选择版本发生增长的包。在取得 npm 凭证前，workflow 会运行完整 workspace 与独立插件验证，只打包选中的插件和 Starter，并记录完整组合、两个 revision、字节数与 SHA-512 integrity。受保护的 `npm-release` Environment 是 Registry 写入门禁。批准后，变化的插件在依赖安全的层内并发发布；一层在 Registry 可读后才进入依赖它的下一层。随后通过冻结的本地 Starter 安装完整混合版本组合，最后发布 Starter、验证干净 Registry 安装并运行真实升级，之后才创建 GitHub Release。
+手动触发的 npm workflow 接收完整 commit SHA，且该 SHA 必须已经等于 `main`。它从 Git 历史确定上一个发布 revision，只选择版本发生增长的包。在取得 npm 凭证前，workflow 会运行完整 workspace 与独立插件验证，只打包选中的插件和 Starter，并记录完整组合、两个 revision、字节数与 SHA-512 integrity。打包 Starter 时，`scripts/release.mjs --pack` 会自动把打进 tarball 的 `README.md` 与 `README.zh-CN.md` 中指向本仓库 `/main/` 的链接固定为不可变的 `RELEASE_REVISION` 完整提交 SHA，并在打包完成后直接解包校验 tarball 内的链接（工作树保持不变），确保后续整理 `main` 资产目录时已发布的 npm 页面不再断链。受保护的 `npm-release` Environment 是 Registry 写入门禁。批准后，变化的插件在依赖安全的层内并发发布；一层在 Registry 可读后才进入依赖它的下一层。随后通过冻结的本地 Starter 安装完整混合版本组合，最后发布 Starter、验证干净 Registry 安装并运行真实升级，之后才创建 GitHub Release。
 
 中断的流程可以恢复：Registry 中已有的选中版本只有在 integrity 与冻结 tarball 完全一致时才能复用；同版本内容不同会立即终止。正式包使用 `latest`，预发布显式使用 `alpha`、`beta` 或 `rc` 通道。未变化的包必须已存在于 Registry，并通过完整 Starter 安装接受验证，但不会再次打包或发布。
 

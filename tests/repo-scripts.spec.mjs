@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
+import { gzipSync } from 'node:zlib'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { assertReleaseIntentCoverage, assertVersionedReleaseIntent, introducedPackageBaseVersions } from '../scripts/check-release-intent.mjs'
 import { localeExport, readPackageLocales } from '../scripts/package-locales.mjs'
@@ -14,11 +15,14 @@ import {
   assertVersionedPublicationChanges,
   createReleasePlan,
   packRelease,
+  pinPackageReadmeLinks,
   publicationInputsChanged,
   publishRelease,
   readChangedPaths,
   readReleaseArtifacts,
   readReleasePackages,
+  readTarballTextEntries,
+  verifyPinnedTarballReadmes,
   verifyRegistryRelease,
   waitForRegistryArtifact,
   writeReleaseManifest,
@@ -560,6 +564,123 @@ describe('selective, channel-safe official release and metadata sync', () => {
       ])
       await expect(readReleaseArtifacts(plan, destination, { revision, baseRevision })).resolves.toHaveLength(2)
     } finally {
+      await rm(destination, { recursive: true, force: true })
+    }
+  })
+
+  it('pins bilingual Starter README repository links to RELEASE_REVISION inside the packed tarball and restores the worktree', async () => {
+    function buildTarball(entries) {
+      const blocks = []
+      for (const [name, text] of Object.entries(entries)) {
+        const content = Buffer.from(text, 'utf8')
+        const header = Buffer.alloc(512)
+        header.write(name, 0, 100, 'utf8')
+        header.write('0000644\0', 100, 8, 'utf8')
+        header.write('0000000\0', 108, 8, 'utf8')
+        header.write('0000000\0', 116, 8, 'utf8')
+        header.write(`${content.length.toString(8).padStart(11, '0')}\0`, 124, 12, 'utf8')
+        header.write('00000000000\0', 136, 12, 'utf8')
+        header.fill(0x20, 148, 156)
+        header[156] = 48
+        header.write('ustar\0', 257, 6, 'utf8')
+        header.write('00', 263, 2, 'utf8')
+        let checksum = 0
+        for (const byte of header) checksum += byte
+        header.write(`${checksum.toString(8).padStart(6, '0')}\0 `, 148, 8, 'utf8')
+        const paddedLength = Math.ceil(content.length / 512) * 512
+        const body = Buffer.alloc(paddedLength)
+        content.copy(body)
+        blocks.push(header, body)
+      }
+      blocks.push(Buffer.alloc(1024))
+      return gzipSync(Buffer.concat(blocks))
+    }
+
+    const workdir = await mkdtemp(join(tmpdir(), 'mnemon-release-readme-'))
+    const destination = await mkdtemp(join(tmpdir(), 'mnemon-release-tar-'))
+    try {
+      await mkdir(join(workdir, 'docs/assets'), { recursive: true })
+      await mkdir(join(workdir, 'docs/en'), { recursive: true })
+      await writeFile(join(workdir, 'docs/assets/demo.gif'), 'gif')
+      await writeFile(join(workdir, 'docs/en/guide.md'), '# Guide\n')
+      const originalEn = [
+        '![Demo](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/demo.gif)',
+        '[Guide](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guide.md#intro)',
+        '[Tree](https://github.com/omdsh-dev/dsh-mnemon/tree/main/docs/en)',
+        '[Latest](https://github.com/omdsh-dev/dsh-mnemon/releases/latest)',
+        '[External](https://example.com/blob/main/ignore.png)',
+      ].join('\n')
+      const originalZh = [
+        '![演示](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/demo.gif)',
+        '[指南](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guide.md)',
+      ].join('\n')
+      await writeFile(join(workdir, 'README.md'), originalEn)
+      await writeFile(join(workdir, 'README.zh-CN.md'), originalZh)
+
+      const pinnedPreview = pinPackageReadmeLinks(originalEn, revision)
+      expect(pinnedPreview).toContain(`https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/${revision}/docs/assets/demo.gif`)
+      expect(pinnedPreview).toContain(`https://github.com/omdsh-dev/dsh-mnemon/blob/${revision}/docs/en/guide.md#intro`)
+      expect(pinnedPreview).toContain(`https://github.com/omdsh-dev/dsh-mnemon/tree/${revision}/docs/en`)
+      expect(pinnedPreview).toContain('https://github.com/omdsh-dev/dsh-mnemon/releases/latest')
+      expect(pinnedPreview).toContain('https://example.com/blob/main/ignore.png')
+
+      const packages = fixture()
+      packages.find(item => item.manifest.name === 'dsh-mnemon').directory = workdir
+      const plan = createReleasePlan(packages, { baseVersions: previousVersions(packages, { 'dsh-mnemon': '0.5.1' }) })
+      const run = vi.fn(async (_args, cwd) => {
+        const filename = 'dsh-mnemon-0.5.2.tgz'
+        const tarball = buildTarball({
+          'package/README.md': await readFile(join(cwd, 'README.md'), 'utf8'),
+          'package/README.zh-CN.md': await readFile(join(cwd, 'README.zh-CN.md'), 'utf8'),
+        })
+        await writeFile(join(destination, filename), tarball)
+        return JSON.stringify([{
+          name: 'dsh-mnemon',
+          version: '0.5.2',
+          filename,
+          files: [{ path: 'LICENSE' }, { path: 'README.md' }, { path: 'README.zh-CN.md' }],
+        }])
+      })
+
+      const artifacts = await packRelease(plan, destination, run, { revision })
+      expect(artifacts).toHaveLength(1)
+      expect(await readFile(join(workdir, 'README.md'), 'utf8')).toBe(originalEn)
+      expect(await readFile(join(workdir, 'README.zh-CN.md'), 'utf8')).toBe(originalZh)
+
+      const packedEntries = readTarballTextEntries(await readFile(artifacts[0].filename), ['package/README.md', 'package/README.zh-CN.md'])
+      expect(packedEntries.get('package/README.md')).toContain(`/${revision}/docs/assets/demo.gif`)
+      expect(packedEntries.get('package/README.md')).not.toContain('dsh-mnemon/main/')
+      expect(packedEntries.get('package/README.zh-CN.md')).toContain(`/${revision}/docs/assets/demo.gif`)
+
+      const badMainTarball = join(destination, 'bad-main.tgz')
+      await writeFile(badMainTarball, buildTarball({ 'package/README.md': originalEn, 'package/README.zh-CN.md': originalZh }))
+      await expect(verifyPinnedTarballReadmes(badMainTarball, revision, workdir)).rejects.toThrow('floating /main/')
+
+      const missingTargetTarball = join(destination, 'missing-target.tgz')
+      await writeFile(missingTargetTarball, buildTarball({
+        'package/README.md': `https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/${revision}/docs/assets/missing.gif`,
+        'package/README.zh-CN.md': pinPackageReadmeLinks(originalZh, revision),
+      }))
+      await expect(verifyPinnedTarballReadmes(missingTargetTarball, revision, workdir)).rejects.toThrow('missing path')
+
+      const failedDest = await mkdtemp(join(tmpdir(), 'mnemon-release-fail-'))
+      try {
+        await expect(packRelease(plan, failedDest, async () => { throw new Error('pack boom') }, { revision })).rejects.toThrow('pack boom')
+        expect(await readFile(join(workdir, 'README.md'), 'utf8')).toBe(originalEn)
+        expect(await readFile(join(workdir, 'README.zh-CN.md'), 'utf8')).toBe(originalZh)
+      } finally {
+        await rm(failedDest, { recursive: true, force: true })
+      }
+
+      const repoRoot = dirname(fileURLToPath(new URL('../package.json', import.meta.url)))
+      const realTarball = join(destination, 'real-readmes.tgz')
+      await writeFile(realTarball, buildTarball({
+        'package/README.md': pinPackageReadmeLinks(await readFile(join(repoRoot, 'README.md'), 'utf8'), revision),
+        'package/README.zh-CN.md': pinPackageReadmeLinks(await readFile(join(repoRoot, 'README.zh-CN.md'), 'utf8'), revision),
+      }))
+      await expect(verifyPinnedTarballReadmes(realTarball, revision, repoRoot)).resolves.toBeUndefined()
+    } finally {
+      await rm(workdir, { recursive: true, force: true })
       await rm(destination, { recursive: true, force: true })
     }
   })

@@ -4,7 +4,7 @@
 
 dsh-mnemon 为 DeepSeek Harness 提供三类记忆：每一轮都会用到的**运行时记忆**、问题需要时才检索的**项目档案**，以及存放在你所选 Provider 上的长期证据**记忆空间**。主策略决定它们如何参与每一轮对话，主策略与增强都在插件页中选择。从默认的分层策略开始即可，日常使用无需管理插件。
 
-[![可组合记忆插件页中的记忆组合面板](../assets/webui/zh-CN/plugin-composition.jpg)](./guides/ui-guide.md#在插件页中)
+[![可组合记忆插件页中的记忆组合面板](../assets/webui-v0.5.32/zh-CN/plugin-composition.jpg)](./guides/ui-guide.md#在插件页中)
 
 ## 使用记忆系统
 
@@ -48,4 +48,4 @@ dsh-mnemon 为 DeepSeek Harness 提供三类记忆：每一轮都会用到的**�
 
 [更新日志](../../CHANGELOG.zh-CN.md) · [版本历史](./releases/README.md) · [路线图](./roadmap.md)
 
-指南描述当前版本。产品媒体统一保存在 [docs/assets](../assets/README.md)（[WebUI](../assets/webui/README.md)、[技能管理](../assets/skills/README.md)、[安装引导](../assets/install/README.md)）。内部 Host RPC 不属于对外插件 SDK。
+指南描述当前版本。产品媒体统一保存在 [docs/assets](../assets/README.md)（[WebUI](../assets/webui-v0.5.32/README.md)、[技能管理](../assets/skills-v0.5.34/README.md)、[安装引导](../assets/install-v0.5.19/README.md)）。内部 Host RPC 不属于对外插件 SDK。

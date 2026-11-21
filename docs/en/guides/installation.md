@@ -4,9 +4,9 @@
 
 This page is for your first time: it starts from a computer that has never run DeepSeek Harness (DSH), installs dsh-mnemon, and ends with a conversation that uses your first memory. It takes about ten minutes. Already using DSH? Skip to [step 3](#3-install-and-enable-dsh-mnemon).
 
-![Add dsh-mnemon on the Plugins page: type the package name, install, Enable now, and the Memory System appears in the sidebar](../../assets/install/en/install.gif)
+![Add dsh-mnemon on the Plugins page: type the package name, install, Enable now, and the Memory System appears in the sidebar](../../assets/install-v0.5.19/en/install.gif)
 
-The screenshots and recordings come from real DSH 0.2.0-rc.1 and dsh-mnemon 0.5.19; the [installation gallery](../../assets/install/README.md) describes how they were captured.
+The screenshots and recordings come from real DSH 0.2.0-rc.1 and dsh-mnemon 0.5.19; the [installation gallery](../../assets/install-v0.5.19/README.md) describes how they were captured.
 
 ## Choose how you use DSH
 
@@ -53,7 +53,7 @@ The first time you open it:
 1. DSH 0.2 shows a **Preview Notice** first. Click **Continue**.
 2. In **Add an API key to get started**, paste an API key you created on the [DeepSeek Platform](https://platform.deepseek.com/) and click **Save and continue**. You can also click **Configure later** and add it in **Settings** afterwards; installing plugins needs no key, conversations do.
 
-<p align="center"><img src="../../assets/install/en/install-02-api-key.jpg" alt="DSH's first-run dialog Add an API key to get started, with Configure later and Save and continue" width="760" /></p>
+<p align="center"><img src="../../assets/install-v0.5.19/en/install-02-api-key.jpg" alt="DSH's first-run dialog Add an API key to get started, with Configure later and Save and continue" width="760" /></p>
 
 ## 3. Install and enable dsh-mnemon
 
@@ -64,7 +64,7 @@ The first time you open it:
 
 | Type the package name and install | Installed; enable it now |
 |---|---|
-| ![The Add plugin dialog with dsh-mnemon typed and the Official npm registry chosen](../../assets/install/en/install-04-add.jpg) | ![The Installed dialog shows dsh-mnemon version 0.5.19 and Enable now](../../assets/install/en/install-05-installed.jpg) |
+| ![The Add plugin dialog with dsh-mnemon typed and the Official npm registry chosen](../../assets/install-v0.5.19/en/install-04-add.jpg) | ![The Installed dialog shows dsh-mnemon version 0.5.19 and Enable now](../../assets/install-v0.5.19/en/install-05-installed.jpg) |
 
 The **Installed** card shows the description from the package, which is in English; the plugin list shows the name and description in the interface language.
 
@@ -104,7 +104,7 @@ Click **Memory System**. It opens on **Status**:
 - the **Memory engine** card shows `dsh-mnemon 0.5.19` or later;
 - with the Mnemon CLI installed, Mnemon Native under **Memory Providers** reads "Service ready" with the CLI version. Without it, it reads "Mnemon CLI not found", and runtime memory and Project Documents work as usual.
 
-![The Memory System's Status page: dsh-mnemon 0.5.19, the three memory layers, and Mnemon Native showing Mnemon 0.2.7](../../assets/install/en/install-07-status.jpg)
+![The Memory System's Status page: dsh-mnemon 0.5.19, the three memory layers, and Mnemon Native showing Mnemon 0.2.7](../../assets/install-v0.5.19/en/install-07-status.jpg)
 
 ## 5. Save your first memory
 
@@ -112,11 +112,11 @@ Click **Memory System**. It opens on **Status**:
 2. Under the reply, **Turn memory · wrote** appears; expand it to see the runtime memory this turn wrote.
 3. Click an entry: the Memory System opens **Runtime memory** with that entry highlighted. Every later turn carries it.
 
-![Typing a sentence to remember; under the reply Turn memory lists what it wrote, and an entry opens in Runtime memory](../../assets/install/en/first-memory.gif)
+![Typing a sentence to remember; under the reply Turn memory lists what it wrote, and an entry opens in Runtime memory](../../assets/install-v0.5.19/en/first-memory.gif)
 
 | What this turn wrote | Where it lives |
 |---|---|
-| ![The reply confirms, and the turn memory bar lists two runtime memory updates](../../assets/install/en/first-01-reply.jpg) | ![Runtime memory highlights the entry that was written](../../assets/install/en/first-02-runtime.jpg) |
+| ![The reply confirms, and the turn memory bar lists two runtime memory updates](../../assets/install-v0.5.19/en/first-01-reply.jpg) | ![Runtime memory highlights the entry that was written](../../assets/install-v0.5.19/en/first-02-runtime.jpg) |
 
 The model decides the wording and where to write it, so your text may differ. Continue with [Getting started](./getting-started.md): Project Documents, Memory Spaces, and saving a reply with **Save to memory**.
 
@@ -258,7 +258,7 @@ mnemon:
 
 ### Installing says "dsh-mnemon@… is incompatible with DSH …"
 
-![The plugin could not be installed: dsh-mnemon@0.5.18 is incompatible with DSH 0.2.0-rc.1, with Edit and Retry](../../assets/install/en/trouble-incompatible.jpg)
+![The plugin could not be installed: dsh-mnemon@0.5.18 is incompatible with DSH 0.2.0-rc.1, with Edit and Retry](../../assets/install-v0.5.19/en/trouble-incompatible.jpg)
 
 Before DSH installs a plugin, and each time it starts, it checks which DSH versions the plugin declares support for, and refuses a release that leaves its own version out. The screenshot shows DSH 0.2.0-rc.1 refusing dsh-mnemon 0.5.18, which declares DSH 0.1.7 only; [Compatibility and upgrades](../reference/compatibility.md) lists which releases each DSH takes.
 
@@ -297,7 +297,7 @@ On 0.5.18 or 0.5.19, do not turn off `dsh-mnemon/starter` to make the message go
 
 ### DSH says "waiting for service: mnemonStarterReady"
 
-![The dsh-mnemon page under Plugins: Components 11 total, 11 off, with dsh-mnemon/starter first and Off; the sidebar has no Memory System](../../assets/install/en/trouble-starter-off.jpg)
+![The dsh-mnemon page under Plugins: Components 11 total, 11 off, with dsh-mnemon/starter first and Off; the sidebar has no Memory System](../../assets/install-v0.5.19/en/trouble-starter-off.jpg)
 
 DSH prints this in the terminal when it starts, or shows it when you enable the plugin:
 

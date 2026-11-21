@@ -228,7 +228,7 @@ Automatic Runtime Actions, including idle review, can retain or raise an existin
 
 The Runtime memory page shows each file's size against its limit.
 
-![Runtime memory with USER.md and MEMORY.md against their default limits](../../assets/webui/en/memory-runtime-limits.jpg)
+![Runtime memory with USER.md and MEMORY.md against their default limits](../../assets/webui-v0.5.32/en/memory-runtime-limits.jpg)
 
 ### Mnemon Native embeddings
 
@@ -268,7 +268,7 @@ On initial Loader-managed startup, named families wait for `Loader.await()` and 
 
 Configuration transactions publish only their final Source set, including rollback, so intermediate unload/reload steps do not change model schemas. Existing Agents observe the ordinary DSH tool-registry updates on their next model request. Delegated children allow only currently registered task tools; idle review skips when no applicable Runtime or Documents write target remains.
 
-![Memory composition with one switch per memory Source and enhancement](../../assets/webui/en/plugin-composition.jpg)
+![Memory composition with one switch per memory Source and enhancement](../../assets/webui-v0.5.32/en/plugin-composition.jpg)
 
 Turning a Source off is reversible routing state, not deletion. Its Memory System page stays, marked **Not running**, and does not read the data plane; Status and the management directories stay observable. Turning it on again uses the original directories and data. The last running Source cannot be turned off. The legacy `memoryTopology.layers.<id>.enabled` flag is turned back on with the Source and is used only when the components cannot be read.
 
