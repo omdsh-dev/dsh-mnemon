@@ -205,8 +205,15 @@ Source 页面保留中文和英文文案。其他语言优先使用 Host 绑定�
 
 ## 文档、存储与素材规范
 
-保持中英文页面一致、公开示例可执行。Mermaid 表达归属和流程；活跃产品截图统一存放在 `docs/assets` 且不得保留无引用孤儿文件（见 [docs/assets/README.md](../../assets/README.md)）。不向 `main` 提交 PR 截图、发布验收二进制树、空目录占位或临时设计草稿。
+保持中英文页面一致、公开示例可执行。Mermaid 表达归属和流程；活跃产品截图统一存放在 `docs/assets` 且不得保留无引用孤儿文件（见 [docs/assets/README.md](../../assets/README.md)）。不向 `main` 提交 PR 截图、发布验收二进制树、空目录占位或临时设计草稿——PR 评审截图请直接附在 GitHub PR 描述中，自动化上传可推送至独立 orphan 分支或外部素材仓库并以完整 commit SHA 引用，版本验收包挂载到 GitHub Release 或 CI Artifact。
 
-没有明确迁移方案与测试前，保留持久格式及配置键。存储改动须验证锁、原子 rename、修订、损坏输入和复制数据根上的升级/回退。
+所有项目规范统一维护在标准开源文档（`CONTRIBUTING.zh-CN.md`、`ISSUE_TRIAGE.zh-CN.md`、`.github/` 模板与 `docs/`）中并配合自动化校验脚本执行，不另设 `AGENT.md` 等工具专属说明文件。
+
+## 代码表达与工程维护
+
+- **用自解释代码替代叙述性注释**：通过清晰的模块划分、严密的类型契约、精炼的命名辅助函数以及可执行的回归测试表达设计意图，避免会随演进漂移的长篇注释。仅保留机器指令（`#!/usr/bin/env node`、`@ts-expect-error`、`@vitest-environment`）。
+- **命名简洁且具业务含义**：既不制造冗长的内部标识符，也不使用无意义的代号式命名（如 `x1`、`tmp`、`bar`、`fn1`）。未经明确迁移评审，不改变公开导出、wire DTO、配置键和 CLI 契约。
+- **持续清理死代码**：及时移除未使用的导入、变量、参数与无引用的内部转发文件，定期以 `pnpm exec tsc -p tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters` 核查。
+- **持久化与兼容性纪律**：没有明确迁移方案与测试前，保留持久格式及配置键。存储改动须验证锁、原子 rename、修订、损坏输入和复制数据根上的升级/回退。
 
 v0.3 benchmark 是冻结的历史结果，不是本架构的性能证明。失效的可执行评估框架已移出工作树，历史说明见 [v0.3.0 发布页](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.3.0)。当前验收入口为上述脚本。

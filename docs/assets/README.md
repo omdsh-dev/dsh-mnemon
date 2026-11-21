@@ -15,5 +15,5 @@ Product screenshots, recordings, and architecture diagrams referenced by `README
 
 - **Active documentation only / 仅存放活跃文档素材**：Keep only media files actively referenced by `README*.md` or `docs/{en,zh-CN}/`. `pnpm run verify:docs` rejects unreferenced orphan files under `docs/assets/`.
 - **Semantic paths / 语义化路径**：Update screenshots in place under `docs/assets/{diagrams,install,webui,skills}/{en,zh-CN}/` rather than creating new `vX.Y.Z` folders.
-- **No PR or Issue binaries in Git / 不向仓库提交 PR 或 Issue 评审附件**：Attach before/after review screenshots and release evidence directly to GitHub Pull Requests or GitHub Releases instead of committing them to `main`.
+- **No PR or Issue binaries in Git / 不向仓库提交 PR 或 Issue 评审附件**：Attach before/after review screenshots directly to GitHub Pull Requests via GitHub attachments; for automated/CLI uploads, push to a dedicated orphan branch or separate asset repository referenced by commit SHA, and attach release acceptance bundles to GitHub Releases or CI artifacts instead of committing them to `main`.
 - **Synthetic data only / 仅使用合成数据**：Never include personal paths, private memories, API keys, or unredacted logs in screenshots or recordings.

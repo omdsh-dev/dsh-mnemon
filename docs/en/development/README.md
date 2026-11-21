@@ -205,8 +205,15 @@ Official packages use independent versions; the Starter pins a tested combinatio
 
 ## Documentation, storage and media policy
 
-Keep English/Chinese pages aligned and public examples executable. Code-native Mermaid diagrams describe ownership and flow; active product media lives under `docs/assets` with zero unreferenced files (see [docs/assets/README.md](../../assets/README.md)). Do not commit PR screenshots, release evidence trees, dead directory stubs, or scratch plans to `main`.
+Keep English/Chinese pages aligned and public examples executable. Code-native Mermaid diagrams describe ownership and flow; active product media lives under `docs/assets` with zero unreferenced files (see [docs/assets/README.md](../../assets/README.md)). Do not commit PR screenshots, release evidence trees, dead directory stubs, or scratch plans to `main` — attach PR review media directly to GitHub PR descriptions, host automated uploads on a dedicated orphan branch or external asset repository pinned by commit SHA, and attach versioned acceptance packages to GitHub Releases or CI artifacts.
 
-Retain persisted formats and existing config keys unless an explicit migration is designed and tested. Verify locking, atomic rename, revisions, corrupt inputs and copied-root upgrade/rollback before changing storage.
+Keep all project conventions in standard GitHub documentation (`CONTRIBUTING.md`, `ISSUE_TRIAGE.md`, `.github/` templates, and `docs/`) backed by executable checks rather than duplicating guidance in tool-specific files such as `AGENT.md`.
+
+## Code expressiveness and maintenance
+
+- **Self-documenting code over narrative comments**: express intent through clear module boundaries, typed contracts, small well-named helpers, and executable regression tests rather than prose comments that drift over time. Retain only machine directives (`#!/usr/bin/env node`, `@ts-expect-error`, `@vitest-environment`).
+- **Concise, meaningful naming**: avoid both overly verbose internal identifiers and cryptic placeholder names (`x1`, `tmp`, `bar`, `fn1`). Preserve public exports, wire DTOs, configuration keys, and CLI contracts unchanged unless a migration is approved.
+- **Zero dead code**: remove unused imports, variables, parameters, and unreferenced internal shims; verify periodically with `pnpm exec tsc -p tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters`.
+- **Persistence and compatibility discipline**: retain persisted formats and existing config keys unless an explicit migration is designed and tested. Verify locking, atomic rename, revisions, corrupt inputs and copied-root upgrade/rollback before changing storage.
 
 The v0.3 release benchmark is a frozen historical result, not a test of this architecture. Its obsolete executable harness was removed from the working tree; see the [v0.3.0 release](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.3.0) for the historical snapshot. Current gates are the scripts above.
