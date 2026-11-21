@@ -41,6 +41,8 @@ dsh-mnemon gives DeepSeek Harness three kinds of memory: **runtime memory** in e
 
 ## What is new
 
+[v0.5.51](./releases/v0.5.51.md) allows Project Documents and Memory Spaces to be shared independently and adds optional BM25 index recall.
+
 [v0.5.50](./releases/v0.5.50.md) reorganizes settings, improves narrow-window layouts and Memory Spaces graph rendering, and reduces repeated reads in Skills.
 
 [v0.5.48](./releases/v0.5.48.md) fixes optional strategy activation and Cordis root compatibility, reduces background task clutter, adds size guidance to skill bundle evolution, and adds an optional 3D memory overview.

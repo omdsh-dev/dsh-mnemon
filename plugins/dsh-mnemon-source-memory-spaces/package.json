@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon-source-memory-spaces",
-  "version": "0.5.31",
+  "version": "0.5.32",
   "description": "Memory Spaces Source and its private Provider SDK.",
   "license": "MIT",
   "type": "module",
@@ -68,7 +68,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
-    "dsh-mnemon": "^0.5.50",
+    "dsh-mnemon": "^0.5.51",
     "jsdom": "^26.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
