@@ -145,6 +145,7 @@ export interface Config {
   idleReviewMs?: number
   idleReview?: Partial<ResolvedIdleReviewConfig>
   conversationInteraction?: {
+    /** @deprecated Switches nothing. Stored profiles may still hold it; the resolved config leaves it out. */
     toolviews?: boolean
     turnBar?: boolean
     saveAction?: boolean

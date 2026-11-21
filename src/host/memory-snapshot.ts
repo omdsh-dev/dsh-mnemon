@@ -88,9 +88,13 @@ function readRuntimeRanges(value: unknown, text: string): RuntimeSnapshotRange[]
   return ranges
 }
 
+function isTransientBm25RecallMessage(message: Message): boolean {
+  return message.role === 'user' && isBm25RecallSource(message.source)
+}
+
 export function summaryWithoutTransientMemory(messages: readonly Message[], authority: MemorySnapshotState | undefined): readonly Message[] {
   const filtered = messages.flatMap((message): Message[] => {
-    if (message.role === 'user' && isBm25RecallSource(message.source)) return []
+    if (isTransientBm25RecallMessage(message)) return []
     const text = snapshotText(message)
     if (text === undefined) return [message]
     const source = message.source as { snapshot?: unknown; runtimeRanges?: unknown } | undefined
