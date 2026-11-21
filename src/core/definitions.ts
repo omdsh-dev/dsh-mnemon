@@ -20,7 +20,6 @@ export function id(value: unknown, label: string): string {
   return normalized
 }
 
-/** A role-agnostic Strategy names the wildcard alone, never beside specific roles. */
 function sourceRoles(value: readonly string[]): string[] {
   if (value.includes(ANY_MEMORY_SOURCE_ROLE)) {
     if (value.length !== 1) throw new Error('memory Strategy supported Source roles must list the any-role wildcard alone')
@@ -29,7 +28,6 @@ function sourceRoles(value: readonly string[]): string[] {
   return uniqueIds(value, 'memory Strategy supported Source role')
 }
 
-/** Only standard slots have a value contract every Strategy can share. */
 function anyStrategyTarget(slot: unknown): typeof ANY_MEMORY_STRATEGY {
   if (!(MEMORY_VIEW_EXTENSION_SLOTS as readonly unknown[]).includes(slot)) throw new Error(`memory Strategy extension for any Strategy must use a standard slot: ${String(slot)}`)
   return ANY_MEMORY_STRATEGY
@@ -42,7 +40,6 @@ export function positiveInteger(value: unknown, label: string, maximum = 1_000_0
   return value as number
 }
 
-/** Canonical JSON representation shared by validation, digest, and replay. */
 export function canonicalMemoryJson(value: unknown, label = 'memory value', ancestors = new Set<object>(), depth = 0): string {
   if (depth > 48) throw new Error(`${label} is nested too deeply`)
   if (value === null || typeof value === 'boolean' || typeof value === 'string') return JSON.stringify(value)
@@ -64,7 +61,6 @@ export function canonicalMemoryJson(value: unknown, label = 'memory value', ance
   }
 }
 
-/** Plain JSON-compatible object check rejecting arrays, null, and class instances (Date, Map, Set, RegExp). */
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const prototype = Object.getPrototypeOf(value)
@@ -82,7 +78,6 @@ export function deepFreeze<T>(value: T): T {
   return Object.freeze(value)
 }
 
-/** Validate the JSON boundary without allocating a discarded canonical string. */
 function assertMemoryJson(value: unknown, label: string, ancestors = new Set<object>(), depth = 0): void {
   if (depth > 48) throw new Error(`${label} is nested too deeply`)
   if (value === null || typeof value === 'boolean' || typeof value === 'string') return
@@ -95,8 +90,6 @@ function assertMemoryJson(value: unknown, label: string, ancestors = new Set<obj
   ancestors.add(value)
   try {
     if (Array.isArray(value)) {
-      // Do not dispatch through caller-owned forEach/map properties: a hidden
-      // override can skip invalid elements and then disappear in structuredClone.
       const length = value.length
       for (let index = 0; index < length; index++) {
         if (index in value) assertMemoryJson(value[index], label, ancestors, depth + 1)
@@ -105,8 +98,6 @@ function assertMemoryJson(value: unknown, label: string, ancestors = new Set<obj
     }
     const prototype = Object.getPrototypeOf(value)
     if (prototype !== Object.prototype && prototype !== null) throw new Error(`${label} contains a non-JSON object`)
-    // Accessors can affect later values. Retain canonical visitation order so
-    // removing serialization does not change which boundary values are checked.
     const entries = Object.entries(value).sort(([left], [right]) => left.localeCompare(right))
     for (const [, item] of entries) assertMemoryJson(item, label, ancestors, depth + 1)
   } finally {
@@ -168,7 +159,6 @@ function pluginCapabilities(values: readonly string[], label: string): string[] 
   return output
 }
 
-/** Validate a plugin node independently of whether its Fiber is active. */
 export function defineMemoryPlugin(value: Omit<MemoryPluginDescriptor, 'apiVersion'> | MemoryPluginDescriptor): MemoryPluginDescriptor {
   if ('apiVersion' in value && value.apiVersion !== MEMORY_PLUGIN_API_VERSION) throw new Error(`unsupported memory plugin API: ${String(value.apiVersion)}`)
   const packageName = requiredText(value.packageName, 'memory plugin packageName', 214)
@@ -266,7 +256,6 @@ export function defineMemoryStrategy<T extends MemoryStrategyDefinition>(definit
     maxRoutes: positiveInteger(manifest.maxRoutes, 'memory Strategy maxRoutes', 1_000),
     maxActions: positiveInteger(manifest.maxActions, 'memory Strategy maxActions', 1_000),
     ...(manifest.extensionSlots === undefined ? {} : { extensionSlots: uniqueIds(manifest.extensionSlots, 'memory Strategy extension slot') }),
-    // Ids this Core does not know stay as declared, so a newer Strategy still loads.
     ...(manifest.workflows === undefined ? {} : { workflows: uniqueIds(manifest.workflows, 'memory Strategy workflow') as MemoryStrategyWorkflow[] }),
   }, 'memory Strategy manifest')
   return Object.freeze({ manifest: normalizedManifest, compose: definition.compose,

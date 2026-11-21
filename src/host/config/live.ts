@@ -4,7 +4,6 @@ import type { Config } from '../protocol.ts'
 import { resolveConfig } from './normalize.ts'
 import { PlainConfig } from './schema.ts'
 
-/** DSH keeps these references stable while committing live profile edits. */
 export type LiveHostConfig = {
   [Key in keyof Config]-?: Key extends 'remoteAccess' ? Config[Key] : Volatile<Config[Key]>
 }
@@ -18,13 +17,11 @@ function plain(value: unknown): unknown {
   return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, plain(child)]))
 }
 
-/** Read a detached snapshot of the live profile configuration. */
 export function plainHostConfig(value: unknown = {}): Config {
   return plain(value) as Config
 }
 
 function liveConfig(): z<Config, LiveHostConfig> {
-  // Copy the published schema so the plain resolver stays non-volatile.
   const schema = new z(PlainConfig.toJSON())
   schema.dict = Object.fromEntries(Object.entries(schema.dict ?? {}).map(([key, field]) => [
     key, key === 'remoteAccess' ? field : field.volatile(),
@@ -38,8 +35,6 @@ function liveConfig(): z<Config, LiveHostConfig> {
         if ('then' in parsed) throw new TypeError('Mnemon configuration validation must be synchronous')
         if (parsed.issues) return parsed
         try {
-          // Keep the object schema visible to SettingsForms while enforcing
-          // pure cross-field constraints before ConfigEditor persists a write.
           resolveConfig(plainHostConfig(parsed.value))
           return parsed
         } catch (error) {
@@ -51,5 +46,4 @@ function liveConfig(): z<Config, LiveHostConfig> {
   return schema as unknown as z<Config, LiveHostConfig>
 }
 
-/** Profile Config for live forms; transport authority retains normal remounts. */
 export const LiveConfig = liveConfig()

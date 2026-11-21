@@ -2,13 +2,6 @@ import type { DocumentSnapshot } from 'dsh-mnemon-source-documents/contracts'
 import type { RuntimeMemoryEntry, RuntimeMemoryMutation, RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
 import type { MnemonMachineIdentity, MnemonReconcileOperation, MnemonReviewEntry, MnemonSyncDiffConflict, MnemonSyncDiffEntry, MnemonTombstone } from './protocol.ts'
 
-/**
- * Memory reconciliation is a proposal, never a write. One bounded model run reads the
- * merged local memory and returns operations that would make it coherent again; a
- * reviewer reads them, may say what they think, and only an accepted review is applied.
- */
-
-/** How much one proposal may ask for. A reconciliation that needs more is a human decision. */
 export const MAX_RECONCILE_OPERATIONS = 40
 const MAX_ENTRY_CHARS = 24_000
 const MAX_DOCUMENTS = 60
@@ -24,12 +17,6 @@ const TARGETS: readonly string[] = ['memory', 'user']
 const IMPORTANCE: readonly string[] = ['critical', 'normal', 'low']
 const KINDS: readonly string[] = ['runtime-add', 'runtime-replace', 'runtime-remove', 'document-archive']
 
-/**
- * The result-tool schema for one reconciliation. Only the fields every operation needs are
- * typed; the per-kind fields carry descriptions instead, because a model that fills an
- * inapplicable field with null must not fail the whole run. The parser below is the
- * authority on what an operation may contain.
- */
 export const RECONCILE_SCHEMA = {
   type: 'object',
   properties: {
@@ -73,46 +60,25 @@ export interface MnemonReconcileEvidence {
   machine: MnemonMachineIdentity
   runtime: RuntimeMemorySnapshot
   documents: DocumentSnapshot
-  /** Labels of the other installations whose entries this installation now holds. */
   foreignMachines: string[]
-  /**
-   * The branch's side of the difference, when a sync repository is configured and
-   * readable: entries published by another installation that this one has not
-   * merged, and the removals the branch recorded that this one has not applied.
-   * Absent means the plan is local, which is what it was before the branch could
-   * be read at all.
-   */
   remote?: {
     entries: MnemonSyncDiffEntry[]
-    /**
-     * The subjects both sides wrote down differently. They are the reason a plan is
-     * needed at all: an entry only one side holds is an addition, and the merge
-     * already brings it in, while two wordings of one subject cannot both stand.
-     */
     conflicts?: MnemonSyncDiffConflict[]
     truncated: boolean
     tombstones: MnemonTombstone[]
     branch: string
     machine?: MnemonMachineIdentity
   } | undefined
-  /** What the reviewer asked the plan to do, in their own words. */
   guidance?: string | undefined
-  /** What reviewers already wrote on the pending reviews, newest last. */
   opinions?: MnemonReconcileOpinion[] | undefined
 }
 
-/** One recorded opinion, flattened for the prompt. */
 export interface MnemonReconcileOpinion {
   author: 'user' | 'agent'
   text: string
   createdAt: string
 }
 
-/**
- * What reviewers already wrote on the proposals that are still open, oldest first.
- * A decided review is not folded in: its opinion was answered by the decision, and the
- * next plan should not keep arguing with a question that was already settled.
- */
 export function pendingOpinions(entries: readonly MnemonReviewEntry[]): MnemonReconcileOpinion[] {
   return entries
     .filter(entry => entry.status === 'pending')
@@ -134,7 +100,6 @@ function originLabel(entry: RuntimeMemoryEntry): string | undefined {
   return origin.label.trim() === '' ? origin.machine : origin.label
 }
 
-/** The other installations whose entries the merged memory holds, as a reviewer should see them. */
 export function foreignMachines(entries: readonly RuntimeMemoryEntry[], machine: MnemonMachineIdentity): string[] {
   const labels = new Set<string>()
   for (const entry of entries) {
@@ -145,7 +110,6 @@ export function foreignMachines(entries: readonly RuntimeMemoryEntry[], machine:
   return [...labels].sort((left, right) => left.localeCompare(right))
 }
 
-/** One numbered evidence block: what the model reads, and what a reviewer can trace back. */
 export function reconcilePrompt(evidence: MnemonReconcileEvidence): string {
   const { machine, runtime, documents, foreignMachines: others } = evidence
   const lines: string[] = []
@@ -181,12 +145,6 @@ export function reconcilePrompt(evidence: MnemonReconcileEvidence): string {
   return lines.join('\n')
 }
 
-/**
- * What the branch holds that this installation does not, and what it removed. Named
- * separately from the local runtime memory, because an operation is still proposed
- * against the local memory: this side says what the other installation already has,
- * so the plan can merge it rather than duplicate it.
- */
 function remoteSection(remote: MnemonReconcileEvidence['remote']): string[] {
   if (remote === undefined) return []
   const lines = ['']
@@ -228,7 +186,6 @@ function remoteSection(remote: MnemonReconcileEvidence['remote']): string[] {
   return lines
 }
 
-/** The reviewer's words, and what reviewers already wrote on the pending proposals. */
 function guidanceSection(guidance: string | undefined, opinions: MnemonReconcileOpinion[] | undefined): string[] {
   const request = guidance?.trim() ?? ''
   const recorded = (opinions ?? []).slice(-MAX_OPINIONS)
@@ -245,7 +202,6 @@ function guidanceSection(guidance: string | undefined, opinions: MnemonReconcile
   return lines
 }
 
-/** How an existing entry is addressed: an exact text, or a unique substring of one. */
 function addresses(entries: readonly RuntimeMemoryEntry[], target: string, oldText: string): 'ok' | 'missing' | 'ambiguous' {
   const candidates = entries.filter(entry => entry.target === target)
   const exact = candidates.filter(entry => entry.content === oldText)
@@ -324,12 +280,10 @@ export interface MnemonReconcileProposal {
   operations: MnemonReconcileOperation[]
 }
 
-/** The snapshot a reconciliation reads when no Documents Source answers. */
 export function emptyDocumentSnapshot(directory: string, at: string): DocumentSnapshot {
   return { workspaceRoot: directory, directory, indexPath: '', generatedAt: at, revision: '', limitBytes: 0, activeBytes: 0, activeCount: 0, archivedCount: 0, total: 0, documents: [] }
 }
 
-/** The host, not the model, decides what a proposal may contain. */
 export function parseReconcileResult(value: unknown, evidence: MnemonReconcileEvidence): MnemonReconcileProposal {
   const result = record(value)
   if (result === undefined) throw new Error('memory reconciliation returned an invalid structured result')
@@ -347,13 +301,11 @@ export function parseReconcileResult(value: unknown, evidence: MnemonReconcileEv
   return { title, summary, action: action as MnemonReconcileProposal['action'], operations }
 }
 
-/** The two ways an accepted proposal reaches memory. Both are ordinary Source mutations. */
 export interface MnemonReconcileApplier {
   runtime(mutation: RuntimeMemoryMutation, signal: AbortSignal): Promise<unknown>
   archive(documentId: string, reason: string, signal: AbortSignal): Promise<unknown>
 }
 
-/** The management channel of the two Sources a proposal can touch. */
 export interface MnemonReconcileSessions {
   runtime: { mutate<T>(operation: string, input: unknown, signal?: AbortSignal): Promise<T> }
   documents: {
@@ -362,11 +314,6 @@ export interface MnemonReconcileSessions {
   }
 }
 
-/**
- * Applies through the Sources themselves, so an accepted review travels the same
- * management path as a user edit: confirmation, expected revision, and the
- * Source's own validation all still apply.
- */
 export function sourceApplier(sessions: MnemonReconcileSessions): MnemonReconcileApplier {
   return {
     runtime: (mutation, signal) => sessions.runtime.mutate('mutate', mutation, signal),
@@ -391,12 +338,6 @@ function mutationFor(operation: Exclude<MnemonReconcileOperation, { kind: 'docum
   }
 }
 
-/**
- * The positions in the plan a selection names, in plan order. A selection is a list
- * of indexes into the plan; an index the plan does not hold is refused outright rather than
- * dropped, because a caller who asked for the fifth operation and silently got four has been
- * told their review was applied when part of it was not. Omitted means all of them.
- */
 export function selectReconcileOperations(
   operations: readonly MnemonReconcileOperation[],
   selection?: readonly number[],
@@ -412,13 +353,6 @@ export function selectReconcileOperations(
   return chosen.sort((left, right) => left - right)
 }
 
-/**
- * Replays an accepted proposal in the order it was written. A proposal is a plan: when one
- * operation fails the rest are not attempted, because continuing to mutate memory from a
- * plan that no longer holds is how a review turns into damage. The failure is reported with
- * the number of operations that did commit, and each failure names the operation's position
- * in the plan rather than in the selection, so a reviewer can find it in what they read.
- */
 export async function applyReconcileOperations(
   operations: readonly MnemonReconcileOperation[],
   applier: MnemonReconcileApplier,

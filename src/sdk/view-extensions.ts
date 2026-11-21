@@ -22,7 +22,6 @@ function sourceKeys(value: MemoryJsonValue | undefined, label: string): string[]
   return [...value] as string[]
 }
 
-/** Validate one standard View extension value; a Strategy validates again before interpreting it. */
 export function validateMemoryViewExtension<K extends MemoryViewExtensionSlot>(slot: K, value: MemoryJsonValue): MemoryViewExtensionValues[K] {
   if (!(MEMORY_VIEW_EXTENSION_SLOTS as readonly string[]).includes(slot)) throw new Error(`unsupported View extension slot: ${String(slot)}`)
   const input = record(value, `View ${slot} contribution`)
@@ -47,7 +46,6 @@ export function validateMemoryViewExtension<K extends MemoryViewExtensionSlot>(s
   return result as MemoryViewExtensionValues[K]
 }
 
-/** Standard values contributed to one composition; each slot has at most one owner. */
 export function memoryViewExtensionValues(contributions: readonly MemoryStrategyContribution[]): Partial<MemoryViewExtensionValues> {
   const output: Partial<MemoryViewExtensionValues> = {}
   for (const contribution of contributions) {
@@ -58,7 +56,6 @@ export function memoryViewExtensionValues(contributions: readonly MemoryStrategy
   return output
 }
 
-/** An extension for whichever selected Strategy declares its standard slot. */
 export function defineMemoryViewExtension<K extends MemoryViewExtensionSlot>(definition: {
   typeId: string
   packageName: string

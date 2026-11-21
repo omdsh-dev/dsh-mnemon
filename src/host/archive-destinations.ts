@@ -1,7 +1,3 @@
-/**
- * Where a MEMORY.md archive or a Document's index can go, and the lineage that names where an archived
- * entry went: the Memory Spaces that can take one, and the destination a Provider's receipt proves.
- */
 import { createHash } from 'node:crypto'
 import type { MemorySpaceCatalog } from 'dsh-mnemon-source-memory-spaces/contracts'
 import { mutationResultCommitted } from './receipts.ts'
@@ -17,11 +13,6 @@ export interface MigrationSource {
   digest: string
 }
 
-/**
- * A space that can take a MEMORY.md archive or a Document's index: active, its
- * Provider enabled and ready, with exact writes and safe forget. A Mnemon Native
- * space stays listed, and active, while its CLI is missing; it takes no writes then.
- */
 export function archivableSpace(directory: MemorySpaceCatalog, body: MemorySpaceCatalog['items'][number]): boolean {
   return body.active && body.providerEnabled !== false && body.provider.capabilities.remember === true
     && body.provider.capabilities.writeMode === 'exact' && body.provider.capabilities.forget === true
@@ -57,11 +48,6 @@ export function destinationFromCommittedMutation(
   }
 }
 
-/**
- * The memory a skipped write names as already holding exactly this text, when
- * its receipt carries that memory's id and stored text. Anything less proves
- * nothing, and the caller verifies by search instead.
- */
 export function skippedExactDestination(
   result: unknown,
   memoryBodyId: string,
@@ -85,17 +71,11 @@ export function mutationStates(result: unknown): string[] {
     .map(entry => entry.trim().toLocaleLowerCase())
 }
 
-/** Whether a Memory Spaces Source other than the one in use lists a space that could take the archive. */
 export async function archivableElsewhere(graph: MnemonRuntimeGraph, scope: MemoryOperationScope, generation: MemoryCompositionGeneration, sourceInstanceKey: string, signal?: AbortSignal): Promise<boolean> {
   if (!generation.sourceInstances().some(source => source.sourceTypeId === 'memory-spaces' && source.sourceInstanceKey !== sourceInstanceKey)) return false
   return !await noArchivableMemorySpace(graph, scope, generation, signal, sourceInstanceKey)
 }
 
-/**
- * True only when no installed Memory Spaces Source lists a space that could take
- * an archive (#336). A directory that cannot be read counts as one that could:
- * the caller then refuses as before, and nothing leaves working memory.
- */
 export async function noArchivableMemorySpace(graph: MnemonRuntimeGraph, scope: MemoryOperationScope, generation: MemoryCompositionGeneration, signal?: AbortSignal, except?: string): Promise<boolean> {
   for (const instance of generation.sourceInstances().filter(source => source.sourceTypeId === 'memory-spaces' && source.sourceInstanceKey !== except)) {
     try {

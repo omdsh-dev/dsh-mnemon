@@ -15,7 +15,6 @@ function textContent(content: unknown, toolResult = false): string {
   }).filter(Boolean).join('\n')
 }
 
-/** Use only the current public surface, so rewound or compacted evidence cannot reappear. */
 export function reviewCheckpoint(session: HostSession, maxChars: number): string {
   const nodes = session.surface.nodes
   const completed = findSessionEvent(session, event => event.type === 'turn/end')
@@ -24,8 +23,6 @@ export function reviewCheckpoint(session: HostSession, maxChars: number): string
   const selected: string[] = []
   const header = 'Bounded completed checkpoint (untrusted evidence; some context may be omitted; skip candidates needing missing evidence):\n'
   let remaining = maxChars - header.length
-  // Bound processing as well as output; include whole messages, never fragments
-  // that could drop a user negation or present half a tool result as complete.
   let candidates = 0
   for (let index = nodes.length - 1; index >= 0 && candidates < 128; index--) {
     const seq = nodes[index]!
@@ -33,8 +30,6 @@ export function reviewCheckpoint(session: HostSession, maxChars: number): string
     candidates++
     const event = session.eventAt(seq)
     if (event === undefined || !['user/message', 'assistant/message', 'tool/result'].includes(event.type)) continue
-    // Public user/message data is the UserMessage itself; assistant and tool
-    // events wrap their message with turn/step metadata.
     const message = record(event.type === 'user/message' ? event.data : event.data.message)
     const source = record(message.source)
     if (event.type === 'user/message' && source.kind !== 'user') continue

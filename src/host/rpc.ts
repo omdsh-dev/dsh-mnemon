@@ -14,7 +14,7 @@ import type { MemoryCapability, MemoryJsonValue, MemoryOperationScope, MemorySou
 import type { CreateMemorySpaceRequest, Insight, MemorySpaceCatalog, PreparedMemoryPlacement, RememberRequest } from 'dsh-mnemon-source-memory-spaces/contracts'
 import type { RuntimeMemoryMutation } from 'dsh-mnemon-source-runtime/contracts'
 import type { DocumentMutation } from 'dsh-mnemon-source-documents/contracts'
-import { MNEMON_ACTIVATION_CHANNEL, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_REVIEW_CHANNEL, MNEMON_SYNC_CHANNEL, MNEMON_WRITE_CHANNEL, type MemoryCompositionStatus, type MnemonPackComponent, type MnemonPackImportMode, type SkillsStatusSummary } from './protocol.ts'
+import { MNEMON_ACTIVATION_CHANNEL, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_REVIEW_CHANNEL, MNEMON_SYNC_CHANNEL, MNEMON_WRITE_CHANNEL, type MemoryCompositionStatus, type MnemonPackComponent, type SkillsStatusSummary } from './protocol.ts'
 import { MNEMON_PACK_COMPONENTS } from './protocol.ts'
 import { applyReconcileOperations, selectReconcileOperations, sourceApplier, type MnemonReconcileSessions } from './reconcile.ts'
 export { MNEMON_ACTIVATION_CHANNEL, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_REVIEW_CHANNEL, MNEMON_SYNC_CHANNEL, MNEMON_WRITE_CHANNEL } from './protocol.ts'
@@ -31,7 +31,6 @@ function requestedScope(payload: Record<string, unknown>): { workspaceId?: strin
     return value.trim() === '' ? [] : [[key, value.trim()]]
   }))
 }
-/** Settings writes keep their own fields only: the routing keys are the Host's, not the store's. */
 function withoutScope(payload: Record<string, unknown>): Record<string, unknown> {
   const patch = { ...payload }
   delete patch.sessionId
@@ -41,8 +40,6 @@ function withoutScope(payload: Record<string, unknown>): Record<string, unknown>
 function scoped(runtime: LiveMnemonRuntime, payload: Record<string, unknown>, lifecycle?: MnemonLifecycle) {
   const requested = requestedScope(payload)
   const route = runtime.route(requested)
-  // Browser workspace ids, and sessions whose Agents are not loaded, resolve through the
-  // authenticated DSH registry.
   const workspaceId = route.selectedWorkspace?.path ?? lifecycle?.workspaceRoot(requested.sessionId)
   const scope: MemoryOperationScope = {
     storage: route.graph.config.storageScope,
@@ -63,7 +60,6 @@ function requireWritable(runtime: ScopedRuntime): void {
 function requireCapability(runtime: ScopedRuntime, typeId: string, capability: MemoryCapability): void {
   assertParticipation(runtime.graph.config, typeId, capability, 'manual')
 }
-/** A memory layer that is off takes no part in reads or writes, management and assistance included. */
 function requireLayerOn(runtime: ScopedRuntime, sourceTypeId: string | undefined): void {
   if (sourceTypeId !== undefined && runtime.graph.config.memoryTopology.layers[sourceTypeId]?.enabled === false) {
     throw new Error(`Memory layer ${sourceTypeId} is off; turn it on to read or change it`)
@@ -72,7 +68,6 @@ function requireLayerOn(runtime: ScopedRuntime, sourceTypeId: string | undefined
 function sourceTypeOf(generation: { sourceInstances(): ReadonlyArray<{ sourceInstanceKey: string; sourceTypeId: string }> } | undefined, sourceInstanceKey: string): string | undefined {
   return generation?.sourceInstances().find(source => source.sourceInstanceKey === sourceInstanceKey)?.sourceTypeId
 }
-/** A one-off pull filter; an absent value means every component. */
 function requestedComponents(value: unknown): MnemonPackComponent[] | undefined {
   if (value === undefined || value === null) return undefined
   if (!Array.isArray(value) || value.length === 0) throw new Error('components must be a non-empty array')
@@ -82,7 +77,6 @@ function requestedComponents(value: unknown): MnemonPackComponent[] | undefined 
   }
   return components
 }
-/** A one-off backup page size; an absent value lets the sync channel pick its default. */
 function requestedLimit(value: unknown): number | undefined {
   if (value === undefined || value === null) return undefined
   const limit = typeof value === 'number' ? value : Number(String(value).trim())
@@ -91,8 +85,6 @@ function requestedLimit(value: unknown): number | undefined {
 }
 function success(value: unknown): RpcResult<unknown> { return { ok: true, value } }
 function failure(error: unknown): RpcResult<unknown> {
-  // A named failure, such as a sync remote that refused the credentials, carries its
-  // reason so the page can state it in its own language; the message stays as written.
   const reason = error instanceof Error ? (error as { reason?: unknown }).reason : undefined
   return { ok: false, error: { code: 'internal', message: errorMessage(error), details: typeof reason === 'string' ? { reason } : {} } }
 }
@@ -109,8 +101,6 @@ const SPACE_WRITE_CAPABILITIES: Record<string, MemoryCapability> = {
   'body-delete': 'forget', 'body-merge': 'write', 'provider-service-update': 'maintain', 'embedding-fill': 'maintain',
 }
 
-// Optional product workflows. They are not Source or Core operations and are
-// advertised only for the exact default instances that this Host coordinates.
 const ASSISTANCE: Record<string, readonly string[]> = {
   'runtime': ['mutate'],
   'documents': ['mutate', 'archive'],
@@ -137,7 +127,6 @@ async function compositionStatus(runtime: ScopedRuntime): Promise<MemoryComposit
   return {
     serving: composition.servingGenerationId !== undefined,
     ...(strategy === undefined ? {} : { strategyTypeId: strategy.typeId, workflows: {
-      // Like lifecycle review, a fallback must not opt the selected Strategy into automatic review.
       idleReview: strategy.typeId === mainStrategyTypeId(runtime.graph.config) && strategyDrives(strategy, 'idle-review'),
       runtimeCapacity: strategyDrives(strategy, 'runtime-capacity'),
     } }),
@@ -164,7 +153,6 @@ async function assisted(runtime: ScopedRuntime, lifecycle: MnemonLifecycle, type
   }
   if (typeId === 'documents') {
     if (operation === 'archive') {
-      // Without a Memory Spaces layer to index into, the coordinator archives locally (#336).
       requireCapability(runtime, typeId, 'archive')
       return lifecycle.archiveDocument(sessionId, String(input.id ?? ''), workspaceRoot, signal)
     }
@@ -175,8 +163,6 @@ async function assisted(runtime: ScopedRuntime, lifecycle: MnemonLifecycle, type
       try {
         return await runtime.source(typeId).mutate('mutate', request, signal)
       } catch (error) {
-        // A conversation whose Agent is not loaded makes room as its Agent would:
-        // a task Agent archives the least recently used Document, then writes.
         if (!runtime.aligned || sessionId === '' || !sourceFailure(error, 'document-capacity')) throw error
         return lifecycle.mutateDocumentTask(sessionId, request, workspaceRoot, signal)
       }
@@ -202,7 +188,6 @@ async function assisted(runtime: ScopedRuntime, lifecycle: MnemonLifecycle, type
       requireAligned(runtime)
       const prepared = await source.read<PreparedMemoryPlacement>('prepare-body-placement', request, signal)
       const body = { name: request.name, description: request.description }
-      // Without a loaded conversation Agent, a task Agent in the same workspace decides.
       const placementDecision = runtime.liveSession
         ? await lifecycle.placeProvider(sessionId, body, prepared, signal)
         : await lifecycle.placeProviderTask(sessionId, body, prepared, workspaceRoot, signal)
@@ -232,10 +217,6 @@ function optionalString(value: unknown, label: string): string | undefined {
   return value.trim() === '' ? undefined : value.trim()
 }
 
-/**
- * The `provider` + `model` pair a page may send with model work. Both or
- * neither: a half route cannot run, and an absent one keeps the profile's own.
- */
 function modelRoute(input: Record<string, unknown>, missing = 'a draft model needs both provider and model'): { provider: string; model: string } | undefined {
   const provider = optionalString(input.provider, 'provider')
   const model = optionalString(input.model, 'model')
@@ -244,7 +225,6 @@ function modelRoute(input: Record<string, unknown>, missing = 'a draft model nee
   return { provider, model }
 }
 
-/** Skill evolution's model work: drafts and backtests run in the background, cases and reviews answer here. */
 async function skillAssistance(runtime: ScopedRuntime, lifecycle: MnemonLifecycle, operation: string, input: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
   const skills = lifecycle.skills
   if (skills === undefined) throw new Error('skill evolution is unavailable')
@@ -260,8 +240,6 @@ async function skillAssistance(runtime: ScopedRuntime, lifecycle: MnemonLifecycl
       if (suggestionId === undefined && draftId === undefined && skill === undefined) throw new Error('a draft needs a suggestion, a draft, or a skill')
       const guidance = optionalString(input.guidance, 'guidance')
       if (guidance !== undefined && guidance.length > 4_000) throw new Error('guidance is too long (max 4000 characters)')
-      // The pick is a Provider and a model together, or neither: half a route
-      // cannot run, and a whole one is what the page's two pickers send.
       const draftRoute = modelRoute(input)
       return skills.draft(source, workspaceRoot, {
         ...(input.backtest === true ? { backtest: true } : {}),
@@ -308,14 +286,11 @@ export function createReadHandler(input: LiveMnemonRuntime, lifecycle?: MnemonLi
       }
       if (endpoint === 'task-agent-models') {
         if (lifecycle === undefined) throw new Error('Mnemon task Agent model directory is unavailable')
-        // The settings page asks from one conversation, so its effective route
-        // is that conversation's route rather than a session-less guess.
         const requested = requestedScope(payload)
         return success(await lifecycle.taskAgentModels(payload.includeCatalog !== false, requested.sessionId))
       }
       const runtime = scoped(input, payload, lifecycle)
       if (Object.hasOwn(SPACE_READ_CAPABILITIES, endpoint)) {
-        // Inspection remains available when model participation is disabled.
         if (SPACE_READ_CAPABILITIES[endpoint] !== 'status') requireCapability(runtime, 'memory-spaces', SPACE_READ_CAPABILITIES[endpoint]!)
         return success(await runtime.source('memory-spaces').read(endpoint, payload, signal))
       }
@@ -352,18 +327,16 @@ export function createReadHandler(input: LiveMnemonRuntime, lifecycle?: MnemonLi
         case 'status':
         case 'status-summary': {
           let documents
-          try { documents = await runtime.source('documents').read('snapshot', null, signal) } catch { /* Optional Source may be unavailable in this scope. */ }
+          try { documents = await runtime.source('documents').read('snapshot', null, signal) } catch { }
           const composition = await compositionStatus(runtime)
-          // Every Memory System page reads this status, so each one can say what a restart would load.
           let restartPending
-          try { restartPending = versions?.restartStatus() } catch { /* The reminder is optional; the status is not. */ }
-          // 技能管理's card: how many skills there are and what waits for the user.
+          try { restartPending = versions?.restartStatus() } catch { }
           let skills: SkillsStatusSummary | undefined
           if (composition.sources.some(source => source.sourceTypeId === 'skills')) {
             try {
               const overview = await runtime.source('skills').read<{ counts: { skills: number; pending: number; drafts: number } }>('overview', null, signal)
               skills = { evolution: lifecycle?.skills?.config().evolution ?? false, skills: overview.counts.skills, waiting: overview.counts.pending + overview.counts.drafts }
-            } catch { /* The card falls back to its own note. */ }
+            } catch { }
           }
           const hasSpaces = composition.sources.some(source => source.sourceTypeId === 'memory-spaces')
           const status = hasSpaces ? await runtime.source('memory-spaces').read<Record<string, unknown>>(endpoint, payload, signal) : {
@@ -513,7 +486,6 @@ export function createWriteHandler(input: LiveMnemonRuntime, lifecycle?: MnemonL
   }
 }
 
-/** Pack data stays inside the selected storage root and DSH authentication. */
 export function createPackHandler(input: LiveMnemonRuntime, nativeDirectoryPicker: () => boolean = () => false): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
@@ -534,20 +506,12 @@ export function createPackHandler(input: LiveMnemonRuntime, nativeDirectoryPicke
   }
 }
 
-/** The one sign-in every generation of this runtime shares. */
 function githubAuth(input: LiveMnemonRuntime): MnemonGitHubAuth {
   const auth = input.sync.github()
   if (auth === undefined) throw new Error('GitHub sign-in is unavailable in this DSH Host')
   return auth
 }
 
-/**
- * Git sync reads and writes the same storage root, under the same gates as Pack.
- *
- * `onConfigured` is the one thing the handler needs from outside the graph: the
- * background timer is armed from the interval this endpoint just saved, and it
- * lives beside the runtime rather than inside it.
- */
 export function createSyncHandler(input: LiveMnemonRuntime, onConfigured?: () => void): HostRpcHandler {
   return async (endpoint, rawPayload, signal) => {
     try {
@@ -558,8 +522,6 @@ export function createSyncHandler(input: LiveMnemonRuntime, onConfigured?: () =>
       if (endpoint === 'configure') {
         requireWritable(runtime)
         const view = await sync.configure(withoutScope(payload))
-        // Re-arm from the interval that was just saved: shortening it should
-        // count from this moment, and turning it off should drop the timer.
         onConfigured?.()
         return success(view)
       }
@@ -569,17 +531,11 @@ export function createSyncHandler(input: LiveMnemonRuntime, onConfigured?: () =>
         return success(await sync.push({ ...(payload.message === undefined ? {} : { message: payload.message }), ...(signal === undefined ? {} : { signal }) }))
       }
       if (endpoint === 'preview') return success(await sync.preview(signal))
-      // Reading the branch's history and the entry-level difference changes nothing
-      // here, so neither endpoint is gated on write access or on a confirmation:
-      // gating a read behind writeEnabled would hide exactly the evidence the
-      // operator needs before deciding whether to write.
       if (endpoint === 'backups') {
         const limit = requestedLimit(payload.limit)
         return success(await sync.backups(limit === undefined ? {} : { limit }, signal))
       }
       if (endpoint === 'diff') return success(await sync.diff(signal))
-      // GitHub sign-in is a property of the Host, not of one workspace graph,
-      // so these endpoints never touch the mirror or the remote branch.
       if (endpoint === 'github-status') return success(await githubAuth(input).status())
       if (endpoint === 'github-start') {
         requireWritable(runtime)
@@ -609,8 +565,6 @@ export function createSyncHandler(input: LiveMnemonRuntime, onConfigured?: () =>
         const result = await sync.pull({
           mode: 'merge',
           ...(components === undefined ? {} : { components }),
-          // Adding the branch's memories normally honors this machine's own deletions.
-          // The reader can overrule that once, for the entries the difference counted.
           ...(payload.revive === true ? { revive: true } : {}),
           ...(signal === undefined ? {} : { signal }),
         })
@@ -621,11 +575,6 @@ export function createSyncHandler(input: LiveMnemonRuntime, onConfigured?: () =>
     } catch (error) { return failure(error) }
   }
 }
-/**
- * Review is the one channel that changes memory only after a human read the
- * proposal: a reconciliation run stages an entry, opinions are recorded against
- * it, and an accepted entry is applied operation by operation.
- */
 export function createReviewHandler(input: LiveMnemonRuntime, lifecycle?: MnemonLifecycle): HostRpcHandler {
   return async (endpoint, rawPayload, signal) => {
     try {
@@ -650,8 +599,6 @@ export function createReviewHandler(input: LiveMnemonRuntime, lifecycle?: Mnemon
       }
       if (endpoint === 'reconcile') {
         if (lifecycle === undefined) throw new Error('Mnemon memory reconciliation is unavailable')
-        // The reviewer's words shape the plan and never widen it: what an operation may
-        // contain is still decided by the host, and nothing is applied by running this.
         const guidance = payload.guidance
         if (guidance !== undefined && typeof guidance !== 'string') throw new Error('the reconciliation guidance must be a string')
         return success(await lifecycle.reconcile(runtime.graph, runtime.scope, signal ?? new AbortController().signal, guidance === undefined ? {} : { guidance }))
@@ -661,18 +608,11 @@ export function createReviewHandler(input: LiveMnemonRuntime, lifecycle?: Mnemon
         const entry = ledger.get(String(payload.id ?? ''))
         if (entry === undefined) throw new Error('unknown review entry: ' + String(payload.id ?? ''))
         if (entry.status !== 'accepted') throw new Error('accept the review before applying it: ' + entry.id)
-        // Omitted means every operation, which is what a caller that predates partial
-        // application sends. An index the plan does not hold is refused rather than
-        // dropped, because a caller that believes it applied the whole review must not
-        // be told a smaller subset succeeded.
         const selection = payload.operations
         if (selection !== undefined && (!Array.isArray(selection) || selection.some(index => typeof index !== 'number'))) {
           throw new Error('the operations to apply must be a list of operation indexes')
         }
         const chosen = selection as number[] | undefined
-        // Running an operation twice is how a plan stops meaning what its author read: the
-        // second run addresses text the first one already replaced. So the ledger decides
-        // what is left to do, and a plan with nothing left is refused rather than replayed.
         const pending = selectReconcileOperations(entry.operations, chosen).filter(index => !(entry.appliedOperations ?? []).includes(index))
         if (pending.length === 0) {
           throw new Error('every operation in this review has already run: ' + entry.id)

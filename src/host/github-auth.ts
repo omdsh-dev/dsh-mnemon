@@ -1,21 +1,3 @@
-/**
- * GitHub sign-in for the repository sync channel: the OAuth device flow, the
- * account query, and the repository list and creation the picker needs.
- *
- * The access token never leaves the Host. It is kept as one grant record in
- * DSH's credentials store, the same seam the Models page writes, so the plugin
- * owns no secret of its own and a Host without that store reports the login as
- * unavailable instead of failing.
- *
- * Requests go through the transport in `github-transport.ts`: the ambient
- * `fetch` first, because a launcher that installed a proxy policy did so on the
- * process-wide dispatcher, then one retry through a proxy discovered from the
- * environment or from this machine's own settings, so a network that reaches
- * GitHub only through a proxy still signs in. Failures report GitHub's error
- * code, the HTTP status and the transport reason, and a device code answer that
- * cannot be used adds its content type and field names; never a value from a
- * response body.
- */
 import { createGitHubTransport, describeTransportError, type MnemonGitHubFetch } from './github-transport.ts'
 import { githubRepositoryNameValid, type MnemonSyncGitHubPoll, type MnemonSyncGitHubRepository, type MnemonSyncGitHubRepositoryList, type MnemonSyncGitHubStatus } from './protocol.ts'
 import { MnemonSyncError } from './sync-error.ts'
@@ -23,15 +5,8 @@ import { MnemonSyncError } from './sync-error.ts'
 export const MNEMON_GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code'
 export const MNEMON_GITHUB_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token'
 export const MNEMON_GITHUB_API_BASE = 'https://api.github.com'
-/** The public client the device flow needs; a GitHub App's own id overrides it. */
 export const MNEMON_GITHUB_DEFAULT_CLIENT_ID = 'Ov23liq4i7n8UsylGRfb'
 export const MNEMON_GITHUB_SCOPE = 'repo'
-/**
- * The one record this plugin keeps in DSH's credentials store, as
- * `credentialKey('dsh-mnemon', 'github')` builds it. Both segments satisfy the
- * store's `^[a-z][a-z0-9-]*$` rule, and the key is spelled here rather than
- * imported so the plugin keeps no dependency on the credentials package.
- */
 export const MNEMON_SYNC_GITHUB_CREDENTIAL_KEY = 'dsh-mnemon/github'
 export const MNEMON_GITHUB_REQUEST_TIMEOUT_MS = 30_000
 export const MNEMON_GITHUB_DEFAULT_INTERVAL_MS = 5_000
@@ -39,12 +14,10 @@ export const MNEMON_GITHUB_SLOW_DOWN_MS = 5_000
 export const MNEMON_GITHUB_MAX_INTERVAL_MS = 60_000
 export const MNEMON_GITHUB_FLOW_LIMIT_MS = 3_600_000
 export const MNEMON_GITHUB_REPOSITORY_PAGE = 100
-/** How many pages of repositories the picker reads; the newest-updated come first. */
 export const MNEMON_GITHUB_REPOSITORY_PAGES = 5
 export const MNEMON_GITHUB_USER_AGENT = 'dsh-mnemon-sync'
 const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code'
 
-/** What one stored grant holds. The token is the only field the channel needs. */
 export interface MnemonGitHubGrant {
   version: 1
   accessToken: string
@@ -53,12 +26,7 @@ export interface MnemonGitHubGrant {
   savedAt: string
 }
 
-/**
- * The record half of DSH's credentials seam, as this plugin uses it: presence
- * of the record is the whole fact, and `write` is the only way in.
- */
 export interface MnemonGitHubCredentialPort {
-  /** Whether the Host exposes a store right now; the service may mount later. */
   available(): boolean
   describe(): Promise<{ configured: boolean; writable: boolean }>
   read(): Promise<MnemonGitHubGrant | undefined>
@@ -83,25 +51,18 @@ function text(value: unknown): string | undefined {
   return typeof value === 'string' && value !== '' ? value : undefined
 }
 
-/** GitHub answers a refused request with a `error` code or an API `message`. */
 function codeOf(body: unknown): string | undefined {
   const fields = record(body)
   return text(fields?.error) ?? text(fields?.message)
 }
 
-/** A positive count GitHub sends as a JSON number, or as a string in a form-encoded answer. */
 function count(value: unknown): number | undefined {
   const number = typeof value === 'string' && /^\d{1,9}$/u.test(value) ? Number(value) : value
   return typeof number === 'number' && Number.isFinite(number) && number > 0 ? number : undefined
 }
 
-/** A key that reads as a field name; anything else in a body that only claimed to be a form could hold a value. */
 const FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/u
 
-/**
- * What an answer GitHub sent looked like, without any of its values: those can be a
- * device code or a token. Enough to tell a proxy's HTML page from a reply that lost a field.
- */
 function shapeOf(answer: { status: number; type?: string | undefined; body: unknown }): string {
   const keys = Object.keys(record(answer.body) ?? {})
   const names = keys.filter(key => FIELD_NAME.test(key)).slice(0, 8)
@@ -112,12 +73,9 @@ function shapeOf(answer: { status: number; type?: string | undefined; body: unkn
 function failure(action: string, status: number, body: unknown): Error {
   const code = codeOf(body)
   const message = code === undefined ? action + ' failed with HTTP ' + String(status) : action + ' failed: ' + code
-  // A grant GitHub no longer honours (revoked, expired, or the app's access withdrawn)
-  // is answered with 401; the page then offers a new sign-in instead of a raw code.
   return status === 401 ? new MnemonSyncError('github-unauthorized', message) : new Error(message)
 }
 
-/** Read one grant out of a stored record, refusing anything else. */
 export function githubGrantFromRecord(record_: unknown): MnemonGitHubGrant | undefined {
   const fields = record(record_)
   if (fields?.kind !== 'grant') return undefined
@@ -154,11 +112,6 @@ function repositoryOf(value: unknown): MnemonSyncGitHubRepository | undefined {
   }
 }
 
-/**
- * The device flow, the account query, and the repository calls, over one
- * credentials port. Every method is safe to call when the port is absent: the
- * status reports the login as unavailable and the rest refuse by name.
- */
 export class MnemonGitHubAuth {
   private flow: DeviceFlow | undefined
 
@@ -169,23 +122,19 @@ export class MnemonGitHubAuth {
     private readonly request: MnemonGitHubFetch = createGitHubTransport(),
   ) {}
 
-  /** Whether this Host exposes a store the grant can live in. */
   available(): boolean {
     return this.port !== undefined && this.port.available()
   }
 
-  /** The store, or undefined while the Host mounts none. */
   private store(): MnemonGitHubCredentialPort | undefined {
     const port = this.port
     return port !== undefined && port.available() ? port : undefined
   }
 
-  /** The token the sync channel may authenticate with, or undefined. */
   async token(): Promise<string | undefined> {
     return (await this.grant())?.accessToken
   }
 
-  /** The stored grant, or undefined while none is stored or the read fails. */
   async grant(): Promise<MnemonGitHubGrant | undefined> {
     const port = this.store()
     if (port === undefined) return undefined
@@ -228,7 +177,6 @@ export class MnemonGitHubAuth {
     }
   }
 
-  /** The flow the user may still finish; an expired one is forgotten here. */
   private liveFlow(): DeviceFlow | undefined {
     const flow = this.flow
     if (flow === undefined) return undefined
@@ -239,7 +187,6 @@ export class MnemonGitHubAuth {
     return flow
   }
 
-  /** Ask GitHub for a code the user types into the browser. */
   async start(signal?: AbortSignal): Promise<MnemonSyncGitHubStatus> {
     if (!this.available()) throw new Error('this DSH Host provides no credentials store, so GitHub sign-in is unavailable')
     const current = this.liveFlow()
@@ -265,7 +212,6 @@ export class MnemonGitHubAuth {
       throw new Error('the GitHub device code answer was incomplete (' + shapeOf(answer) + ')')
     }
     const expiresIn = count(fields?.expires_in) ?? 900
-    // The cadence stays inside the range `slow_down` moves it in, so the page's timer always fires.
     const intervalMs = Math.min(Math.max((count(fields?.interval) ?? MNEMON_GITHUB_DEFAULT_INTERVAL_MS / 1000) * 1000, 1000), MNEMON_GITHUB_MAX_INTERVAL_MS)
     this.flow = {
       deviceCode,
@@ -278,10 +224,6 @@ export class MnemonGitHubAuth {
     return this.status()
   }
 
-  /**
-   * Ask once whether the browser step happened. The Host keeps the cadence
-   * GitHub asked for, so a page that polls faster cannot trip `slow_down`.
-   */
   async poll(signal?: AbortSignal): Promise<MnemonSyncGitHubPoll> {
     if (!this.available()) throw new Error('this DSH Host provides no credentials store, so GitHub sign-in is unavailable')
     const flow = this.liveFlow()
@@ -298,7 +240,6 @@ export class MnemonGitHubAuth {
         ...(signal === undefined ? {} : { signal }),
       })
     } catch (error) {
-      // A dropped connection is not an answer: keep the flow and let the page retry.
       flow.nextPollAt = this.now() + flow.intervalMs
       return { status: 'pending', intervalMs: flow.intervalMs, message: describeTransportError(error) }
     }
@@ -338,13 +279,11 @@ export class MnemonGitHubAuth {
     return { status: 'error', message: code }
   }
 
-  /** Stop waiting for the browser step. The stored grant is untouched. */
   async cancel(): Promise<MnemonSyncGitHubStatus> {
     this.flow = undefined
     return this.status()
   }
 
-  /** Forget the stored grant and any flow that was waiting for it. */
   async signOut(): Promise<MnemonSyncGitHubStatus> {
     this.flow = undefined
     const port = this.store()
@@ -352,7 +291,6 @@ export class MnemonGitHubAuth {
     return this.status()
   }
 
-  /** The account the token belongs to, or undefined when the query fails. */
   private async account(token: string, signal?: AbortSignal): Promise<string | undefined> {
     try {
       const { status, body } = await this.json(MNEMON_GITHUB_API_BASE + '/user', { headers: this.authorization(token), ...(signal === undefined ? {} : { signal }) })
@@ -377,12 +315,9 @@ export class MnemonGitHubAuth {
     return grant.accessToken
   }
 
-  /** The repositories the account may write to, most recently pushed first. */
   async repositories(signal?: AbortSignal): Promise<MnemonSyncGitHubRepositoryList> {
     const token = await this.requireToken()
     const repositories: MnemonSyncGitHubRepository[] = []
-    // An account past one page still finds a repository it updated less recently;
-    // a page shorter than a full one is the last.
     for (let page = 1; page <= MNEMON_GITHUB_REPOSITORY_PAGES; page += 1) {
       const url = MNEMON_GITHUB_API_BASE + '/user/repos?per_page=' + String(MNEMON_GITHUB_REPOSITORY_PAGE) + '&page=' + String(page) + '&sort=updated&affiliation=owner%2Ccollaborator%2Corganization_member'
       const { status, body } = await this.ask(url, { headers: this.authorization(token), ...(signal === undefined ? {} : { signal }) }, 'listing GitHub repositories')
@@ -398,7 +333,6 @@ export class MnemonGitHubAuth {
     return { login, repositories }
   }
 
-  /** Create one public or private repository under the signed-in account. */
   async create(name: unknown, isPrivate: unknown, signal?: AbortSignal): Promise<MnemonSyncGitHubRepository> {
     const token = await this.requireToken()
     const value = typeof name === 'string' ? name.trim() : ''
@@ -415,11 +349,6 @@ export class MnemonGitHubAuth {
     return repository
   }
 
-  /**
-   * A request that may never reach GitHub. The transport already retried it
-   * through a proxy if one was found; what is left is reported as the transport
-   * reason rather than the bare `fetch failed` undici would show.
-   */
   private async ask(url: string, options: {
     method?: string
     headers?: Record<string, string>
@@ -455,9 +384,6 @@ export class MnemonGitHubAuth {
       try {
         body = raw === '' ? undefined : JSON.parse(raw)
       } catch {
-        // GitHub's OAuth endpoints answer form-encoded unless `accept: application/json`
-        // reaches them, and a layer that rebuilds the request's headers - another plugin
-        // patching `fetch` - can drop it. The fields are the same either way (#369).
         body = /^application\/x-www-form-urlencoded\b/iu.test(type ?? '') ? Object.fromEntries(new URLSearchParams(raw)) : undefined
       }
       return { status: response.status, ...(type === undefined ? {} : { type }), body }

@@ -26,7 +26,6 @@ export interface MemoryGenerationHostSnapshot {
   evaluation: MemoryCompositionEvaluationReport
 }
 
-/** No generation serves new work: the composition is incomplete or was rejected. */
 export class MemoryCompositionUnavailableError extends Error {
   readonly code = 'memory-composition-unavailable'
 
@@ -37,7 +36,6 @@ export class MemoryCompositionUnavailableError extends Error {
   }
 }
 
-/** Matched by code, so a copy of Core bundled into another entry point still qualifies. */
 export function isMemoryCompositionUnavailable(error: unknown): error is MemoryCompositionUnavailableError {
   return error instanceof Error && (error as { code?: unknown }).code === 'memory-composition-unavailable'
 }
@@ -55,11 +53,6 @@ function report(
   })
 }
 
-/**
- * Owns candidate → serving → draining generation transitions.
- * Cordis owns definition registrations; this host owns factory-created runtime
- * objects and keeps a retired generation alive only while turn leases exist.
- */
 export class MemoryGenerationHost {
   private readonly records = new Map<string, GenerationRecord>()
   private serving: GenerationRecord | undefined
@@ -165,8 +158,6 @@ export class MemoryGenerationHost {
     this.closed = true
     this.serving = undefined
     const drained = new Promise<void>(resolve => { this.onDrained = resolve })
-    // In-flight management and tool requests retain their existing lease.
-    // New acquisitions stop immediately; Source clients close after the last request.
     for (const record of [...this.records.values()]) this.retire(record)
     if (this.records.size === 0) this.onDrained?.()
     this.closing = (async () => {
@@ -196,7 +187,6 @@ export class MemoryGenerationHost {
     return required.some(key => !available.has(key))
   }
 
-  /** A failed replacement must not keep applying an explicitly disabled policy. */
   private removesServingExtension(snapshot: MemoryContributionSnapshot): boolean {
     const available = new Set((snapshot.strategyExtensions ?? []).map(extension => extension.instanceKey))
     return this.serving?.generation.report.strategyExtensionInstanceKeys?.some(key => !available.has(key)) ?? false

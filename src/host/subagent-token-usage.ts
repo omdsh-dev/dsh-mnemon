@@ -1,14 +1,5 @@
-/**
- * Mnemon-owned projection for provider usage after a subagent descriptor.
- *
- * Fork-backed subagents inherit the parent's durable event prefix. DSH's
- * generic `tokenUsage` projection intentionally totals that complete log, so
- * it cannot also represent the cost of the child shown in the subagent
- * catalog. This independent projection keeps the generic metric untouched
- * and resets at every durable descriptor.
- */
 import { z } from 'zod'
-import type { HostContextShape, HostSessionEvent } from "./dsh.ts"
+import type { HostContextShape } from "./dsh.ts"
 
 export interface MnemonTokenUsageProjection {
   uncachedInputTokens: number
@@ -35,7 +26,7 @@ interface ProjectionEvent {
 }
 
 interface ProjectionRegistry {
-  register(definition: typeof mnemonSubagentTokenUsageProjectionDefinition): unknown
+  register(definition: typeof subagentTokenUsageProjection): unknown
 }
 
 type ProjectionContext = HostContextShape & { sessionProjections?: ProjectionRegistry }
@@ -72,6 +63,10 @@ const emptyTokenUsage = (): MnemonTokenUsageProjection => ({
   cacheWriteTokens: 0,
 })
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function nonnegativeInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
     ? value
@@ -79,16 +74,15 @@ function nonnegativeInteger(value: unknown): number | undefined {
 }
 
 function usageBuckets(value: unknown): MnemonTokenUsageProjection | undefined {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
-  const usage = value as Record<string, unknown>
-  const inputTokens = nonnegativeInteger(usage.inputTokens)
-  const outputTokens = nonnegativeInteger(usage.outputTokens)
-  const cacheReadTokens = usage.cacheReadTokens === undefined
+  if (!isPlainObject(value)) return undefined
+  const inputTokens = nonnegativeInteger(value.inputTokens)
+  const outputTokens = nonnegativeInteger(value.outputTokens)
+  const cacheReadTokens = value.cacheReadTokens === undefined
     ? 0
-    : nonnegativeInteger(usage.cacheReadTokens)
-  const cacheWriteTokens = usage.cacheWriteTokens === undefined
+    : nonnegativeInteger(value.cacheReadTokens)
+  const cacheWriteTokens = value.cacheWriteTokens === undefined
     ? 0
-    : nonnegativeInteger(usage.cacheWriteTokens)
+    : nonnegativeInteger(value.cacheWriteTokens)
   if (inputTokens === undefined || outputTokens === undefined
     || cacheReadTokens === undefined || cacheWriteTokens === undefined) return undefined
   return {
@@ -100,25 +94,25 @@ function usageBuckets(value: unknown): MnemonTokenUsageProjection | undefined {
 }
 
 function usageSample(event: ProjectionEvent): UsageSample | undefined {
-  if (typeof event.data !== 'object' || event.data === null || Array.isArray(event.data)) return undefined
-  const data = event.data as Record<string, unknown>
-  const turn = nonnegativeInteger(data.turn)
-  const step = nonnegativeInteger(data.step)
+  if (!isPlainObject(event.data)) return undefined
+  const turn = nonnegativeInteger(event.data.turn)
+  const step = nonnegativeInteger(event.data.step)
   if (turn === undefined || step === undefined) return undefined
   let rawUsage: unknown
   if (event.type === 'assistant/chunk') {
-    const chunk = data.chunk
-    if (typeof chunk !== 'object' || chunk === null || Array.isArray(chunk)) return undefined
-    const record = chunk as Record<string, unknown>
-    if (record.type !== 'usage') return undefined
-    rawUsage = record.usage
+    if (!isPlainObject(event.data.chunk) || event.data.chunk.type !== 'usage') return undefined
+    rawUsage = event.data.chunk.usage
   } else if (event.type === 'assistant/message') {
-    rawUsage = data.usage
+    rawUsage = event.data.usage
   } else {
     return undefined
   }
   const buckets = usageBuckets(rawUsage)
   return buckets === undefined ? undefined : { turn, step, buckets }
+}
+
+function isSameStep(last: UsageSample | null, sample: UsageSample): boolean {
+  return last !== null && last.turn === sample.turn && last.step === sample.step
 }
 
 function equalTokenUsage(left: MnemonTokenUsageProjection, right: MnemonTokenUsageProjection): boolean {
@@ -141,15 +135,9 @@ function replaceTokenUsage(
   }
 }
 
-/** Wire key consumed only by Mnemon's subagent-catalog token-usage projection. */
 export const MNEMON_SUBAGENT_TOKEN_USAGE_KEY = 'mnemonSubagentTokenUsage'
 
-/**
- * Fold provider usage after the latest subagent descriptor. A fork may carry
- * an ancestor descriptor as part of its seed, so every descriptor resets the
- * fold and the child's own descriptor becomes the final authoritative origin.
- */
-export const mnemonSubagentTokenUsageProjectionDefinition = {
+export const subagentTokenUsageProjection = {
   key: MNEMON_SUBAGENT_TOKEN_USAGE_KEY,
   stateVersion: 1,
   stateSchema: tokenUsageStateSchema,
@@ -165,11 +153,7 @@ export const mnemonSubagentTokenUsageProjectionDefinition = {
     if (!state.descriptorSeen) return state
     const sample = usageSample(event)
     if (sample === undefined) return state
-    const previous = state.last !== null
-      && state.last.turn === sample.turn
-      && state.last.step === sample.step
-      ? state.last.buckets
-      : undefined
+    const previous = isSameStep(state.last, sample) ? state.last!.buckets : undefined
     if (previous !== undefined && equalTokenUsage(previous, sample.buckets)) return state
     return {
       descriptorSeen: true,
@@ -180,10 +164,9 @@ export const mnemonSubagentTokenUsageProjectionDefinition = {
   wire: tokenUsageWire,
 } as const
 
-/** Register lazily when the optional DSH projection service is present. */
-export function registerMnemonSubagentTokenUsageProjection(ctx: HostContextShape): void {
+export function registerSubagentTokenUsage(ctx: HostContextShape): void {
   ctx.inject(['sessionProjections'], (rawContext) => {
     const projectionContext = rawContext as ProjectionContext
-    projectionContext.sessionProjections?.register(mnemonSubagentTokenUsageProjectionDefinition)
+    projectionContext.sessionProjections?.register(subagentTokenUsageProjection)
   })
 }

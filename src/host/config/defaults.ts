@@ -47,7 +47,6 @@ export const IDLE_REVIEW_BOUNDS = Object.freeze({
   maxTokens: { min: 128, max: 131_072 },
 })
 
-// The Runtime Source's own defaults and ceiling for its two files, which these settings configure.
 export const DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES = RUNTIME_MEMORY_LIMITS.memory
 export const DEFAULT_RUNTIME_USER_LIMIT_BYTES = RUNTIME_MEMORY_LIMITS.user
 export const MIN_RUNTIME_MEMORY_LIMIT_BYTES = 1

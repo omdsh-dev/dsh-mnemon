@@ -20,7 +20,6 @@ declare module '@deepseek-ai/dsh-llm' {
 
 export const MNEMON_PLUGIN_SOURCE = 'dsh-mnemon'
 
-/** Includes the published V3 wrapper and its official V4 migration. */
 export function isMnemonMessageSource(source: unknown): boolean {
   if (typeof source !== 'object' || source === null) return false
   const { kind, plugin } = source as { kind?: unknown; plugin?: unknown }
@@ -34,7 +33,6 @@ export function isBm25RecallSource(source: unknown): boolean {
   return form === 'bm25-recall' || form === 'bm25-invalidation'
 }
 
-/** A user-role message this plugin adds to a step, marked with its own source. */
 export function createPluginMessage(text: string, form: MnemonUserMessageForm, metadata?: { snapshot?: MemorySnapshotState; bm25?: Bm25RecallState; runtimeRanges?: RuntimeSnapshotRange[] }): HostUserMessage {
   return structuredClone({
     id: randomUUID(),

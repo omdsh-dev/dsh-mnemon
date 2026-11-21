@@ -44,13 +44,11 @@ import { IdleReviewSchema, SkillsConfig, validateMemoryViewPreferences } from '.
 export { normalizeDisplayMode }
 export { resolveEmbedding, resolvePersistenceStrategy, resolveRecallQuality }
 
-/** The resolved config with the profile's main Strategy choice applied; without a choice the topology's id stays. */
 export function withMainStrategy(config: SharedResolvedConfig, view: Pick<MemoryViewPreferences, 'strategyTypeId'>): SharedResolvedConfig {
   const selected = view.strategyTypeId
   return selected === undefined ? config : { ...config, memoryTopology: { ...config.memoryTopology, strategyId: selected } }
 }
 
-/** The type id of the main Strategy the Host composes the View with. */
 export function mainStrategyTypeId(config: Pick<SharedResolvedConfig, 'memoryTopology'>): string {
   return config.memoryTopology.strategyId
 }
@@ -130,7 +128,6 @@ function resolveTaskAgentModel(value: TaskAgentModelConfig | undefined): Resolve
   if (mode !== 'inherit' && mode !== 'fixed') throw new Error(`dsh-mnemon: unsupported task Agent model mode: ${String(mode)}`)
   const follow = value?.followConversation
   if (follow !== undefined && typeof follow !== 'boolean') throw new Error('dsh-mnemon: taskAgentModel.followConversation must be a boolean')
-  // A fixed route names its own model, so only an inherited one can follow a conversation.
   if (mode === 'inherit') return follow === true ? { mode, followConversation: true } : { mode }
   const provider = optionalText(value?.provider)
   const model = optionalText(value?.model)

@@ -4,24 +4,6 @@ import { truncate } from '../sdk/input.ts'
 
 export const MNEMON_ACTIVITY_SCHEMA = 'dsh-mnemon.activity/v1' as const
 
-interface ActivityMetaBase {
-  schema: typeof MNEMON_ACTIVITY_SCHEMA
-  operationId: string
-  reference?: string
-  sourceTypeId?: string
-}
-
-interface ReadActivityMeta extends ActivityMetaBase {
-  kind: 'read'
-  items: MemoryActivityItem[]
-}
-
-interface WriteActivityMeta extends ActivityMetaBase {
-  kind: 'write'
-  committed: boolean
-  item: MemoryActivityItem
-}
-
 const MAX_ITEMS = 8
 const MAX_TITLE = 160
 const MAX_EXCERPT = 500
@@ -67,7 +49,6 @@ function resultItems(value: unknown): MemoryActivityItem[] {
 function writeItem(argsValue: unknown, operationId: string): MemoryActivityItem {
   const outer = object(argsValue) ?? {}
   const input = object(outer.input) ?? outer
-  // A removal names the text it removed; an item with no text is known only by its id.
   const content = bounded(input.content ?? input.description ?? input.reason ?? input.summary ?? input.old_text ?? input.oldText, MAX_EXCERPT)
   const explicitTitle = bounded(input.title ?? input.name, MAX_TITLE)
   const identity = bounded(input.id ?? input.memoryBodyId ?? input.targetMemoryBodyId ?? input.sourceId, 300)
@@ -106,10 +87,8 @@ export function memoryWritePresentation(sourceTypeId: string | undefined, operat
   }) as unknown as JsonValue
 }
 
-/** A named tool whose result records activity: one that reads or writes a Source operation, not an inspection. */
 type RecordedToolName = { [Name in MemoryToolName]: (typeof MEMORY_TOOLS)[Name] extends { readonly sourceTypeId: string; readonly kind: 'read' | 'write' } ? Name : never }[MemoryToolName]
 
-/** The activity a named tool's result records: the Source and operation its row in the tool table names. */
 export function namedToolPresentation(name: RecordedToolName): (args: unknown, value: unknown) => JsonValue {
   const tool = MEMORY_TOOLS[name]
   return tool.kind === 'write' ? memoryWritePresentation(tool.sourceTypeId, tool.operation) : memoryReadPresentation(tool.sourceTypeId, tool.operation)
@@ -126,7 +105,6 @@ function cleanItem(value: unknown): MemoryActivityItem {
   return { id: entry.id, title: entry.title, ...(entry.excerpt === undefined ? {} : { excerpt: entry.excerpt }) }
 }
 
-/** Fail closed on arbitrary third-party/session metadata. */
 export function parseMnemonActivityMeta(value: unknown, callId: string, toolName: string): { read?: MemoryActivityRead; writeback?: MemoryActivityWriteback } {
   const meta = object(value)
   if (meta?.schema !== MNEMON_ACTIVITY_SCHEMA || (meta.kind !== 'read' && meta.kind !== 'write')) return {}

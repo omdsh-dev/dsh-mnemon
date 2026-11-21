@@ -15,7 +15,6 @@ export type EmbeddingCredentialStore = () => HostCredentialsService | undefined
 const object = (value: unknown): Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
 
-/** Preserve other Host redaction while never returning a legacy inline key. */
 export function publicEmbeddingSettings(value: unknown, original: unknown, metadata = false): unknown {
   const config = object(value)
   if (!metadata && config.embedding === undefined) return value
@@ -32,7 +31,6 @@ export function publicEmbeddingSettings(value: unknown, original: unknown, metad
   }
 }
 
-/** Write/verify a new record before referencing it; failures keep the old configuration and key intact. */
 export async function prepareEmbeddingSettings(
   settings: HostSettingsService,
   namespace: string,
@@ -48,7 +46,6 @@ export async function prepareEmbeddingSettings(
   const last = operations.findLastIndex(operation => operation.path.length === 1 && operation.path[0] === 'embedding')
   if (namespace !== MNEMON_SETTINGS_NAMESPACE || last === -1) return { operations, revision }
   const operation = operations[last]!
-  // A transaction can set the whole field more than once; only its final value is effective.
   const edits = operations.filter((entry, index) => index === last || entry.path[0] !== 'embedding')
   if (operation.op === 'unset') {
     const view = settings.describe({ redactSecrets: false }).find(candidate => candidate.ns === namespace)
@@ -105,7 +102,6 @@ export async function prepareEmbeddingSettings(
     }
   }
   resolved = resolveEmbedding(next as MnemonEmbeddingConfig)
-  // Validate the same normalized configuration the runtime will receive, without returning its key.
   if (resolved.apiKey) throw new Error('Embedding settings must not persist a plaintext key')
   const oldRef = previous.apiKeyRef
   const commit = oldRef && oldRef !== resolved.apiKeyRef
@@ -123,11 +119,6 @@ export async function prepareEmbeddingSettings(
   }
 }
 
-/**
- * The one GitHub credentials record this plugin keeps, as DSH's store addresses it:
- * `<scope>/<id>`. Presence of the record is the whole fact, and every write
- * goes through `modifyRecord` so a replacement happens under the store's lock.
- */
 export function credentialPort(service: () => HostCredentialsService | undefined): MnemonGitHubCredentialPort {
   return {
     available: () => service() !== undefined,
@@ -146,7 +137,6 @@ export function credentialPort(service: () => HostCredentialsService | undefined
     clear: async () => {
       const store = service()
       if (store === undefined) return
-      // An absent record is already the signed-out state; deleting one twice is not a failure.
       if (await store.readRecord(MNEMON_SYNC_GITHUB_CREDENTIAL_KEY) === undefined) return
       await store.deleteRecord(MNEMON_SYNC_GITHUB_CREDENTIAL_KEY)
     },

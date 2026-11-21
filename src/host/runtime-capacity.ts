@@ -1,9 +1,3 @@
-/**
- * The runtime-capacity workflow: a runtime memory write that does not fit first compacts USER.md locally, or
- * archives MEMORY.md entries into a Memory Space, routing them in bounded batches when several spaces could
- * take them, or into the Runtime Source's local archive when none can (#336), and then commits the write.
- * The coordinator runs it one write at a time.
- */
 import { randomUUID } from 'node:crypto'
 import type { HostSubagentResult } from "./dsh.ts"
 import { RUNTIME_ENTRY_DELIMITER, type RuntimeMemoryCompactedEntry, type RuntimeMemoryMaintenancePlan, type RuntimeMemoryMutation, type RuntimeMemoryMutationResult } from 'dsh-mnemon-source-runtime/contracts'
@@ -25,7 +19,6 @@ export type RuntimeModelResult = { provider: string; runId: string; result: Host
 
 type RuntimeArchiveScope = {
   source: SourceSession; cleanup: SourceSession; memoryBodyIds?: ReadonlySet<string>; writeScope?: MemorySpaceWriteScopeRequest
-  /** Another Memory Spaces Source lists a space that could take the archive, so its absence here is no reason to archive locally. */
   elsewhere?: boolean
 }
 
@@ -33,12 +26,10 @@ export interface RuntimeWriteContext {
   runtime: SourceSession
   inspectRuntime: SourceSession
   maintain: boolean
-  /** Automatic writes retain the replaced entry's importance through planning and compaction. */
   preserveImportance?: boolean
   expectedRevision?: string
   assertWritable?(): void
   commit(): Promise<RuntimeMemoryMutationResult>
-  /** The Memory Spaces Source an archive writes to, or undefined when none in this View takes writes. */
   memorySpaces(): Promise<RuntimeArchiveScope | undefined>
   model(operation: 'migration' | 'compaction' | 'reconcile', label: string, prompt: string, schema: Record<string, unknown>, persona: string): Promise<RuntimeModelResult>
 }
@@ -108,15 +99,10 @@ function runtimeMigrationSources(
 
 export async function runtimeArchiveSource(runtimeSource: MnemonAgentRuntimeSource, graph: MnemonRuntimeGraph, scope: MemoryOperationScope, view: ComposableMemoryView, generation: MemoryCompositionGeneration, turn?: ComposableMemoryTurn, signal?: AbortSignal): Promise<RuntimeArchiveScope | undefined> {
   if (!graph.config.writeEnabled || !runtimeSource.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only')
-  // Memory Spaces switched off, or taking no automatic writes, leave the archive
-  // to the Runtime Source (#336).
   if (!allowsParticipation(graph.config, 'memory-spaces', 'write', 'automatic')) return undefined
   const candidates = generation.sourceInstances().filter(source => source.sourceTypeId === 'memory-spaces'
     && view.actionOffers.some(offer => offer.sourceInstanceKey === source.sourceInstanceKey && offer.sourceActionId === 'remember' && offer.authority === undefined))
   if (candidates.length === 0) {
-    // So does a layer with no space anywhere that could take it. A space this View
-    // does not offer, or a directory that cannot be read now, keeps the refusal and
-    // the retry in a new turn it asks for.
     if (await noArchivableMemorySpace(graph, scope, generation, signal)) return undefined
     throw new Error('Source Action is not offered by the current View: memory-spaces/remember')
   }
@@ -130,14 +116,8 @@ export async function runtimeArchiveSource(runtimeSource: MnemonAgentRuntimeSour
     elsewhere: await archivableElsewhere(graph, scope, generation, candidates[0]!.sourceInstanceKey, signal) }
 }
 
-/**
- * MEMORY.md keeps working without a Memory Space to archive into: the Runtime
- * Source moves the entries compaction leaves out to its local archive, as exact
- * text, in the same commit as the compaction and the pending write (#336).
- */
 async function archiveRuntimeLocally(counters: SubagentCounters, context: RuntimeWriteContext, request: RuntimeMemoryMutation, plan: RuntimeMemoryMaintenancePlan, reason: string, signal: AbortSignal): Promise<CoordinatedRuntimeMemoryResult> {
   signal.throwIfAborted()
-  // A Runtime Source from before the local archive would compact without keeping what it leaves out.
   if (plan.localArchive !== true) {
     throw new Error(`runtime memory archival found no Memory Space that can take the archive (${reason}), and this Runtime Source cannot archive locally; pending write was not committed and existing runtime entries are unchanged; update dsh-mnemon-source-runtime, activate a supported Memory Space, or increase runtimeMemory.memoryLimitBytes`)
   }
@@ -181,8 +161,6 @@ export async function runtimeLocked(counters: SubagentCounters, context: Runtime
   } catch (error) {
     const failure = runtimeError(error, signal)
     if (capacity === undefined || signal.aborted) throw failure
-    // A routing fallback can succeed before the actual archive fails. Preserve
-    // both facts, without claiming a failed or uncertain write was committed.
     const routing = routingDiagnostics.length === 0 ? '' : ` First routing diagnostics: ${routingDiagnostics.join(' ')}`
     const message = `${runtimeError(capacity, signal).message} Automatic capacity maintenance failed: ${failure.message}${routing}`
     const reported = failure instanceof AggregateError ? new AggregateError(failure.errors, message, { cause: failure }) : new Error(message, { cause: failure })
@@ -199,8 +177,6 @@ function runtimeError(error: unknown, signal: AbortSignal): Error {
   const value = optionalObject(error)
   let fallback = cancelled ? 'Runtime memory operation cancelled.' : undefined
   if (!cancelled && sourceFailure(error, 'runtime-capacity')) {
-    // JSON serialization drops Error.message but retains the Source's numeric
-    // capacity fields. Do not dump arbitrary objects to reconstruct the message.
     fallback = [value?.used, value?.projected, value?.limit].every(field => Number.isSafeInteger(field) && Number(field) >= 0)
       ? `Runtime memory capacity exceeded: ${value!.projected} bytes (current ${value!.used}, limit ${value!.limit}). Archive and compact runtime memory before retrying.`
       : 'Runtime memory capacity exceeded. Archive and compact runtime memory before retrying.'
@@ -220,7 +196,7 @@ async function maintainRuntime(counters: SubagentCounters, context: RuntimeWrite
   if (context.expectedRevision !== undefined && context.expectedRevision !== plan.revision) throw new Error('Runtime source revision conflict before capacity maintenance')
   if (!plan.requiresMaintenance) return context.commit()
   if (plan.entries.length === 0) throw new Error('runtime memory capacity was exceeded without entries available for maintenance')
-  compactedBudget(plan) // Fail before any model or Provider work if pins cannot fit.
+  compactedBudget(plan)
   if (request.target === 'user') return compactUserAndCommit(context, request, plan, signal)
 
   const archiveEntries = plan.entries.filter(entry => entry.pinned !== true)
@@ -244,9 +220,6 @@ async function maintainRuntime(counters: SubagentCounters, context: RuntimeWrite
     return catalog
   }
   const catalog = await readDirectory()
-  // A Source that predates writeScope retains the narrower pinned read namespace.
-  // An empty scope always denies every destination; never replace it with the live catalog.
-  // A Mnemon Native space stays listed, and active, while its CLI is missing; it takes no writes then.
   const ready = (body: MemorySpaceCatalog['items'][number]) => catalog.providers?.find(provider => provider.id === body.provider.id)?.serviceConfigured !== false
   const writable = (body: MemorySpaceCatalog['items'][number]) => (
     body.active && body.providerEnabled !== false && body.provider.capabilities.remember === true && ready(body)
@@ -263,9 +236,6 @@ async function maintainRuntime(counters: SubagentCounters, context: RuntimeWrite
       : allowed !== undefined && catalog.items.some(body => body.active && body.providerEnabled !== false && body.provider.capabilities.remember && !allowed?.has(body.id)) && writableBodies.length === 0
         ? 'current View write scope excludes the active writable Memory Spaces'
         : writableBodies.length === 0 ? 'no active writable Memory Space in the authorized scope' : 'authorized destinations lack exact writes or safe forget'
-    // With no Memory Space at all that could take this archive, MEMORY.md archives
-    // locally and keeps working (#336). One outside this View's write scope is
-    // still worth the retry in a new turn that the error asks for.
     if (!catalog.items.some(body => archivableSpace(catalog, body)) && archive.elsewhere !== true) return archiveRuntimeLocally(counters, context, request, plan, `${reason}${unsupported === '' ? '' : ` (${unsupported})`}`, signal)
     const scope = archive.writeScope === undefined ? 'management' : `${archive.writeScope.grant.sourceInstanceKey}/${catalog.writeScope === undefined ? 'pinned-read' : 'source-write'}`
     throw new Error(`runtime memory archival requires an existing active writable Memory Space with exact writes and safe forget; ${reason}; scope=${scope}, catalog=${catalog.items.length}, authorized=${allowed?.size ?? 'management'}, writable=${writableBodies.length}; pending write was not committed and existing runtime entries are unchanged; retry the same request in a new turn after activating a supported authorized Memory Space, or increase runtimeMemory.memoryLimitBytes${unsupported === '' ? '' : `; unsupported destinations: ${unsupported}`}`)
@@ -280,11 +250,6 @@ async function maintainRuntime(counters: SubagentCounters, context: RuntimeWrite
     for (const index of archiveEntries.keys()) routed.set(index + 1, eligibleBodies[0]!.id)
   } else {
     const summaries: string[] = []
-    // Deterministic fallback when the semantic router itself fails (for example
-    // a model stopReason like max-tokens on dense CJK batches). Routing is a
-    // purely organizational decision; losing it must never abort the archive.
-    // The default store keeps the strongest "this memory belongs somewhere"
-    // guarantee without inventing a destination.
     const fallbackBody = eligibleBodies.find(body => body.mnemonDefault) ?? eligibleBodies[0]!
     const chunks = runtimeRouteChunks(archiveEntries)
     for (const [chunkIndex, chunk] of chunks.entries()) {
@@ -337,9 +302,6 @@ ${chunk.context}
         if (typeof value.summary === 'string' && value.summary.trim() !== '') summaries.push(value.summary.trim())
       } catch (error) {
         signal.throwIfAborted()
-        // Routing is advisory, including a returned proposal that fails Host
-        // validation. Publish either the complete proposal or the whole chunk's
-        // deterministic fallback; never retain a partially validated route.
         for (const index of chunk.indexes) routed.set(index, fallbackBody.id)
         const diagnostic = `batch ${chunkIndex + 1} routed to ${fallbackBody.id} deterministically (routing failed: ${safeFailureDetail(errorMessage(error))})`
         summaries.push(diagnostic)
@@ -351,9 +313,6 @@ ${chunk.context}
   if (routed.size !== archiveEntries.length) throw new Error('runtime memory migration omitted committed archive sources')
   const compactedEntries = plan.entries.map(({ content, importance, branches, pinned }): RuntimeMemoryCompactedEntry => ({ content, importance, ...(branches === undefined ? {} : { branches }), ...(pinned === undefined ? {} : { pinned }) }))
 
-  // Re-check the local source before any Provider side effect. A later race is
-  // still caught by compactAndMutate; Provider receipts are verified because
-  // an external data plane cannot share the local filesystem lock.
   const current = await runtimeMemory.read<RuntimeMemoryMaintenancePlan>('maintenance-plan', { ...request, ...(context.preserveImportance ? { preserveImportance: true } : {}) }, signal)
   if (current.revision !== plan.revision) throw new Error('runtime memory changed while archival was running; no archive writes were attempted')
   const destinations = await readDirectory()
@@ -382,8 +341,6 @@ ${chunk.context}
   const created = new Map<string, { id: string; memoryBodyId: string }>()
   let commitAttempted = false
   try {
-    // Keep Native exact imports batched per destination, while retaining earlier
-    // destinations' receipts if a later Provider call fails.
     for (const memoryBodyId of new Set(routed.values())) {
       signal.throwIfAborted()
       context.assertWritable?.()
@@ -537,9 +494,6 @@ async function archiveRuntimeEntry(
   if (!mutationStates(result).includes('skipped')) {
     throw new Error(`runtime archive write did not commit synchronously for Memory Space ${memoryBodyId}`)
   }
-  // A write skipped because the space already holds this exact text can name
-  // that memory itself, as Mnemon Native does after matching its stored
-  // contents byte for byte. A ranked search could miss it (#339).
   const named = skippedExactDestination(result, memoryBodyId, entry.content)
   if (named !== undefined) return named
   const recalled = await service.read<{ results: Insight[]; sources?: Array<{ status?: string; hint?: string }> }>('search', {

@@ -23,7 +23,6 @@ export interface MemoryTestTurn {
   release(): void
 }
 
-/** Read-only identity/manifest, never an installed definition or Source handle. */
 export interface MemoryTestSource {
   readonly sourceInstanceKey: string
   readonly manifest: MemorySourceManifest
@@ -40,7 +39,6 @@ export interface MemoryTestOptions {
   sourceTimeoutMs?: number
 }
 
-/** JSON-only observations for composition/replacement tests, not engine access. */
 export interface MemoryTestDiagnostics {
   servingGenerationId?: string
   drainingGenerationIds: string[]
@@ -54,12 +52,6 @@ export interface MemoryTestManagementClient {
   mutate(operation: string, input: MemoryJsonValue, options: { confirmed: true; expectedRevision?: string }): Promise<MemorySourceManagementResult>
 }
 
-/**
- * A test fixture, not a production service or a second Loader. It mounts real
- * Cordis Fibers against the same Runtime/compiler used by the Host. The small
- * Loader identity adapter supplies only stable Entry ids for installMemory.
- * No built-in Source, Provider, database, browser, or private binding is needed.
- */
 export class MemoryCompositionRunner {
   readonly context = new Context()
   readonly #runtime = provideMemoryRuntime(this.context)
@@ -181,7 +173,6 @@ export class MemoryCompositionRunner {
     finally { lease.release() }
   }
 
-  /** Exercise the public protocol, including rejected confirmation/revision cases. */
   async executeManagement(request: MemorySourceManagementRequest): Promise<MemorySourceManagementResult> {
     this.#assertOpen()
     const lease = this.#generations.acquire()
@@ -189,7 +180,6 @@ export class MemoryCompositionRunner {
     finally { lease.release() }
   }
 
-  /** Same scoped management contract a Source page receives, backed by real generations. */
   async managementClient(sourceInstanceKey: string, scopeValue: MemoryViewRequest['scope'] = { storage: 'custom' }): Promise<MemoryTestManagementClient> {
     const scope = structuredClone(scopeValue)
     const instance = (await this.managementCatalog(scope)).sources.find(source => source.sourceInstanceKey === sourceInstanceKey)
@@ -234,12 +224,6 @@ export class MemoryCompositionRunner {
 
 export { DEFAULT_MEMORY_VIEW_BUDGET }
 
-/**
- * Evaluate a trusted, already-built DSH Client artifact in a test. Dependencies
- * are explicit (normally the test's React and UI primitives), so no production
- * Loader, global registry, source alias, or second copy of React is required.
- * This is a test fixture, not another Client Loader implementation.
- */
 export function loadMemoryClientArtifact<T extends object = Record<string, unknown>>(
   path: string | URL,
   dependencies: Readonly<Record<string, unknown>>,

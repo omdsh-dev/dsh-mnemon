@@ -33,7 +33,6 @@ function sourceType(fragment: ComposableMemoryView['projection'][number]): strin
 export interface MemoryWakeBindings {
   routes?: Readonly<Record<string, string>>
   actions?: Readonly<Record<string, string>>
-  /** Visible generic dispatch tools; omitted preserves the legacy Host bindings. */
   routingTools?: readonly string[]
 }
 
@@ -75,7 +74,6 @@ export function createMemoryWake(view: ComposableMemoryView, bindings: MemoryWak
   }
 }
 
-/** Root-turn pins over Candidate → Serving → Draining generations. */
 export class ComposableMemoryTurnManager {
   private readonly turns = new Map<string, StoredTurn>()
   private readonly retainedViews = new Map<string, { view: ComposableMemoryView; lease: MemoryGenerationLease; count: number }>()
@@ -133,7 +131,6 @@ export class ComposableMemoryTurnManager {
     return this.retainedViews.get(viewId)?.view ?? [...this.turns.values()].find(turn => turn.context.view.id === viewId)?.context.view
   }
 
-  /** A delegated child keeps the original grant and generation, not owner-latest state. */
   retainView(viewId: string): () => void {
     if (this.closed) throw new Error('Composable Memory turn manager is disposed')
     let retained = this.retainedViews.get(viewId)
@@ -155,7 +152,6 @@ export class ComposableMemoryTurnManager {
     }
   }
 
-  /** Each execution owns its own pin and budget while sharing immutable authority. */
   pinTurn(turnId: string, scope: MemoryOperationScope, viewId: string): ComposableMemoryTurn {
     if (this.closed) throw new Error('Composable Memory turn manager is disposed')
     const id = turnId.trim()

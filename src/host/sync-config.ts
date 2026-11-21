@@ -9,15 +9,11 @@ import {
   MNEMON_SYNC_TOKEN_ENV, syncBranchValid, syncDirectoryParts, syncEmailValid, syncRepositoryProblem, type MnemonSyncConfigView,
 } from './protocol.ts'
 
-// The environment variable that overrides the stored token for one operation
-// and the defaults the settings form shows are declared with the other wire
-// constants, because the browser names both.
 export {
   MNEMON_SYNC_DEFAULT_AUTHOR_EMAIL, MNEMON_SYNC_DEFAULT_AUTHOR_NAME,
   MNEMON_SYNC_DEFAULT_BRANCH, MNEMON_SYNC_DEFAULT_SUBDIR, MNEMON_SYNC_TOKEN_ENV,
 }
 export const MNEMON_SYNC_CONFIG_FILE = 'sync-git.json'
-/** Seven days: the longest automatic backup interval the settings form offers. */
 export const MNEMON_SYNC_MAX_AUTO_BACKUP_MINUTES = 10_080
 
 const STATE_DIRECTORY = 'state'
@@ -32,27 +28,19 @@ function known(key: string): boolean {
   return (SETTING_KEYS as readonly string[]).includes(key)
 }
 
-/** A Git branch name, by the rule the settings form checks too. */
 export function syncBranch(value: unknown): string {
   const name = String(value ?? '').trim()
   if (!syncBranchValid(name)) throw new Error('sync branch must be a Git branch name')
   return name
 }
 
-/** The directory inside the branch the payload lives in, always relative and slash terminated. */
 export function syncSubdirectory(value: unknown): string {
   const text = String(value ?? '')
-  // The settings form shares the rule but has never refused a NUL byte, which only the Host does.
   const parts = text.includes('\0') ? undefined : syncDirectoryParts(text)
   if (parts === undefined) throw new Error('sync directory must be a relative path inside the branch')
   return parts.join('/') + '/'
 }
 
-/**
- * A remote this Host can run Git against, never carrying credentials in its own text. A local path
- * is absolute by this Host's platform, which the settings form cannot know; as with a directory,
- * only the Host refuses a NUL byte.
- */
 export function syncRepositoryUrl(value: unknown): string {
   const url = String(value ?? '').trim()
   const problem = url.includes('\0') ? 'format' : syncRepositoryProblem(url, isAbsolute)
@@ -67,11 +55,6 @@ export function syncToken(value: unknown): string {
   return token
 }
 
-/**
- * The commit author, empty when the commit should use the Git identity the
- * machine already has: the field is optional, so an empty value is a choice
- * rather than a mistake.
- */
 export function syncAuthorName(value: unknown): string {
   const name = String(value ?? '').trim()
   if (name === '') return ''
@@ -79,7 +62,6 @@ export function syncAuthorName(value: unknown): string {
   return name
 }
 
-/** The commit author address, empty when the local Git identity supplies both halves. */
 export function syncAuthorEmail(value: unknown): string {
   const email = String(value ?? '').trim()
   if (email === '') return ''
@@ -87,11 +69,6 @@ export function syncAuthorEmail(value: unknown): string {
   return email
 }
 
-/**
- * The automatic backup interval in minutes, zero meaning off. An hour is the
- * floor the settings form offers, so anything shorter is a typo rather than a
- * choice; a week is the ceiling, because a longer wait is not a backup.
- */
 export function syncAutoBackupMinutes(value: unknown): number {
   if (value === null || value === undefined || value === '') return 0
   const minutes = typeof value === 'number' ? value : Number(String(value).trim())
@@ -108,16 +85,9 @@ export interface MnemonSyncSettings {
   token?: string
   authorName: string
   authorEmail: string
-  /** Minutes between automatic backups; zero keeps the sync manual. */
   autoBackupMinutes: number
 }
 
-/**
- * One storage root's Git sync configuration. It lives beside the root rather
- * than in `Config`: the values belong to that root, and the token must never
- * travel through a settings RPC or a profile patch. The file is written whole
- * through a temporary file at mode `0600`.
- */
 export class MnemonSyncSettingsStore {
   private readonly root: string
 
@@ -133,7 +103,6 @@ export class MnemonSyncSettingsStore {
     return join(this.directory(), MNEMON_SYNC_CONFIG_FILE)
   }
 
-  /** The disposable Git work tree the sync channel commits in, never the root itself. */
   mirror(): string {
     return join(this.directory(), 'sync', 'git')
   }
@@ -184,13 +153,6 @@ export class MnemonSyncSettingsStore {
     writeAtomicJsonSync(this.path(), file)
   }
 
-  /**
-   * Apply one browser patch. An empty value means what the field's own hint
-   * says: the repository and the token are cleared, the branch and the
-   * directory go back to the defaults, an empty commit author falls back to the
-   * Git identity of the machine running the sync, and an empty backup interval
-   * turns the automatic backup off.
-   */
   patch(patch: unknown): MnemonSyncSettings {
     const fields = record(patch)
     if (fields === undefined) throw new Error('sync configuration must be an object')
@@ -212,18 +174,12 @@ export class MnemonSyncSettingsStore {
     return next
   }
 
-  /** The token of one operation: the environment variable wins over the stored one. */
   token(settings: MnemonSyncSettings): string | undefined {
     const fromEnvironment = process.env[MNEMON_SYNC_TOKEN_ENV]?.trim()
     if (fromEnvironment !== undefined && fromEnvironment !== '') return fromEnvironment
     return settings.token
   }
 
-  /**
-   * The saved view. Only the two sources this file can see are named here; the
-   * channel layers a stored GitHub grant on top when neither is set, and passes in
-   * the profile switch, which is not part of the stored settings at all.
-   */
   view(settings: MnemonSyncSettings, enabled: boolean): MnemonSyncConfigView {
     const token = this.token(settings)
     const present = token !== undefined && token !== ''

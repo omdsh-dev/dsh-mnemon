@@ -3,10 +3,6 @@ import type { HostContextShape, ToolExecution } from './dsh.ts'
 import type { MnemonAgentRuntimeSource } from './runtime.ts'
 import { memoryTool } from './memory-tools.ts'
 
-/** Ask through the Host's native/PTC pipeline before any memory tool body runs.
- * Existing denials and asks survive; the Host still applies its monotonic guards.
- * The live preference also covers calls from an already-pinned View or child.
- */
 export function registerMemoryWriteApproval(ctx: HostContextShape, runtime: MnemonAgentRuntimeSource): () => void {
   const stop = ctx.on('tools/pre-execute', (async (execution: ToolExecution, next: () => Promise<PreToolDecision>) => {
     const decision = await next()

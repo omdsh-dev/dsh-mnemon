@@ -7,7 +7,7 @@ import {
 } from 'dsh-mnemon-source-memory-spaces/contracts'
 import { RUNTIME_DIRECTORY, RUNTIME_MEMORIES_FILE, RUNTIME_PROJECTION_FILES, summarizeRuntimeMemories } from 'dsh-mnemon-source-runtime/contracts'
 import { createStorageRoot, expandUserPath, resolveGlobalDataDir, type ResolvedConfig, type StorageRoot } from './config/index.ts'
-import type { StorageAreaInventory, StorageAreaKind, StorageAreaStatus, StorageScopeCatalog, StorageScopeInventory, StorageScopeKind } from './protocol.ts'
+import type { StorageAreaInventory, StorageAreaKind, StorageScopeCatalog, StorageScopeInventory, StorageScopeKind } from './protocol.ts'
 
 export type { StorageAreaInventory, StorageAreaKind, StorageAreaStatus, StorageScopeCatalog, StorageScopeInventory, StorageScopeKind } from './protocol.ts'
 
@@ -42,9 +42,12 @@ function missing(kind: StorageAreaKind, path: string): StorageAreaInventory {
   return { kind, path, status: 'missing', bytes: 0, itemCount: 0, details: {} }
 }
 
-// Each area is read through its Source's own names and counting rules, so an inventory follows
-// the Source when its files change instead of reporting a store it no longer understands. The
-// Source says whether a file can be counted; the messages the Status page shows stay here.
+function missingProjectionIssue(hasMemory: boolean, hasUser: boolean): string | undefined {
+  if (hasMemory && hasUser) return undefined
+  if (!hasMemory && !hasUser) return 'USER.md or MEMORY.md projection is missing'
+  return hasMemory ? 'shared USER.md projection is missing' : 'MEMORY.md projection is missing'
+}
+
 function runtimeArea(root: string, userRoot: string = root): StorageAreaInventory {
   const path = join(root, RUNTIME_DIRECTORY)
   const resolvedUserRoot = canonical(userRoot)
@@ -84,13 +87,7 @@ function runtimeArea(root: string, userRoot: string = root): StorageAreaInventor
     const memoryProjection = !hasLocal || existsSync(join(path, RUNTIME_PROJECTION_FILES.memory))
     const userProjection = !hasGlobal || existsSync(join(userPath, RUNTIME_PROJECTION_FILES.user))
     const projectionsHealthy = memoryProjection && userProjection
-    const issue = projectionsHealthy
-      ? undefined
-      : !memoryProjection && !userProjection
-        ? 'USER.md or MEMORY.md projection is missing'
-        : !memoryProjection
-          ? 'MEMORY.md projection is missing'
-          : 'shared USER.md projection is missing'
+    const issue = missingProjectionIssue(memoryProjection, userProjection)
     return {
       kind: 'runtime', path,
       status: itemCount === 0 ? 'empty' : projectionsHealthy ? 'ready' : 'invalid',
@@ -197,7 +194,6 @@ function inspect(kind: StorageScopeKind, rawRoot: string | undefined, activeRoot
   }
 }
 
-/** Read-only storage catalog. It never creates, moves, or repairs files. */
 export class StorageScopeInspector {
   constructor(
     private readonly runner: Pick<StorageRoot, 'effectiveDataDir'>,

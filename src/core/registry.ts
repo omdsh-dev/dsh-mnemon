@@ -16,12 +16,6 @@ export interface MemoryContributionInstall {
 
 export type MemoryContributionListener = (snapshot: MemoryContributionSnapshot) => void
 
-/**
- * Scope-local definition registry behind ctx.mnemonMemory.
- *
- * It owns definitions only. Runtime objects are created and drained by a
- * generation host attached by dsh-mnemon core.
- */
 export class MemoryContributionRegistry {
   private readonly sources = new Map<string, InstalledMemorySource>()
   private readonly strategies = new Map<string, InstalledMemoryStrategy>()
@@ -122,7 +116,6 @@ export class MemoryContributionRegistry {
       try {
         listener(snapshot)
       } catch {
-        // Isolate subscriber failures so remaining listeners still observe the snapshot.
       }
     }
   }

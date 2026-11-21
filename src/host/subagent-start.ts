@@ -2,37 +2,21 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import type { HostAgent, HostSubagentProvider, HostSubagentRun, HostSubagentStartRequest, HostSubagentsService } from './dsh.ts'
 import { activationOwned, claimReservedChild, isReservedChild, reservedChildId, titleTask, withReservedChild } from './agent-compat.ts'
 
-/** The Agent registry lookups that find an activation's local child. */
 export interface SubagentStartAgents {
   get?(id: string): HostAgent | undefined
   isOwnedBy?(id: string, parent: HostAgent): boolean
 }
 
-/** Where DSH reports each Agent it publishes, before the Agent's first step. */
 export interface SubagentPublications {
   on(name: string, listener: (...args: never[]) => unknown, options?: { prepend?: boolean }): unknown
 }
 
-/** A delegated child's own tools and persona. */
 type ChildComposition = Pick<HostSubagentStartRequest, 'toolFilter' | 'persona'> & { setup?: (agent: HostAgent) => void }
 
-/** DSH's deployment persona, which a child's own section of the same name replaces for that child. */
 const PERSONA_SECTION = 'deployment:persona-prefix'
 
-// Distinguishes overlapping starts, as continuation-turn.ts does.
 const composingChild = new AsyncLocalStorage<symbol>()
 
-/**
- * How a provider gives a delegated child its own tools and persona:
- * - `request`: on DSH 0.2.0 the start request carries both, and DSH applies
- *   them in the child's own scope;
- * - `publication`: DSH 0.2.1 takes neither, in the request or from any
- *   provider, and a child joins its parent's composition, so Mnemon applies
- *   them in the child's scope itself while DSH publishes the child.
- *   Only for a provider whose children DSH creates in this process: one that
- *   prepares local activations, as DSH's spawn and fork do;
- * - undefined: neither, so the provider is not used.
- */
 export function childComposition(subagents: Pick<HostSubagentsService, 'startActivation'>, provider: HostSubagentProvider | undefined): 'request' | 'publication' | undefined {
   const capabilities = provider?.capabilities
   if (capabilities === undefined) return undefined
@@ -41,21 +25,6 @@ export function childComposition(subagents: Pick<HostSubagentsService, 'startAct
   return local && !Object.hasOwn(capabilities, 'toolFilter') && !Object.hasOwn(capabilities, 'persona') ? 'publication' : undefined
 }
 
-/**
- * Start one delegated child through the subagent API the running DSH offers:
- * DSH 0.2.0 runs it with the one-shot `start`, DSH 0.2.1 as a managed
- * activation (#356). An activation keeps a run's contract:
- * - caller delivery returns the result to Mnemon, so the parent conversation
- *   gets no completion notice;
- * - its signal covers only startup, so a later abort disposes the child, which
- *   is how an aborted run stopped;
- * - the live child in the Agent registry stands in for `localAgent`.
- *
- * The child's tools and persona stay in the request where the provider takes
- * them, as on DSH 0.2.0. On DSH 0.2.1 they are registered in the child's own
- * scope as DSH publishes it, after DSH has composed it and before its first
- * step, which needs `publications`.
- */
 export async function startSubagent(
   subagents: HostSubagentsService,
   agents: SubagentStartAgents | undefined,
@@ -93,22 +62,18 @@ async function startOnHost(
     if (modern && (childId === undefined || agents?.get?.(request.parent.id) !== request.parent)) {
       throw new Error('Mnemon requires an exact live parent and reserved child identity on an activation-owned DSH')
     }
-    // This source snapshot reports the same version as the published rc.1. Select the
-    // contract before dispatch; never retry a potentially accepted start with another shape.
     const startCurrent = subagents.startActivation as unknown as (spec: Omit<HostSubagentStartRequest, 'label'> & { provider: string; label: string; childId: string; delivery: 'caller' }) => ReturnType<NonNullable<HostSubagentsService['startActivation']>>
     const activation = modern
       ? await startCurrent.call(subagents, { ...task, provider, label, signal, childId: childId!, delivery: 'caller',
         ...('resolveName' in subagents && typeof subagents.resolveName === 'function' && name !== undefined ? { name } : {}),
       })
       : await subagents.startActivation({ provider, label, ...(childId === undefined ? {} : { childId }), request: task, signal, delivery: 'caller' })
-    // A second dispose from the caller reports any failure of this one.
     const stop = () => { activation.dispose().catch(() => {}) }
     try {
       const release = () => signal.removeEventListener('abort', stop)
       signal.addEventListener('abort', stop, { once: true })
       void activation.result.then(release, release)
       if (signal.aborted) stop()
-      // The child is resident until the activation settles, which takes at least one model turn.
       const child = agents?.get?.(activation.childId)
       if (modern && (activation.childId !== childId || child === undefined || !isReservedChild(agents, request.parent, child))) {
         throw new Error('DSH did not return the reserved live Mnemon child')
@@ -123,7 +88,6 @@ async function startOnHost(
         dispose: () => activation.dispose(),
       }
     } catch (error) {
-      // The caller never received this run, so nothing else would release the child.
       stop()
       throw error
     }
@@ -135,13 +99,6 @@ async function startOnHost(
   throw new Error('This DSH has neither subagents.startActivation nor subagents.start, so dsh-mnemon cannot start its memory subagent; install a dsh-mnemon release that supports this DSH version')
 }
 
-/**
- * Register the child's persona and tool filter in its own scope, as DSH 0.2.1
- * still does for a child an earlier release recorded with them:
- * the persona replaces the deployment persona and the filter narrows the tools
- * the child shares with its parent, for that child alone. Its scope releases
- * both with it.
- */
 function compose(agent: HostAgent, { toolFilter, persona, setup }: ChildComposition): void {
   const prompt = agent.ctx.systemPrompt
   const tools = agent.ctx.tools
@@ -156,12 +113,6 @@ function compose(agent: HostAgent, { toolFilter, persona, setup }: ChildComposit
   setup?.(agent)
 }
 
-/**
- * Start a child and compose it while DSH publishes it, ahead of other plugins'
- * listeners. Async context attributes concurrent starts, and DSH's ownership
- * check confirms the parent. A failed composition makes DSH roll the child
- * back; a child that was not seen published is disposed and refused.
- */
 async function startComposed(
   publications: SubagentPublications,
   agents: SubagentStartAgents | undefined,
@@ -198,13 +149,11 @@ async function startComposed(
     run = await composingChild.run(pending, start)
     if (failure !== undefined) throw failure
     if (!composed.has(run.id)) throw new Error(`dsh-mnemon did not see memory subagent ${run.id} created, so it could not give it its own instructions and tools`)
-    // Stop observing before handing the run over; a failure here takes the same path as a failed start.
     await closeObserver()
     return run
   } catch (error) {
-    try { await closeObserver() } catch { /* Preserve the start failure. */ }
-    // The caller never receives this run, so nothing else would stop the child.
-    try { await run?.dispose() } catch { /* Preserve the start failure. */ }
+    try { await closeObserver() } catch { }
+    try { await run?.dispose() } catch { }
     throw error
   }
 }

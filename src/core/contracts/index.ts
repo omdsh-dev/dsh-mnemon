@@ -1,4 +1,3 @@
-/** Metadata, operation inputs and protocol results use JSON-safe values. */
 export type MemoryJsonPrimitive = string | number | boolean | null
 export type MemoryJsonValue = MemoryJsonPrimitive | MemoryJsonValue[] | { [key: string]: MemoryJsonValue }
 
@@ -36,7 +35,6 @@ export interface MemoryMigrationLineageEndpoint {
   digest: string
 }
 
-/** Auditable proof that one exact source item reached one committed destination. */
 export interface MemoryMigrationLineage {
   source: MemoryMigrationLineageEndpoint
   destination: MemoryMigrationLineageEndpoint

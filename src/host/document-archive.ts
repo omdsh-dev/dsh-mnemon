@@ -1,8 +1,3 @@
-/**
- * The Document workflow: a Document write that does not fit first archives the Documents its capacity plan
- * names, each indexed in a Memory Space with lineage, or archived locally when no space can take its index
- * (#336), and then commits the write. The coordinator runs it one request at a time.
- */
 import { randomUUID } from 'node:crypto'
 import type { HostAgent, HostSubagentResult } from "./dsh.ts"
 import type { DocumentCapacityPlan, DocumentMutation, DocumentMutationResult, DocumentRecord, DocumentView } from 'dsh-mnemon-source-documents/contracts'
@@ -57,7 +52,6 @@ function documentIndexMatches(content: string, document: DocumentView): boolean 
   return content.includes(archivedDocumentPath(document)) && content.includes(document.contentHash)
 }
 
-/** What the Document workflow takes from the coordinator that runs it. */
 export interface DocumentWorkflowHost {
   readonly runtimeSource: MnemonAgentRuntimeSource
   readonly counters: SubagentCounters
@@ -89,8 +83,6 @@ export async function documentLocked(host: DocumentWorkflowHost, parent: HostAge
   try {
     result = await documentCommit(host, parent, request, signal)
   } catch (error) {
-    // A concurrent writer can invalidate the preflight. Retry once through
-    // the same archive-before-eviction path without overwriting its revision.
     if (!sourceFailure<{ code: 'document-capacity'; candidates: DocumentRecord[] }>(error, 'document-capacity') || error.candidates.length === 0) throw error
     const archived = await archiveDocumentLocked(host, parent, error.candidates[0]!.id, signal)
     archivedDocumentIds.push(error.candidates[0]!.id)
@@ -123,8 +115,6 @@ export async function archiveDocumentLocked(host: DocumentWorkflowHost, parent: 
     if (indexSpaces === undefined) return archiveDocumentLocally(host.counters, controller, document, 'no Memory Spaces layer takes writes here', signal)
     const memoryService = indexSpaces.forGeneration(lease.generation)
     const identity = await memoryService.identity()
-    // Compensation owns this exact Source instance, generation and storage scope,
-    // even if the caller's View ends or a later configuration replaces it.
     const cleanup = graph.source('memory-spaces', agentScope(parent, graph.config))
       .forInstance(identity.sourceInstanceKey).forGeneration(lease.generation)
     const grant = authority?.context.view.readGrants.find(grant => grant.sourceInstanceKey === identity.sourceInstanceKey && grant.schema === 'dsh-mnemon.memory-spaces/v1')
@@ -135,9 +125,6 @@ export async function archiveDocumentLocked(host: DocumentWorkflowHost, parent: 
     const eligible = (body: MemorySpaceCatalog['items'][number]) => indexable(body) && (allowed === undefined || allowed.has(body.id))
     const bodies = directory.items.filter(eligible)
     if (bodies.length === 0) {
-      // With no Memory Space at all for its index, the Document is archived
-      // locally and the write that needed room goes ahead (#336). One outside
-      // this View's scope is still worth the retry the error asks for.
       if (!directory.items.some(indexable) && !await archivableElsewhere(graph, agentScope(parent, graph.config), lease.generation, identity.sourceInstanceKey, signal)) {
         return archiveDocumentLocally(host.counters, controller, document, 'no Memory Space can take its index', signal)
       }
@@ -160,8 +147,6 @@ export async function archiveDocumentLocked(host: DocumentWorkflowHost, parent: 
     }
     const catalog = await memoryService.read<MemorySpaceCatalog>('body-directory', null, signal)
     if (!catalog.items.some(body => body.id === memoryBodyId && eligible(body))) throw new Error('document archive Memory Space is no longer eligible')
-    // Reuse a real index left by an older failed attempt. A semantic near-match
-    // or an item in another space cannot prove this document revision durable.
     const previous = await memoryService.read<{ results: Insight[] }>('search', {
       query: document.contentHash, mode: 'keyword', limit: 50, memoryBodyIds: [memoryBodyId],
     }, signal)
@@ -174,7 +159,6 @@ export async function archiveDocumentLocked(host: DocumentWorkflowHost, parent: 
         destination = { layerId: 'memory-spaces', reference: `memory-space:${encodeURIComponent(memoryBodyId)}/item:${encodeURIComponent(existing.id)}`, digest: sha256(existing.content) }
       } else {
         signal.throwIfAborted()
-        // Native batch import preserves exact content without semantic merging.
         const written = await memoryService.mutate<unknown[]>('remember-many', {
           requests: [{ content, memoryBodyId, category: 'context', source: 'agent' }],
         }, signal)
@@ -188,7 +172,6 @@ export async function archiveDocumentLocked(host: DocumentWorkflowHost, parent: 
         if (isNew && receiptId !== undefined) {
           destination = destinationFromCommittedMutation(receipt, memoryBodyId, content)!
         } else if (states.includes('skipped')) {
-          // The receipt can name the stored index itself, as a runtime archive's can.
           const named = skippedExactDestination(receipt, memoryBodyId, content)
           if (named !== undefined) destination = named
           else {
@@ -211,12 +194,9 @@ export async function archiveDocumentLocked(host: DocumentWorkflowHost, parent: 
     } catch (error) {
       if (createdId !== undefined) {
         try {
-          // An aborted request must still clean up its own newly created index.
           const cleanupSignal = AbortSignal.timeout(30_000)
           const persisted = await graph.source('documents', agentScope(parent, graph.config)).forGeneration(lease.generation)
             .read<DocumentView>('document', { id }, cleanupSignal)
-          // A transport failure after a successful document commit must not
-          // destroy the now-live cold reference. Unknown state is retained.
           if (persisted.status === 'archived') throw new Error('Document is already archived; preserve its index and inspect the completed operation')
           const removed = await cleanup.mutate('forget', { id: createdId, memoryBodyId }, cleanupSignal)
           if (!mutationResultCommitted(removed)) throw new Error('Provider did not confirm index cleanup')
@@ -236,12 +216,6 @@ async function documentCommit(host: DocumentWorkflowHost, parent: HostAgent, req
   return receipt.details as unknown as DocumentMutationResult
 }
 
-/**
- * The Memory Spaces Source a Document archive indexes into, or undefined when
- * that layer is off, not installed, takes no automatic writes, or has no space
- * anywhere that could take the index (#336). A space this View does not offer
- * keeps the refusal, as before.
- */
 async function documentIndexSpaces(host: DocumentWorkflowHost, parent: HostAgent, generation: MemoryCompositionGeneration, signal: AbortSignal): Promise<SourceSession | undefined> {
   const graph = host.runtimeSource.forAgent(parent)
   if (!graph.config.writeEnabled || !host.runtimeSource.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only')
@@ -255,7 +229,6 @@ async function documentIndexSpaces(host: DocumentWorkflowHost, parent: HostAgent
   return host.writableSourceFor(parent, 'memory-spaces', 'remember')
 }
 
-/** A Project Document archived without a Mnemon index keeps its original under .mnemon/documents/archived. */
 async function archiveDocumentLocally(counters: SubagentCounters, controller: SourceSession, document: DocumentView, reason: string, signal: AbortSignal): Promise<CoordinatedDocumentResult> {
   signal.throwIfAborted()
   const summary = `Archived locally without a Mnemon index, since ${reason}.`

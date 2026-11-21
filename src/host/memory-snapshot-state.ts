@@ -2,12 +2,10 @@ import { createHash } from 'node:crypto'
 import type { ComposableMemoryView } from '../core/contracts/index.ts'
 import { canonicalMemoryJson } from '../core/definitions.ts'
 
-/** Durable Host metadata, never instructions or a serialized ReadGrant. */
 export interface MemorySnapshotState {
   version: 1
   boundary: string
   entries: string[]
-  /** Complete Runtime projections can distinguish content changes from newly hidden facts. */
   branchVisibility?: string
 }
 
@@ -26,11 +24,6 @@ export function readMemorySnapshotState(value: unknown): MemorySnapshotState | u
   }
 }
 
-/**
- * Only Runtime's Source-owned, complete-projection provenance permits additive
- * history. Unknown Sources and opaque grants are compared in full. Do not use
- * View ids or source revisions here: ordinary Runtime writes change both.
- */
 export function memorySnapshotState(view: ComposableMemoryView | undefined): MemorySnapshotState | undefined {
   if (view === undefined) return undefined
   const entries: string[] = []
@@ -63,7 +56,6 @@ export function memorySnapshotState(view: ComposableMemoryView | undefined): Mem
   }
 }
 
-/** A missing old occurrence is a deletion/correction, even with duplicate facts. */
 export function retainsSnapshotEntries(previous: readonly string[], current: readonly string[]): boolean {
   const counts = new Map<string, number>()
   for (const entry of current) counts.set(entry, (counts.get(entry) ?? 0) + 1)

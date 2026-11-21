@@ -4,7 +4,6 @@ import type { MemorySnapshotState } from './memory-snapshot-state.ts'
 
 const optedInSteps = new WeakMap<HostSession, { turn: number; step: number }>()
 
-/** The preset can isolate its compaction service from the Agent's root context. */
 export function markSnapshotCompactionStep(session: HostSession, turn: number, step: number): void {
   optedInSteps.set(session, { turn, step })
 }

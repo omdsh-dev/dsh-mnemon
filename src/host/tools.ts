@@ -21,27 +21,14 @@ function definition(value: ToolDefinition): ToolDefinition {
   return value
 }
 
-// DSH tool outputs use its supported JSON Schema subset. `type: "json"` is
-// valid in the parameter DSL, but it is not a JSON Schema type.
 const JSON_OBJECT_OUTPUT = { type: 'object', additionalProperties: true } as const
-/** Register a deliberately small model-facing surface over Mnemon's protocol. */
 function requireAgent(exec: ToolExecution) {
   if (exec.agent === undefined) throw new Error('Mnemon semantic operations require a live DSH agent')
   return exec.agent
 }
 
-/**
- * The fields of a written Document the model needs to refer to it: never its body, which it just
- * wrote, nor a path under the storage root, which it could read as one in the workspace. The
- * content hash is what an archive's lineage names.
- */
 const DOCUMENT_RECEIPT_FIELDS = ['id', 'title', 'description', 'status', 'revision', 'contentHash', 'sizeBytes', 'sourcePaths', 'memoryBodyIds', 'archivedAt', 'archiveSummary'] as const
 
-/**
- * A Document write as the model reads it: the Document written and the layer's totals. The
- * snapshot of every Document, with their excerpts and paths, grows with the layer and stays on
- * the control plane the WebUI reads (#390).
- */
 export function documentReceipt(value: unknown): unknown {
   const result = typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined
   const snapshot = result?.snapshot
@@ -56,18 +43,12 @@ export function documentReceipt(value: unknown): unknown {
   }
 }
 
-/** A generic Action's receipt for a Document write, compacted as the named Document tools return it (#390). */
 function documentActionReceipt(receipt: MemoryMutationReceipt): MemoryMutationReceipt {
   const details = receipt.details
   if (typeof details !== 'object' || details === null || Array.isArray(details)) return receipt
   return { ...receipt, details: ('result' in details ? { ...details, result: documentReceipt(details.result) } : documentReceipt(details)) as MemoryJsonValue }
 }
 
-/**
- * Named product tools are views over the same Source Route/Action protocol. Each family registers its tools in the
- * historical registry order, which puts Memory Spaces' reads before the Documents tools and its writes after
- * the runtime memory tool. DSH's prompt assembler independently orders wire schemas.
- */
 export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentRuntimeSource, coordinator: MnemonSubagentCoordinator, contributions: MemoryRuntime, initialReady?: Promise<unknown>): () => void {
   const definitions: ToolDefinition[] = []
   const catalog = { tools: { register: (tool: ToolDefinition) => { definitions.push(tool) } } } as unknown as HostContextShape
@@ -105,8 +86,6 @@ export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentR
   }
   try { reconcile(contributions.committedContributionSnapshot()) }
   catch (error) { dispose(); throw error }
-  // The Starter loads Host before Sources. Publish its initial named families
-  // together after the Loader settles, without replacing independent tools.
   void initialReady?.then(() => {
     if (!active) return
     ready = true
@@ -117,7 +96,6 @@ export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentR
   return dispose
 }
 
-/** What the handlers of every family share: the calling Agent's runtime graph and Sources, its checks, and a Source Action call. */
 function toolHelpers(runtimeSource: MnemonAgentRuntimeSource) {
   const runtimeFor = (exec: ToolExecution): MnemonRuntimeGraph => {
     const agent = requireAgent(exec)
@@ -147,7 +125,6 @@ function toolHelpers(runtimeSource: MnemonAgentRuntimeSource) {
     const receipt = await sourceFor(exec, typeId).action(actionId, input, offer => runtimeSource.config.writeEnabled && offer.authority === undefined, exec.signal)
     const details = receipt.details
     const result = typeof details === 'object' && details !== null && !Array.isArray(details) && 'result' in details ? details.result : details
-    // Keep familiar product fields, but never erase accepted/candidate/unknown completion for the model.
     return { ...(typeof result === 'object' && result !== null && !Array.isArray(result) ? result : { result }),
       memoryReceipt: { status: receipt.status, completion: receipt.completion, ...(receipt.committedAt === undefined ? {} : { committedAt: receipt.committedAt }) },
     }
@@ -157,7 +134,6 @@ function toolHelpers(runtimeSource: MnemonAgentRuntimeSource) {
 
 type ToolHelpers = ReturnType<typeof toolHelpers>
 
-/** The two generic View tools, which run whichever Route or Action of the turn's View a call names. */
 function registerViewTools(ctx: HostContextShape, { runtimeFor, config, composableTurn }: ToolHelpers, coordinator: MnemonSubagentCoordinator): void {
   ctx.tools.register(definition({
     name: 'mnemon_view_route',
@@ -174,7 +150,6 @@ function registerViewTools(ctx: HostContextShape, { runtimeFor, config, composab
       presentationMeta: memoryReadPresentation(undefined, 'view-route', 'routeId') },
     execute: async (args: { routeId: string; input: MemoryJsonValue }, exec: ToolExecution) => {
       const { manager, turn } = composableTurn(exec)
-      // An id the View does not offer names only what the envelope shows (#390).
       const refusal = unofferedViewId(runtimeFor(exec), turn, 'route', args.routeId, exec.agent)
       if (refusal !== undefined) throw new Error(refusal)
       const evidence = await manager.executeRoute(turn.turnId, args.routeId, args.input, exec.signal)
@@ -201,7 +176,6 @@ function registerViewTools(ctx: HostContextShape, { runtimeFor, config, composab
       if (!config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
       const agent = requireAgent(exec)
       const graph = runtimeFor(exec)
-      // The turn the coordinator acts in; an id it does not offer names only what the envelope shows (#390).
       const turn = graph.composableTurns.activeTurn(agent.id)
       const refusal = turn === undefined ? undefined : unofferedViewId(graph, turn, 'action', args.offerId, exec.agent)
       if (refusal !== undefined) throw new Error(refusal)
@@ -216,7 +190,6 @@ function registerViewTools(ctx: HostContextShape, { runtimeFor, config, composab
   } as never))
 }
 
-/** Memory Spaces' catalog, Recall, Related and health. */
 function registerMemorySpaceReadTools(ctx: HostContextShape, { sourceFor, requireSource }: ToolHelpers, coordinator: MnemonSubagentCoordinator): void {
   ctx.tools.register(definition({
     name: 'mnemon_memory_bodies',
@@ -303,7 +276,6 @@ function registerMemorySpaceReadTools(ctx: HostContextShape, { sourceFor, requir
   } as never))
 }
 
-/** The project Documents tools. */
 function registerDocumentTools(ctx: HostContextShape, { requireSource, config, sourceAction }: ToolHelpers, coordinator: MnemonSubagentCoordinator): void {
   ctx.tools.register(definition({
     name: 'mnemon_document_search',
@@ -372,7 +344,6 @@ function registerDocumentTools(ctx: HostContextShape, { requireSource, config, s
       if (!config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
       const agent = requireAgent(exec)
       if (args.action === 'archive') {
-        // Without a Memory Spaces layer to index into, the coordinator archives locally (#336).
         requireSource(exec, 'documents', 'archive')
         if (isSubagent(agent) && !coordinator.isUserContinuation(agent)) throw new Error('idle document workers cannot cold-archive directly')
         if (args.id === undefined) throw new Error('document id is required for archive')
@@ -389,7 +360,6 @@ function registerDocumentTools(ctx: HostContextShape, { requireSource, config, s
   } as never))
 }
 
-/** The runtime memory tool, which writes USER.md and MEMORY.md. */
 function registerRuntimeTools(ctx: HostContextShape, { requireSource, config, composableTurn }: ToolHelpers, coordinator: MnemonSubagentCoordinator): void {
   ctx.tools.register(definition({
     name: 'mnemon_runtime_memory',
@@ -427,7 +397,6 @@ function registerRuntimeTools(ctx: HostContextShape, { requireSource, config, co
   } as never))
 }
 
-/** Memory Spaces' writes: remember, link and forget, and creating, updating and merging spaces. */
 function registerMemorySpaceWriteTools(ctx: HostContextShape, { requireSource, sourceAction }: ToolHelpers, coordinator: MnemonSubagentCoordinator): void {
   ctx.tools.register(definition({
     name: 'mnemon_remember',

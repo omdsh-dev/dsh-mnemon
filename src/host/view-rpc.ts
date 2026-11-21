@@ -38,7 +38,6 @@ export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRunt
       const sessionId = optionalId(payload.sessionId)
       const selectedWorkspaceId = optionalId(payload.workspaceId)
       const route = runtime.route({ ...(sessionId === undefined ? {} : { sessionId }), ...(selectedWorkspaceId === undefined ? {} : { workspaceId: selectedWorkspaceId }) })
-      // A session whose Agent is not loaded yet keeps the workspace DSH's registry lists it under.
       const sessionWorkspace = lifecycle?.workspaceRoot(sessionId) ?? route.effectiveWorkspace?.path
       const workspaceId = route.selectedWorkspace?.path ?? sessionWorkspace
       const aligned = route.aligned && (route.selectedWorkspace === undefined || sessionId === undefined

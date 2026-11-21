@@ -117,7 +117,6 @@ export const InteractionConfig: z<InteractionConfig> = z.object({
   saveAction: z.boolean().default(DEFAULT_INTERACTION_CONFIG.saveAction),
 })
 
-/** 技能管理's settings, with the ranges its page accepts. */
 export const SkillsConfig: z<Partial<ResolvedSkillsConfig>, ResolvedSkillsConfig> = z.object({
   evolution: z.boolean().default(DEFAULT_SKILLS_CONFIG.evolution),
   allowCreate: z.boolean().default(DEFAULT_SKILLS_CONFIG.allowCreate),
@@ -128,7 +127,6 @@ export const SkillsConfig: z<Partial<ResolvedSkillsConfig>, ResolvedSkillsConfig
     create: z.array(z.union(['project-dsh', 'project-agents', 'user-dsh', 'user-agents'] as const)).min(1).max(4),
     default: z.union(['project-dsh', 'project-agents', 'user-dsh', 'user-agents'] as const),
   }), value => {
-    // Cordis serializes transforms; keep validation self-contained.
     if (!value.create || !value.default || new Set(value.create).size !== value.create.length || !value.create.includes(value.default)) throw new Error('skills.skillRoots requires unique create roots including default')
     return { create: value.create, default: value.default }
   }),
@@ -136,7 +134,6 @@ export const SkillsConfig: z<Partial<ResolvedSkillsConfig>, ResolvedSkillsConfig
   autoAdopt: z.boolean().default(DEFAULT_SKILLS_CONFIG.autoAdopt),
   autoAdoptDailyLimit: z.number().step(1).min(SKILLS_BOUNDS.autoAdoptDailyLimit.min).max(SKILLS_BOUNDS.autoAdoptDailyLimit.max).default(DEFAULT_SKILLS_CONFIG.autoAdoptDailyLimit),
   autoAdoptTimeZone: z.transform(z.string(), value => {
-    // Cordis serializes transforms; this callback must not capture module bindings.
     if (value === 'local') return value
     if (!value || value.length > 100) throw new Error('skills.autoAdoptTimeZone must be an IANA time zone or local')
     try { new Intl.DateTimeFormat('en', { timeZone: value }).format(0) } catch { throw new Error('skills.autoAdoptTimeZone must be an IANA time zone or local') }
@@ -250,11 +247,6 @@ const MemoryTopologySchema: z<MemoryTopologyConfig> = z.object({
 })
 
 export const Config: z<SharedConfig> = z.object({
-  // Bundle wiring, not an end-user memory setting. Keep the legacy root
-  // behavior by default while allowing cordis.patch.yml to compose the public
-  // Source/Strategy Entries without double registration.
-  // Keep this optional in the schema so legacy dataDir-only installs still
-  // resolve to the custom scope instead of being silently reset to global.
   storageScope: z.union(['global', 'workspace', 'custom', 'workspaces'] as const),
   runtimeUserScope: z.union(['storage', 'global'] as const).default('storage'),
   documentsScope: z.union(['storage', 'global'] as const).default('storage'),
@@ -269,9 +261,6 @@ export const Config: z<SharedConfig> = z.object({
     dataDir: z.string(),
   })).default([]),
   store: z.string(),
-  // Memory Spaces' own configuration takes 1-600,000 ms for the same value. One range for both is
-  // on the roadmap (docs/plans/review-gaps-2026-10.md, item 4); until then each keeps its own,
-  // so that stored values validate as they did.
   timeoutMs: z.number().step(1).min(MIN_TIMEOUT_MS).max(MAX_TIMEOUT_MS).default(DEFAULT_TIMEOUT_MS),
   defaultRecallLimit: z.number().step(1).min(MIN_RECALL_LIMIT).max(MAX_RECALL_LIMIT).default(DEFAULT_RECALL_LIMIT),
   documents: DocumentsSchema.default({
@@ -306,7 +295,6 @@ export const Config: z<SharedConfig> = z.object({
     maxUnknownResults: DEFAULT_RECALL_MAX_UNKNOWN_RESULTS,
   }),
   routingGuidance: z.boolean().default(true),
-  // Retain the raw alias here so startup can migrate the exact stored field.
   displayMode: z.union(['sidebar', 'builtin', 'buildin'] as const).default('sidebar'),
   tabEnabled: z.boolean().default(true),
   writeEnabled: z.boolean().default(true),
@@ -317,23 +305,15 @@ export const Config: z<SharedConfig> = z.object({
   writebackMode: z.union(['guided', 'off'] as const).default('guided'),
   idleReviewMs: z.number().step(1).min(MIN_IDLE_REVIEW_MS).max(MAX_IDLE_REVIEW_MS).default(DEFAULT_IDLE_REVIEW_MS),
   idleReview: IdleReviewSchema.default(DEFAULT_IDLE_REVIEW),
-  // Conversation surfaces default on and remain independently switchable live.
-  // `toolviews` switches nothing. Its declaration only keeps the form DSH
-  // generates from this schema, and the default it fills in, as they were:
-  // stored values would validate without it, since undeclared keys pass
-  // through. Settings writes refuse it and the resolved config leaves it out.
   conversationInteraction: z.object({
     toolviews: z.boolean().default(false),
     turnBar: z.boolean().default(DEFAULT_INTERACTION_CONFIG.turnBar),
     saveAction: z.boolean().default(DEFAULT_INTERACTION_CONFIG.saveAction),
   }).default({ toolviews: false, turnBar: DEFAULT_INTERACTION_CONFIG.turnBar, saveAction: DEFAULT_INTERACTION_CONFIG.saveAction }),
-  // Declared so DSH applies a change live, as it does every other key here.
   skills: SkillsConfig.default({ ...DEFAULT_SKILLS_CONFIG }),
   persistenceStrategy: MemoryPersistenceStrategySchema,
   taskAgentModel: TaskAgentModelSchema,
   subagentProviderNames: z.array(z.string()).default([]),
-  // Git sync is off until a user switches it on: the block stays a title and a
-  // switch, and nothing about Git is probed while it is off.
   syncEnabled: z.boolean().default(false),
 })
 

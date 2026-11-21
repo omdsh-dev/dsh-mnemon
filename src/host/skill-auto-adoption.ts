@@ -23,7 +23,6 @@ export function hashSkillCases(cases: readonly EvalCase[]): string {
 }
 export function hashSkillDraft(draft: SkillDraft): string { return createHash('sha256').update(SkillsContracts.skillDraftSignature(draft)).digest('hex') }
 
-/** Only fresh idle-review suggestions enter this bounded, in-process queue. */
 export class SkillAutoAdoption {
   private readonly jobs = new Map<string, Job>()
   private tail: Promise<void> = Promise.resolve()
@@ -72,7 +71,6 @@ export class SkillAutoAdoption {
     if (current.conflict !== undefined || current.draft.status !== 'ready' || suggestion?.status !== 'review' || suggestion.draftId !== draft.id || hashSkillDraft(current.draft) !== hashSkillDraft(draft) || hashSkillCases(cases) !== casesHash) throw new AutomaticSkillStop('changed')
   }
   private async runs(job: Job, ids: string[]): Promise<BacktestRun[]> {
-    // The backtest workers each have a 45-minute deadline, including queueing.
     const deadline = AbortSignal.timeout(46 * 60 * 1000)
     const signal = AbortSignal.any([job.controller.signal, deadline])
     for (;;) {
@@ -115,7 +113,6 @@ export class SkillAutoAdoption {
         const draft = await this.host.draft(job.source, job.workspace, { suggestionId: job.id, action: suggestion.action, ...(previous === undefined ? {} : { previous }), guidance, route: draftRoute }, job.controller.signal)
         await this.unchanged(job, draft, casesHash)
         await this.record(job, { stage: 'backtesting', attempt })
-        // Always measure a fresh pair, with one frozen route and identical cases.
         const baseline = await this.host.backtest(job.source, job.workspace, { skillName: draft.skillName, target: { kind: draft.action === 'update' ? 'current' : 'none', ...(draft.action === 'update' ? { draftId: draft.id } : {}) }, route: runRoute, expectedCasesHash: casesHash, signal: job.controller.signal })
         runIds.add(baseline.runId)
         this.checkpoint(job)
@@ -130,7 +127,7 @@ export class SkillAutoAdoption {
         if (comparison.outcome === 'not-worse') {
           this.checkpoint(job)
           await job.source.mutate('draft-adopt', { id: draft.id, automatic: { reservationId: reserved.reservationId, draftHash: hashSkillDraft(draft), baselineRunId: baseline.runId, draftRunId: candidate.runId, casesHash, attempt } }, job.controller.signal)
-          return // The Source records adoption and its scores with the version.
+          return
         }
         if (attempt === 3) throw new AutomaticSkillStop('regressed')
         await this.record(job, { stage: 'rewriting', attempt, reason: 'regressed', ...scores })
@@ -144,7 +141,6 @@ export class SkillAutoAdoption {
         ...(failure instanceof AutomaticSkillStop && failure.message === failure.reason ? {} : { detail: failure instanceof Error ? failure.message : String(failure) }),
       }).catch(recordError => this.host.warn('Could not record automatic adoption outcome', recordError))
     } finally {
-      // Also stop the first run if starting the second run failed or was disabled.
       for (const id of runIds) await job.source.mutate('run-cancel', { id }).catch(error => this.host.warn('Could not stop automatic skill backtest', error))
     }
   }

@@ -5,9 +5,7 @@ import { mutationResultCommitted } from './receipts.ts'
 import { assertAgentMemoryIncluded } from './workspace-exclusion.ts'
 import type { MnemonSubagentCoordinator } from './subagent.ts'
 
-/** What a memory saved without a vector means, in the words the WebUI receipts use (#388). */
 const UNEMBEDDED_LINE = '未生成向量：嵌入没有成功，这条记忆暂时不参与语义匹配。嵌入服务可用后，可在 Mnemon Native 嵌入设置的「测试状态」中补齐。'
-/** The same, while DSH does not manage the embedding settings: no embedding service is set up, as on a default install. */
 const UNEMBEDDED_NO_SERVICE_LINE = '这条记忆暂未生成向量：当前没有可用的嵌入服务，它暂不参与语义匹配，关键词检索不受影响。连接嵌入服务后，可在 Mnemon Native 嵌入设置的「测试状态」中补齐。'
 
 const USAGE = '用法：/mnemon [status|recall <查询>|related <ID>|remember <内容>|forget <ID>]'
@@ -50,7 +48,6 @@ async function execute(serviceOrSource: MnemonAgentRuntimeSource, coordinator: M
       const status = await source.read<MemorySpacesStatus>('status', null, invocation.signal)
       if (!status.healthy) return { kind: 'error', text: `Mnemon 不可用：${status.error ?? '未知错误'}` }
       const stats = status.stats
-      // Mnemon Native is optional: without its CLI the other providers still serve memory.
       const nativeInstalled = status.commandFound !== false
       return {
         kind: 'success',
@@ -70,7 +67,6 @@ async function execute(serviceOrSource: MnemonAgentRuntimeSource, coordinator: M
         query: argument,
         limit: Math.min(graph.config.defaultRecallLimit, 10),
       }, invocation.signal)
-      // A read that did not run found nothing either way; say why rather than that nothing matched (#389).
       if (response.notRun === true) return { kind: 'error', text: response.budgetExhausted === true ? `本回合的召回次数已用完，“${argument}”没有查询。` : `“${argument}”没有查询。` }
       if (response.results.length === 0) return { kind: 'success', text: `没有找到与“${argument}”相关的记忆。` }
       return { kind: 'success', text: `召回 ${response.results.length} 条：\n\n${response.results.map(insightLine).join('\n\n')}` }
@@ -79,7 +75,6 @@ async function execute(serviceOrSource: MnemonAgentRuntimeSource, coordinator: M
       if (argument === '') return error('related 需要 recall 返回的完整 ID。')
       const response = await coordinator.related(invocation.agent, argument, undefined, invocation.signal)
       const results = response.results
-      // Related starts only from a memory the same turn's recall returned, and each command runs a turn of its own.
       if (response.notRun === true) return { kind: 'error', text: response.budgetExhausted === true ? `本回合的关联查询次数已用完，ID ${argument} 没有查询。` : `ID ${argument} 没有查询：关联查询只从同一回合召回返回的记忆出发，请在对话中召回后再查关联。` }
       if (results.length === 0) return { kind: 'success', text: `ID ${argument} 的两跳内没有关联记忆。` }
       return { kind: 'success', text: `关联记忆 ${results.length} 条：\n\n${results.map(insightLine).join('\n\n')}` }

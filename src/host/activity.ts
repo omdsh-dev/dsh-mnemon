@@ -10,10 +10,6 @@ interface PendingCall {
   name: string
 }
 
-/**
- * The counter a settled call adds to: a named tool's write, inspection, or read, a read of
- * Documents being a document search. The generic View tools and other tools count only by name.
- */
 function counter(name: string): 'recalls' | 'writes' | 'documentSearches' | 'inspections' | undefined {
   const tool = memoryTool(name)
   if (tool?.sourceTypeId === undefined) return undefined
@@ -36,10 +32,6 @@ function emptyActivity(turn: number): TurnMemoryActivity {
     retrieved: [], writebacks: [] }
 }
 
-/**
- * Incremental durable-log projection. Repeated UI reads process only events
- * appended since the previous snapshot instead of rescanning the full session.
- */
 export class TurnActivityProjection {
   private readonly cursor = new SessionEventCursor()
   private eventCount = 0

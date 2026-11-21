@@ -7,7 +7,6 @@ import type { MnemonReviewEntry, MnemonReviewLedgerView, MnemonReviewOpinion, Mn
 
 export const MNEMON_REVIEW_DIRECTORY = 'state'
 export const MNEMON_REVIEW_FILE = 'review-ledger.json'
-/** The ledger is a worklist, not an archive: the oldest decided proposals fall off first. */
 const MAX_REVIEW_ENTRIES = 200
 const MAX_REVIEW_TEXT = 4_000
 const LOCK_STALE_MS = 30_000
@@ -44,7 +43,6 @@ function parseOpinions(value: unknown): MnemonReviewOpinion[] {
   })
 }
 
-/** A proposal that no longer parses is dropped rather than failing the whole ledger. */
 function parseEntry(value: unknown): MnemonReviewEntry | undefined {
   const entry = record(value)
   if (entry === undefined || typeof entry.id !== 'string' || entry.id.trim() === '') return undefined
@@ -72,10 +70,6 @@ function parseEntry(value: unknown): MnemonReviewEntry | undefined {
   }
 }
 
-/**
- * The review ledger holds what a reconciliation proposed and what reviewers said about
- * it. Proposals are inert: an entry is only ever applied when someone accepts it.
- */
 export class MnemonReviewLedger {
   private readonly root: string
   private readonly runner: Pick<StorageRoot, 'effectiveDataDir'> & Partial<Pick<StorageRoot, 'withExclusive'>>
@@ -94,7 +88,6 @@ export class MnemonReviewLedger {
     return join(this.directory(), MNEMON_REVIEW_FILE)
   }
 
-  /** Serialize async review mutations across concurrent RPC callers and storage locks. */
   withExclusive<T>(operation: () => T | Promise<T>): Promise<T> {
     const run = () => (this.runner.withExclusive !== undefined ? this.runner.withExclusive(operation) : Promise.resolve().then(operation))
     const next = this.queue.then(run)
@@ -121,7 +114,6 @@ export class MnemonReviewLedger {
     return this.list().find(entry => entry.id === id)
   }
 
-  /** One proposal from one reconciliation run. Every run is kept, even when it finds nothing. */
   create(input: { title: string; summary: string; machine: { id: string; label: string }; foreignMachines: string[]; operations: MnemonReviewEntry['operations'] }): MnemonReviewEntry {
     return this.withFileLock(() => {
       const at = new Date().toISOString()
@@ -142,7 +134,6 @@ export class MnemonReviewLedger {
     })
   }
 
-  /** An opinion never decides anything by itself; it is what a reviewer thinks. */
   addOpinion(id: string, author: MnemonReviewOpinion['author'], value: string): MnemonReviewEntry {
     const opinion = text(value).trim()
     if (opinion === '') throw new Error('a review opinion must not be empty')
@@ -160,11 +151,6 @@ export class MnemonReviewLedger {
     })
   }
 
-  /**
-   * Reopening is how an opinion that changes a decision is honoured. It also starts the
-   * plan over: what a reviewer answers is the plan as a whole, so a position that ran
-   * under the old decision is offered again and read against the new one.
-   */
   reopen(id: string): MnemonReviewEntry {
     return this.update(id, entry => {
       const { decidedAt: _decidedAt, appliedAt: _appliedAt, appliedOperations: _appliedOperations, failure: _failure, ...rest } = entry
@@ -172,11 +158,6 @@ export class MnemonReviewLedger {
     })
   }
 
-  /**
-   * Records one run of the plan: which positions committed, and - when one failed - what
-   * stopped it. Those positions are what keeps a partly applied plan in the worklist and
-   * takes a finished one out of it.
-   */
   applied(id: string, failure?: string, committed: readonly number[] = []): MnemonReviewEntry {
     return this.update(id, entry => {
       const { appliedAt: _appliedAt, failure: _failure, ...rest } = entry

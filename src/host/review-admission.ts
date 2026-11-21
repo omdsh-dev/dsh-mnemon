@@ -8,10 +8,6 @@ const RESULT_TOOL = 'mnemon_subagent_result'
 const CHECK_TIMEOUT_MS = 5_000
 interface Challenge { agent: HostAgent; execution?: ToolExecution; accepted: boolean }
 
-/** An in-step no-op challenge through the mandatory review completion channel.
- * Inventory alone cannot see execution-time guards. No errors are classified as
- * permission failures, and an unavailable checkpoint is never a permanent ban.
- */
 export class AutomaticReviewAdmission {
   private readonly challenges = new Map<string, Challenge>()
   private readonly controllers = new Set<AbortController>()
@@ -23,7 +19,6 @@ export class AutomaticReviewAdmission {
     return { ...(this.statuses.get(agent) ?? { state: 'unchecked' }) }
   }
 
-  /** Only an unexpired, host-issued challenge for this exact Agent can no-op. */
   acknowledge(args: unknown, execution: ToolExecution): boolean {
     if (typeof args !== 'object' || args === null || !('requestId' in args) || typeof args.requestId !== 'string') return false
     const challenge = this.challenges.get(args.requestId)
@@ -46,9 +41,6 @@ export class AutomaticReviewAdmission {
     }
     if (signal.aborted) { unavailable('cancelled'); signal.throwIfAborted() }
     const tools = agent.ctx.tools
-    // PTC records durable dispatch events on this Agent. They are valid only
-    // inside a real step. The request hook awaits the entire check, including
-    // cancellation/log drains, before the Host can append step/end.
     if (this.disposed) return unavailable('disposed')
     if (tools?.execute === undefined) return unavailable('executor-unavailable')
     if (this.draining.has(agent)) return unavailable('check-in-flight')
@@ -77,8 +69,6 @@ export class AutomaticReviewAdmission {
         stops.push(agent.ctx.on('tools/result', ((execution: ToolExecution, result: { isError?: boolean }) => {
           if (execution === challenge.execution) challenge.accepted = result.isError === false
         }) as never))
-        // Automatic admission must not open an approval prompt. Preserve all
-        // other decisions and guards; an approval requirement means skip now.
         stops.push(agent.ctx.on('tools/pre-execute', (async (execution: ToolExecution, next: () => Promise<{ kind: string }>) => {
           const decision = await next()
           if (execution.agent === agent && (execution.callId === callId || execution.rootCallId === callId) && decision.kind === 'ask') {
@@ -98,9 +88,6 @@ export class AutomaticReviewAdmission {
         })
         executing = true
         this.draining.add(agent)
-        // Cancellation requests a stop, never abandons PTC's dispatch/log
-        // drain. Letting the request hook return early would close the step
-        // before a delayed dispatch settles and invalidate its audit scope.
         const outcome = await pending.finally(cleanup)
         combined.throwIfAborted()
         if (challenge.execution !== undefined && challenge.accepted && outcome.isError === false) {
@@ -109,19 +96,13 @@ export class AutomaticReviewAdmission {
         }
         return unavailable(approvalRequired ? 'approval-required' : challenge.execution === undefined ? 'handler-not-reached' : 'result-rejected')
       } finally {
-        // Revoke even if an extension ignores cancellation and returns later.
         this.challenges.delete(requestId)
         combined.removeEventListener('abort', revoke)
         if (!executing) cleanup()
       }
     }
     try {
-      // Native-first also handles DSH's `both` presentation when run_code is
-      // denied. Pure Code Mode rejects native dispatch before policy; fallback
-      // uses a real run_code execution, never a fabricated parent token.
       if (await attempt(false)) return true
-      // Executor-based Hosts keep run_code outside the registered capability
-      // inventory. The selected executor still decides whether it may run.
       return (usesToolBatchExecution(tools) || tools.get?.('run_code', agent) !== undefined) && await attempt(true)
     } catch {
       unavailable(signal.aborted ? 'cancelled' : this.disposed ? 'disposed' : controller.signal.aborted ? 'timeout' : 'execution-error')

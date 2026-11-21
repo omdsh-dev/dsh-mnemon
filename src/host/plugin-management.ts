@@ -33,7 +33,6 @@ import {
 import { inspectMemoryView } from './view-presentation.ts'
 import { preferences, resolveLoaderAnchor, schema, withMainStrategy } from './config/index.ts'
 
-/** Deliberately excludes Loader.write(): generated or package YAML is never edited. */
 export interface MemoryPluginLoaderEntry {
   id: string
   disabled: boolean
@@ -55,12 +54,10 @@ interface MemoryPluginModule {
   memoryStrategyConfiguration?: MemoryStrategyConfiguration
 }
 
-/** DSH's official plugin manager; it owns enablement in the profile patch. */
 interface HostPluginManager {
   setPluginEnabled(entryId: string, enabled: boolean): Promise<{ application: string; error?: { message?: string } }>
 }
 
-/** Saved choices keep only configuration once the profile patch owns enablement. */
 function configurationOnly(entries: Record<string, MemoryPluginSavedPreference>): Record<string, MemoryPluginSavedPreference> {
   return Object.fromEntries(Object.entries(entries).map(([entryId, value]) => [entryId, { config: value.config }]))
 }
@@ -75,7 +72,6 @@ interface ManagedPlugin {
 const PACKAGE = /^(?:@[a-z0-9._-]+\/)?dsh-mnemon-(source|strategy)-[a-z0-9._-]+$/u
 const hash = (value: unknown) => createHash('sha256').update(canonicalMemoryJson(value)).digest('hex')
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
-
 
 function contributionRoles(snapshot: MemoryContributionSnapshot, entryId: string): MemoryPluginRole[] {
   const roles = new Set<MemoryPluginRole>()
@@ -147,11 +143,6 @@ function orderPlugins(values: MemoryPluginEntryView[]): MemoryPluginEntryView[] 
   return ordered
 }
 
-/**
- * Profile-local plugin graph overlay. Every dsh-mnemon Source or Strategy Entry
- * is one peer node; activation, configuration, dependency checks and rollback
- * use one transaction. Contribution roles do not create separate managers.
- */
 export class MemoryPluginManagement {
   readonly settingsNamespace: string
   private readonly settings: HostSettingsScope<MemoryViewPreferences>
@@ -162,7 +153,6 @@ export class MemoryPluginManagement {
   private discoveryWarnings: string[] = []
   private changingEntries = false
   private restorePending = false
-  /** A failed move keeps saved choices in effect instead of retrying on every profile reload. */
   private enablementMoveError: string | undefined
 
   constructor(private readonly ctx: HostContextShape, private readonly engine: MemoryRuntime, private readonly settingsService: HostSettingsService) {
@@ -181,13 +171,10 @@ export class MemoryPluginManagement {
   start(): () => void {
     const schedule = () => this.scheduleRestore()
     const stops = [this.ctx.on('loader/entry-init', schedule), this.ctx.on('loader/partial-dispose', schedule),
-      // ConfigEditor reconciles the whole profile, including unrelated writes.
-      // Its public settled event can arrive while an overlay is being restored.
       this.ctx.on('app-boot/config-reload', () => this.scheduleRestore(true)),
       this.settingsService.onUpdated(namespace => {
         if (namespace === this.settingsNamespace) schedule()
       })]
-    // Saved enablement moves into the profile patch once the plugin manager runs.
     this.ctx.inject(['pluginManager'], () => { schedule() })
     schedule()
     return () => { this.closed = true; this.restorePending = false; clearTimeout(this.timer); for (const stop of stops.reverse()) stop() }
@@ -212,7 +199,6 @@ export class MemoryPluginManagement {
     }).catch(() => {})
   }
 
-  /** A response must not race the deferred restore after profile reconciliation. */
   private async settled(): Promise<void> {
     do {
       this.enqueueRestore()
@@ -227,10 +213,6 @@ export class MemoryPluginManagement {
     return candidate && typeof candidate.entries === 'function' ? candidate as MemoryPluginLoader : undefined
   }
 
-  /**
-   * With the DSH plugin manager, the profile patch owns enablement, so its
-   * Plugins page and Mnemon agree. Profiles without it keep Mnemon's overlay.
-   */
   private pluginManager(): HostPluginManager | undefined {
     const candidate = this.ctx.get('pluginManager') as Partial<HostPluginManager> | undefined
     return typeof candidate?.setPluginEnabled === 'function' ? candidate as HostPluginManager : undefined
@@ -245,7 +227,6 @@ export class MemoryPluginManagement {
     return this.settingsService.describe({ redactSecrets: true }).find(value => value.ns === namespace)?.revision ?? 0
   }
 
-  /** The plugin manager owns enablement unless moving the saved choices failed. */
   private enablementOwner(): HostPluginManager | undefined {
     return this.enablementMoveError === undefined ? this.pluginManager() : undefined
   }
@@ -318,8 +299,6 @@ export class MemoryPluginManagement {
     await this.settled()
     const pending = this.queue
     const items = await this.managed()
-    // Discovery imports can yield while another plugin's profile write queues
-    // a restore. Discard that mixed read and inspect the settled tree again.
     if (pending !== this.queue || this.restorePending) return this.catalog()
     const values = items.map(item => clone(item.value))
     const snapshot = this.engine.contributionSnapshot()
@@ -448,7 +427,6 @@ export class MemoryPluginManagement {
 
   private async evaluateSnapshot(snapshot: MemoryContributionSnapshot, config: ResolvedConfig, scope: MemoryOperationScope, strategyTypeId: string, signal?: AbortSignal) {
     signal?.throwIfAborted()
-    // An explicit choice is validated strictly; the runtime fallback never hides it.
     const { strategyFallback: _fallback, ...options } = memoryGenerationOptions(config, scope.workspaceId)
     const generation = new MemoryCompositionGeneration(snapshot, { ...options, strategyTypeId })
     try {
@@ -469,7 +447,6 @@ export class MemoryPluginManagement {
       const previous = preferences(this.settings.get())
       const merged = { ...previous.entries, ...request.entries }
       const next = preferences({ strategyTypeId: request.strategyTypeId, entries: manager === undefined ? merged : configurationOnly(merged) })
-      // Enable before disabling, so a dependency is never left without its provider.
       const toggles = manager === undefined ? [] : items.flatMap(item => {
         const enabled = choices.get(item.entry.id)!.enabled
         return enabled === !item.entry.disabled ? [] : [{ entryId: item.entry.id, enabled }]
@@ -503,7 +480,6 @@ export class MemoryPluginManagement {
     })
   }
 
-  /** Move saved enablement into the profile patch once, keeping only configuration overlays. */
   private async moveEnablement(manager: HostPluginManager, items: ManagedPlugin[]): Promise<boolean> {
     const saved = this.settings.get().entries ?? {}
     const moves = items.flatMap(item => {
@@ -511,8 +487,6 @@ export class MemoryPluginManagement {
       return enabled === undefined ? [] : [{ entryId: item.entry.id, enabled }]
     }).sort((left, right) => Number(right.enabled) - Number(left.enabled))
     if (moves.length === 0) return false
-    // Write each saved choice explicitly: the live state may still be Mnemon's
-    // earlier overlay rather than what the profile patch declares.
     const viewRevision = this.settingsRevision()
     for (const move of moves) await this.setEnabled(manager, move.entryId, move.enabled)
     await this.settingsService.mutate(this.settingsNamespace, [{ op: 'set', path: ['entries'], value: configurationOnly(saved) }], viewRevision)
@@ -535,7 +509,6 @@ export class MemoryPluginManagement {
     const desired = Object.fromEntries(items.flatMap(item => {
       const unified = saved[item.entry.id]
       if (unified === undefined) return []
-      // With the plugin manager, the profile patch already decided enablement.
       const current = !item.entry.disabled
       return [[item.entry.id, { enabled: manager === undefined ? unified.enabled ?? current : current, config: unified.config }]]
     }))
@@ -554,8 +527,6 @@ export class MemoryPluginManagement {
     persist(): Promise<void>
     compensate(): Promise<void>
   }, signal?: AbortSignal): Promise<void> {
-    // A profile write can reset even entries unchanged by this request. Keep
-    // their original state too, before staging any live updates.
     const previous = items.map(item => ({ item, disabled: item.entry.options.disabled as boolean | undefined ?? null,
       config: clone(item.entry.options.config ?? {}), enabled: item.value.enabled, active: item.value.active }))
     const touched = new Set<string>()
@@ -591,9 +562,6 @@ export class MemoryPluginManagement {
             await commit.validate()
             await commit.persist()
             persisted = true
-            // SettingsForms -> ConfigEditor.edit replays the entire profile.
-            // Re-read actual Loader entries and restore every selected overlay
-            // before publishing a Serving generation or returning success.
             const entries = new Map(Array.from(this.loader()?.entries() ?? []).map(entry => [entry.id, entry]))
             await replay(items.flatMap(item => {
               const entry = entries.get(item.entry.id)
@@ -603,8 +571,6 @@ export class MemoryPluginManagement {
           }
         } catch (error) {
           const failures: unknown[] = []
-          // Compensation can itself reconcile the profile, so restore the live
-          // entries only after the durable document is back to its old value.
           if (persisted) try { await commit!.compensate() } catch (rollback) { failures.push(rollback) }
           const current = new Map(Array.from(this.loader()?.entries() ?? []).map(entry => [entry.id, entry]))
           for (const before of previous.reverse()) {

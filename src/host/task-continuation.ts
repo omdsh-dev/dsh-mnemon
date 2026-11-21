@@ -24,7 +24,6 @@ interface Assembly {
 
 const CONTINUATION_GUIDANCE = 'This is a new user request in a completed Mnemon task conversation. The previous task stays completed. Use the current memory View and ordinary memory tools for this request; require receipts for changes. Do not repeat the previous task or submit its expired completion request.'
 
-/** Older workers have no reserved ID: require their own Host descriptor and task contract. */
 export function isLegacyMemoryTask(agent: HostAgent): boolean {
   if (agent.session.header?.origin !== 'subagent') return false
   const descriptor = findSessionEvent(agent.session, event => event.type === 'subagent/descriptor', agent.session.inheritedEventCount ?? 0)
@@ -34,8 +33,6 @@ export function isLegacyMemoryTask(agent: HostAgent): boolean {
     return message?.content?.filter(block => block.type === 'text').map(block => block.text ?? '').join('\n') ?? ''
   }
   let prompt = false, instructions = false
-  // This is a Host-recorded system instruction, not a quoted user message. It
-  // also identifies interrupted workers and PTC runs whose visible tool is an executor.
   for (const event of sessionEvents(agent.session, descriptor.seq + 1)) {
     if (!prompt && event.type === 'user/message' && ((event.data.message ?? event.data) as { source?: { kind?: string } }).source?.kind === 'user') {
       if (!/^\[dsh-mnemon:delegated [a-z-]+\](?:\n|$)/u.test(textOf(event.data.message ?? event.data))) return false
@@ -47,7 +44,6 @@ export function isLegacyMemoryTask(agent: HostAgent): boolean {
   return false
 }
 
-/** A resumed task receives memory authority only for a newly accepted human turn. */
 export class TaskContinuation {
   private readonly memory: AgentMemoryTurn
   private authorizedTurn: number | undefined
@@ -90,13 +86,11 @@ export class TaskContinuation {
     const actor = execution.agent
     if (this.closed || actor === undefined || this.liveAgent(actor.id) !== actor) return FINISHED_TASK_REFUSAL
     if (actor !== this.agent) {
-      // Delegation can outlive its parent's turn only while it holds one of the
-      // actual user-issued Views. A new automatic child cannot acquire a grant.
       try {
         const graph = this.runtime.forAgent(actor)
         const pin = graph.composableTurns.activeTurn(actor.id)
         if (pin !== undefined && this.views.get(pin.view.id) === graph) return undefined
-      } catch { /* A missing/disposed graph cannot grant continuation authority. */ }
+      } catch { }
       return FINISHED_TASK_REFUSAL
     }
     if (this.authorizedTurn === undefined) return FINISHED_TASK_REFUSAL

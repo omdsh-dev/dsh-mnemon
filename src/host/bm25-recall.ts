@@ -47,7 +47,6 @@ export interface Bm25View {
 
 const presentations = new WeakMap<ComposableMemoryView, Bm25View>()
 
-/** The ReadGrants are source-owned snapshots. UI previews can omit catalog rows. */
 export function bm25View(view: ComposableMemoryView | undefined): Bm25View | undefined {
   if (view?.strategyTypeId !== 'default-three-tier') return undefined
   const cached = presentations.get(view)
@@ -125,9 +124,6 @@ export function bm25View(view: ComposableMemoryView | undefined): Bm25View | und
             provenance: { sourceTypeId: 'runtime', ...(fixed.complete ? { snapshot: { version: 1, scope, entries: fixed.entries, branchVisibility: scope } } : {}) },
           }
     }),
-    // This is a presentation-only copy. Workspace authorities remain in the
-    // original pinned View. Catalog or search revision churn cannot retire an
-    // otherwise identical fixed snapshot in the middle of a live conversation.
     readGrants: view.readGrants.map(grant => {
       const source = bySource.get(grant.sourceInstanceKey)
       return source === undefined ? grant : { ...grant, id: grantIds.get(grant.id)!, revision: source.scope, value: null }

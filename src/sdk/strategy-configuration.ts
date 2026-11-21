@@ -7,16 +7,9 @@ import type {
 } from '../core/contracts/index.ts'
 import { canonicalMemoryJson, deepFreeze, isPlainObject } from '../core/definitions.ts'
 
-/** Human-facing metadata only. It is never added to a model View. */
 export type MemoryLocalizedText = MemoryPluginLocalizedText
 export type { MemoryStrategyConfigurationField, MemoryStrategyConfigurationFieldOption }
 
-/**
- * Optional module export named `memoryStrategyConfiguration`.
- * An installed, trusted Cordis Entry owns its fields and its pure factory.
- * The Host may preview that factory, but mounting/disposal still belongs to
- * Cordis. Configuration here must be public; credentials belong to Sources.
- */
 export interface MemoryStrategyConfiguration {
   apiVersion: 'dsh-mnemon/strategy-configuration/v1'
   kind: 'strategy' | 'strategy-extension'
@@ -24,7 +17,6 @@ export interface MemoryStrategyConfiguration {
   label: MemoryLocalizedText
   description: MemoryLocalizedText
   fields: readonly MemoryStrategyConfigurationField[]
-  /** Same factory used by apply(); must not perform I/O or register a Fiber. */
   create(config: Record<string, MemoryJsonValue>): MemoryInstallContribution
 }
 
@@ -32,7 +24,6 @@ export function defineMemoryStrategyConfiguration(value: Omit<MemoryStrategyConf
   return readMemoryStrategyConfiguration({ ...value, apiVersion: 'dsh-mnemon/strategy-configuration/v1' })
 }
 
-/** Host discovery also validates modules that do not use the author helper. */
 export function readMemoryStrategyConfiguration(value: MemoryStrategyConfiguration): MemoryStrategyConfiguration {
   const text = (input: unknown) => typeof input === 'object' && input !== null && ['en', 'zh-CN'].every(key => {
     const item = (input as Record<string, unknown>)[key]
@@ -78,7 +69,6 @@ export function readMemoryStrategyConfiguration(value: MemoryStrategyConfigurati
   return definition
 }
 
-/** Validate and copy supplied values without applying defaults or executing code. */
 export function memoryStrategyConfigurationValues(definition: MemoryStrategyConfiguration, input: unknown): Record<string, MemoryJsonValue> {
   const value = input ?? {}
   if (!isPlainObject(value)) throw new Error('Plugin configuration must be an object')

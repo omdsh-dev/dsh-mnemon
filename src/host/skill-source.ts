@@ -5,11 +5,6 @@ import type { SkillsSourcePort } from './skill-evolution.ts'
 
 export const SKILLS_SOURCE_TYPE = 'skills'
 
-/**
- * The Skills Source of a conversation's workspace graph, or nothing when the
- * component is not running or its layer is off. The scope carries no Agent,
- * so a read never borrows a turn's pinned View.
- */
 export function skillsSourceFor(runtime: Pick<MnemonAgentRuntimeSource, 'forAgent'>, agent: HostAgent): SkillsSourcePort | undefined {
   let graph
   try { graph = runtime.forAgent(agent) } catch { return undefined }

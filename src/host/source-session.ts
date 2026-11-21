@@ -4,7 +4,6 @@ import type { MemoryGenerationHost } from '../core/index.ts'
 import type { ComposableMemoryTurn, ComposableMemoryTurnManager } from '../core/turns.ts'
 import type { MemoryCompositionGeneration } from '../core/composition.ts'
 
-/** Host-side caller of a Source's JSON protocol, never its implementation. */
 export class SourceSession {
   constructor(
     private readonly generations: MemoryGenerationHost,
@@ -16,19 +15,16 @@ export class SourceSession {
     private readonly generation?: MemoryCompositionGeneration,
   ) {}
 
-  /** Capture execution identity before awaiting work; never borrow a later turn. */
   forTurn(turn: ComposableMemoryTurn): SourceSession {
     if (turn.scope.agentId !== this.scope.agentId || turn.scope.sessionId !== this.scope.sessionId
       || turn.scope.storage !== this.scope.storage || turn.scope.workspaceId !== this.scope.workspaceId) throw new Error('Source session scope does not match the pinned turn')
     return new SourceSession(this.generations, this.turns, this.typeId, this.scope, turn, this.instanceKey, this.generation)
   }
 
-  /** Exact instance identity; never fall back to a different Source of the same type. */
   forInstance(instanceKey: string): SourceSession {
     return new SourceSession(this.generations, this.turns, this.typeId, this.scope, this.pinnedTurn, instanceKey, this.generation)
   }
 
-  /** The caller owns this generation's lease for the entire operation. */
   forGeneration(generation: MemoryCompositionGeneration): SourceSession {
     return new SourceSession(this.generations, this.turns, this.typeId, this.scope, this.pinnedTurn, this.instanceKey, generation)
   }
@@ -48,7 +44,6 @@ export class SourceSession {
     return this.executeResult<T>('mutate', operation, input, signal)
   }
 
-  /** Model tools always use the offered Route, never the management channel. */
   async route(routeId: string, input: unknown, signal?: AbortSignal): Promise<MemoryEvidence> {
     const turn = this.requireTurn()
     const source = await this.selected(turn)
@@ -62,7 +57,6 @@ export class SourceSession {
     const offer = await this.offeredAction(turn, actionId)
     return this.turns.executeAction(turn.turnId, offer.id, json(input), authorize, signal)
   }
-  /** Preflight Host-coordinated maintenance before any management side effect. */
   async assertActionOffered(actionId: string, authorize: (offer: MemoryActionOffer) => boolean): Promise<void> {
     const offer = await this.offeredAction(this.requireTurn(), actionId)
     if (!authorize(offer)) throw new Error('memory ActionOffer is not currently authorized: ' + offer.id)
@@ -128,7 +122,6 @@ function json(input: unknown): MemoryJsonValue {
   return JSON.parse(JSON.stringify(input)) as MemoryJsonValue
 }
 
-/** Error codes are part of the Source protocol; its private Error classes are not. */
 export function sourceFailure<T extends { code: string }>(value: unknown, code: T['code']): value is T {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     && 'code' in value && value.code === code

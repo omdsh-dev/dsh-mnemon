@@ -2,7 +2,6 @@ import type { HostSession, HostSessionEvent } from './dsh.ts'
 
 export const SESSION_EVENT_PAGE_SIZE = 256
 
-/** Read the public offset without constructing a snapshot. Older adapters can expose indexed reads only. */
 export function sessionLength(session: HostSession): number {
   if (typeof session.seq === 'number') return session.seq
   let low = 0, high = 1
@@ -15,7 +14,6 @@ export function sessionLength(session: HostSession): number {
   return low
 }
 
-/** Never retain the transcript or invoke DSH's full-log snapshot cache. */
 export function* sessionEvents(session: HostSession, from = 0, to = sessionLength(session)): Generator<HostSessionEvent> {
   for (let offset = from; offset < to; offset += SESSION_EVENT_PAGE_SIZE) {
     yield* session.snapshotEvents(offset, Math.min(to, offset + SESSION_EVENT_PAGE_SIZE))
@@ -36,7 +34,6 @@ export function findSessionEvent(session: HostSession, predicate: (event: HostSe
   return undefined
 }
 
-/** A completed/current turn can be long; page it without truncating its evidence. */
 export function* sessionTurnEvents(session: HostSession, turn: number): Generator<HostSessionEvent> {
   const end = sessionLength(session)
   for (const entry of reverseSessionEvents(session, 0, end)) {
@@ -49,7 +46,6 @@ export function* sessionTurnEvents(session: HostSession, turn: number): Generato
   }
 }
 
-/** Cursor for small derived projections; no event objects or transcript text are retained. */
 export class SessionEventCursor {
   private session: HostSession | undefined
   private offset = 0

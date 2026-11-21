@@ -3,7 +3,6 @@ import type { HostSettingsService } from '../dsh.ts'
 import { MNEMON_SETTINGS_NAMESPACE } from '../protocol.ts'
 import type { MemoryPluginSavedPreference, MemoryViewPreferences } from '../view-protocol.ts'
 
-/** Explicit profile rows, not the Loader's resolved defaults or effective config. */
 export interface LegacySettingsEntryOverride {
   readonly id: string
   readonly disabled?: unknown
@@ -15,10 +14,8 @@ export interface LegacySettingsImportOptions {
   readonly viewNamespace: string
   readonly legacyNamespace: string
   readonly sections: unknown
-  /** The owning Entry's explicit config override, before applying schema defaults. */
   readonly currentOverride: unknown
   readonly entryOverrides: readonly LegacySettingsEntryOverride[]
-  /** Settled Loader entries whose public descriptors actually declare a Source. */
   readonly sourceEntryIds: readonly string[]
 }
 
@@ -29,7 +26,6 @@ export interface LegacySettingsImportPatch {
 }
 
 export interface LegacySettingsImportPlan {
-  /** Root config fields only. The caller validates and atomically commits them. */
   patch: LegacySettingsImportPatch
   diagnostics: string[]
 }
@@ -52,7 +48,6 @@ function object(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
-/** Copy JSON data without invoking getters, serializers or prototype methods. */
 function copy(value: unknown, label: string, ancestors = new Set<object>(), depth = 0): MemoryJsonValue {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -78,7 +73,6 @@ function copiedObject(value: unknown, label: string): JsonObject {
   return copy(value, label) as JsonObject
 }
 
-/** Inspect validated copies only; never evaluate expressions or invoke getters. */
 function containsExpression(value: MemoryJsonValue): boolean {
   return value !== null && typeof value === 'object'
     && (Object.hasOwn(value, '__jsExpr') || Object.values(value).some(containsExpression))
@@ -113,7 +107,6 @@ function view(value: unknown, label: string): Partial<MemoryViewPreferences> {
       entryId(id, label)
       const item = copiedObject(raw, `${label}.entries`)
       fields(item, ['enabled', 'config'], `${label}.entries`)
-      // Enablement moves into the profile patch once DSH's plugin manager runs.
       if (Object.hasOwn(item, 'enabled') && typeof item.enabled !== 'boolean') throw new Error(`${label} Entry enabled must be boolean`)
       const config = Object.hasOwn(item, 'config') ? copiedObject(item.config, `${label} Entry config`) : {}
       if (JSON.stringify(config).length > 64 * 1024) throw new Error(`${label} Entry config exceeds 64 KiB`)
@@ -166,8 +159,6 @@ function applyEntryOverrides(entries: Record<string, MemoryPluginSavedPreference
       diagnostics.push(`Skipped legacy View preference for ${id}: its explicit disabled value is not boolean.`)
       continue
     }
-    // Source configuration stays on its native Entry. The View manager only
-    // owns Source activation and must not overwrite those independent fields.
     if (row.config !== undefined && !sourceEntryIds.has(id)) {
       const config = copiedObject(row.config, 'Explicit Entry config')
       if (containsExpression(config)) {
@@ -181,11 +172,6 @@ function applyEntryOverrides(entries: Record<string, MemoryPluginSavedPreference
   }
 }
 
-/**
- * Recover only the canonical root and the exact owning profile's old namespaces.
- * This does not read files, edit profile rows, validate plugin domains or commit.
- * Malformed relevant input rejects the complete plan without an import marker.
- */
 export function planLegacySettingsImport(options: LegacySettingsImportOptions): LegacySettingsImportPlan {
   const diagnostics: string[] = []
   try {
@@ -212,7 +198,6 @@ export function planLegacySettingsImport(options: LegacySettingsImportOptions): 
     if (Object.hasOwn(current, 'legacySettingsImported') && typeof current.legacySettingsImported !== 'boolean') throw new Error('Current import marker must be boolean')
     const root = Object.hasOwn(sections, 'mnemon') ? copiedObject(sections.mnemon, 'mnemon') : {}
     if (Object.hasOwn(root, 'memoryView') || Object.hasOwn(root, 'legacySettingsImported')) throw new Error('Legacy mnemon contains reserved migration fields')
-    // `toolviews` switches nothing any more; it stays accepted so a file that holds it still imports.
     const oldInteraction = Object.hasOwn(root, 'conversationInteraction')
       ? interaction(root.conversationInteraction, 'mnemon.conversationInteraction', ['toolviews', 'turnBar', 'saveAction']) : {}
     const oldUi = Object.hasOwn(sections, 'mnemon-ui') ? interaction(sections['mnemon-ui'], 'mnemon-ui', ['turnBar', 'saveAction']) : {}
@@ -252,7 +237,6 @@ function displayModeOf(value: unknown): unknown {
     : undefined
 }
 
-/** Canonicalize only the legacy field through DSH's locked, revision-fenced writer. */
 export async function migrateLegacyDisplayMode(settings: HostSettingsService): Promise<void> {
   if (!settings.writable) return
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -265,7 +249,6 @@ export async function migrateLegacyDisplayMode(settings: HostSettingsService): P
       await settings.mutate(MNEMON_SETTINGS_NAMESPACE, [{ op: 'set', path: ['displayMode'], value: 'builtin' }], view.revision)
       return
     } catch (error) {
-      // A concurrent explicit Sidebar choice wins; re-read instead of overwriting it.
       if (attempt === 2 || typeof error !== 'object' || error === null || !('code' in error) || error.code !== 'SETTINGS_CONFLICT') throw error
     }
   }

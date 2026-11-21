@@ -2,7 +2,6 @@ import { createHash, randomUUID } from 'node:crypto'
 import { canonicalMemoryJson } from '../core/definitions.ts'
 import type { MemoryJsonValue, MemoryMutationReceipt, MemoryMigrationLineage, MemoryMutationCompletion } from "../core/contracts/index.ts"
 
-/** Stable digest of validated configuration; raw values never enter diagnostics. */
 export function memoryConfigurationDigest(value: unknown): string {
   return `config:${createHash('sha256').update(canonicalMemoryJson(value, 'memory configuration')).digest('hex')}`
 }
@@ -39,7 +38,6 @@ export function truncate(value: string, maximum: number): string {
   if (maximum <= 0) return ''
   if (value.length <= maximum) return value
   let end = maximum - 1
-  // Keep a supplementary character whole when reserving one unit for the ellipsis.
   if (end > 0 && /[\uD800-\uDBFF]/u.test(value[end - 1]!)) end--
   return `${value.slice(0, end)}…`
 }
@@ -65,7 +63,6 @@ export function receipt(
   }
 }
 
-/** Validate migration proof supplied by an authorized Source management caller. */
 export function migrationLineage(value: MemoryJsonValue | undefined): MemoryMigrationLineage[] {
   if (value === undefined) return []
   if (!Array.isArray(value) || value.length > 1_000) throw new Error('lineage must be an array of at most 1000 entries')
