@@ -61,10 +61,11 @@ fix(client): honor trusted remote management grant
 4. **提供真实证据且不膨胀仓库**：用户可见变更的前后对比截图或短视频直接上传附在 GitHub PR 描述中（使用 GitHub 附件）。若通过 CLI 或自动化流程上传，请推送到独立的 orphan 分支或外部素材仓库并以完整 commit SHA 引用，版本发布验收包则挂载到 GitHub Release 或 CI Artifact；不要向 `main` 提交 PR 或 Issue 评审二进制目录。Host、CLI、Headless 变更附脱敏日志或命令结果。
 5. **双语同步**：长期文档在 `docs/en/` 和 `docs/zh-CN/` 保持同名、同职责；同步维护 `README.md`、`README.zh-CN.md`、`CHANGELOG.md` 与 `CHANGELOG.zh-CN.md`。产品文档素材统一按语义目录存放在 `docs/assets/` 且不得保留无引用文件。
 6. **编写简洁自解释的代码**：优先用清晰的模块组织、准确的命名、精炼的纯辅助函数与可执行的回归测试表达意图，而不是堆砌叙述性注释。避免过长命名与无意义的代号命名（如 `x1`、`tmp`、`bar`），清理死代码与未用绑定（`tsc --noUnusedLocals --noUnusedParameters`），仅保留机器消费指令（如 shebang、`@ts-expect-error`、`@vitest-environment` 与 `@deprecated`）。
-7. **安全与数据**：持久化格式、路径、RPC authority、Provider 凭据或导入导出变更必须说明兼容、迁移或拒绝、回滚和数据保留行为。
-8. **边界稳定**：`src/host/protocol.ts` 是可在浏览器使用的 Client 与 Host wire DTO 来源；不得在浏览器半区引入可执行的 Host 模块。
-9. **AI 披露**：按 PR 模板如实填写使用的模型和编码工具；贡献者仍对最终代码、验证和安全负责。
-10. **不提交生成物**：确认工作区不包含 `lib/` 或临时 Provider lab 数据。
+7. **边界单点校验，拒绝过度防御**：输入、路径、权限与完整性校验只在外部信任边界执行一次（如 CLI/RPC 入口、持久化读盘、外部 HTTP/Provider 响应、发布 workflow 入口），越过边界后信任类型系统与上游不变量。不为“绕过上游门禁的人造调用”在内部多层叠加重复校验、重复哈希或额外子进程检查。
+8. **安全与数据**：持久化格式、路径、RPC authority、Provider 凭据或导入导出变更必须说明兼容、迁移或拒绝、回滚和数据保留行为。
+9. **边界稳定**：`src/host/protocol.ts` 是可在浏览器使用的 Client 与 Host wire DTO 来源；不得在浏览器半区引入可执行的 Host 模块。
+10. **AI 披露**：按 PR 模板如实填写使用的模型和编码工具；贡献者仍对最终代码、验证和安全负责。
+11. **不提交生成物**：确认工作区不包含 `lib/` 或临时 Provider lab 数据。
 
 ## 文档和持久化约束
 
