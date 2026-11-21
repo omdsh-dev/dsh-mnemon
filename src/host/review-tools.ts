@@ -20,12 +20,20 @@ const startingChild = new AsyncLocalStorage<symbol>()
  */
 export function idleReviewBlockReason(parent: HostAgent, agentTeams: 'pause' | 'scoped' = 'pause'): 'agent-team' | undefined {
   if (agentTeams === 'scoped') return undefined
-  const teams = parent.ctx?.get?.('agentTeams') as { isEnabled?(agent: HostAgent): boolean } | undefined
-  if (teams === undefined) return undefined
-  const tools = parent.ctx.tools
-  const active = tools?.get?.('spawn_teammate', parent) !== undefined
-    || typeof teams?.isEnabled === 'function' && teams.isEnabled(parent) && tools?.get?.('team_task_create', parent) !== undefined
-  return active ? 'agent-team' : undefined
+  try {
+    const teams = parent.ctx?.get?.('agentTeams') as { isEnabled?(agent: HostAgent): boolean } | undefined
+    if (teams === undefined) return undefined
+    const tools = parent.ctx.tools
+    const active = tools?.get?.('spawn_teammate', parent) !== undefined
+      || typeof teams?.isEnabled === 'function' && teams.isEnabled(parent) && tools?.get?.('team_task_create', parent) !== undefined
+    return active ? 'agent-team' : undefined
+  } catch {
+    // Teams probes such as `isEnabled(parent)` can throw UNAUTHORIZED when a
+    // captured Agent reference is no longer the exact live caller in DSH.
+    // Fail closed conservatively rather than throwing out of status reads or
+    // idle timers (#702).
+    return 'agent-team'
+  }
 }
 
 export type ReviewToolPolicy = (execution: Readonly<ToolExecution>) => string | undefined
