@@ -50,7 +50,6 @@ export function cleanJson(value: unknown): MemoryJsonValue {
   return null
 }
 
-/** Graceful Mnemon Native descriptor used while the Host directory loads or when operations are absent. */
 export function nativeFallbackProvider(t: Translate, serviceConfigured = true): MemoryProviderDescriptor {
   return {
     id: NATIVE_PROVIDER_ID,
@@ -248,7 +247,6 @@ export function PlacementTargetControls(props: {
     })}</fieldset>
     <div className={css.placementCandidates}>{readyFirst(providers).map(provider => {
       const selected = draft.allowedProviderIds.includes(provider.id)
-      // A saved candidate that is no longer ready can still be cleared.
       const itemDisabled = props.disabled === true || (provider.serviceConfigured === false && !selected) || (draft.dataBoundary === 'local-only' && provider.kind === 'remote')
       return <label key={provider.id} data-selected={selected || undefined} data-disabled={itemDisabled || undefined}><input type="checkbox" checked={selected} disabled={itemDisabled} onChange={event => toggleProvider(provider.id, event.target.checked)} /><ProviderIcon providerId={provider.id} icon={provider.icon} className={css.candidateIcon} /><span><strong>{provider.label}</strong><small>{provider.serviceConfigured === false ? t(providerUnavailableKey(provider)) : provider.origin === 'native' ? t('overview.candidateNativeReady') : provider.kind === 'local' ? t('overview.candidateLocal') : t('overview.candidateRemote')}</small></span><i className={css.choiceControl} data-kind="check" aria-hidden="true" /></label>
     })}</div>

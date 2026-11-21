@@ -20,10 +20,7 @@ function verifiedLauncher(path: string): string | undefined {
   try { return samePath(path, join(root, 'bin/mnemon.js')) ? realpathSync(path) : undefined } catch { return undefined }
 }
 
-/** Execute JavaScript with the Host binary even when it is Electron's GUI executable. */
 export function nodeLauncherEnvironment(environment: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  // Windows treats environment keys case-insensitively. Emit a single spelling,
-  // and do not restore keys deliberately removed by saved embedding overrides.
   const inherited = Object.fromEntries(Object.entries(environment).filter(([key]) => key.toUpperCase() !== 'ELECTRON_RUN_AS_NODE'))
   return { ...inherited, ELECTRON_RUN_AS_NODE: '1' }
 }
@@ -33,8 +30,6 @@ export function mnemonNpmLauncher(command: string): string | undefined {
   try { realCommand = realpathSync(command) } catch {}
   const direct = verifiedLauncher(realCommand)
   if (direct !== undefined) return direct
-  // Read static targets from npm/pnpm shims, including versioned global
-  // directories and cross-drive absolute targets. Never interpret batch code.
   if (/\.cmd$/i.test(command)) {
     try {
       const launchers = new Set<string>()
@@ -45,8 +40,6 @@ export function mnemonNpmLauncher(command: string): string | undefined {
         else if (!isAbsolute(target)) continue
         if (target.includes('%')) continue
         const launcher = verifiedLauncher(resolve(dirname(command), target))
-        // Canonicalize the package link so optional dependencies resolve from
-        // pnpm's actual virtual store, not from its public global symlink.
         if (launcher !== undefined) launchers.add(launcher)
       }
       if (launchers.size === 1) return [...launchers][0]
@@ -55,7 +48,6 @@ export function mnemonNpmLauncher(command: string): string | undefined {
   return undefined
 }
 
-/** Resolve only the platform package pinned by the recognized official launcher. */
 function npmNativeBinary(launcher: string): string | undefined {
   const pkg = manifest(join(dirname(dirname(launcher)), 'package.json'))
   const target = `${process.platform}-${process.arch}`
@@ -63,10 +55,6 @@ function npmNativeBinary(launcher: string): string | undefined {
   const version = typeof pkg?.version === 'string' ? `${pkg.version}-${target}` : undefined
   if (version === undefined || pkg?.optionalDependencies?.[alias] !== `npm:${MNEMON_NPM_PACKAGE}@${version}`) return undefined
   try {
-    // Resolve from this launcher (including nested/pnpm installs), never from
-    // the Host's node_modules or a guessed global npm prefix.
-    // Avoid require.resolve's cached symlink target after a package-manager
-    // update while DSH is still running.
     const packagePath = createRequire(launcher).resolve.paths(alias)?.map(path => join(path, alias, 'package.json')).find(existsSync)
     if (packagePath === undefined) return undefined
     const native = manifest(packagePath)
@@ -74,20 +62,15 @@ function npmNativeBinary(launcher: string): string | undefined {
     const binary = join(dirname(packagePath), 'bin', process.platform === 'win32' ? 'mnemon.exe' : 'mnemon')
     return isMnemonExecutable(binary) ? binary : undefined
   } catch {
-    // Preserve the launcher's diagnostics for missing optional dependencies or
-    // a future npm layout we do not recognize.
     return undefined
   }
 }
 
-/** Keep CLI subprocesses under our windowsHide, timeout and cancellation policy. */
 export function resolveMnemonInvocation(command: string, args: readonly string[], env?: NodeJS.ProcessEnv): {
   command: string; args: string[]; env?: NodeJS.ProcessEnv
 } {
   const launcher = mnemonNpmLauncher(command)
   if (launcher !== undefined) {
-    // The npm wrapper's nested spawn does not hide Windows console windows.
-    // Its update command owns npm provenance, so retain that special entry.
     const binary = args.length === 1 && args[0] === 'update' ? undefined : npmNativeBinary(launcher)
     if (binary === undefined) return { command: process.execPath, args: [launcher, ...args], env: nodeLauncherEnvironment(env) }
     command = binary
@@ -201,7 +184,6 @@ function commandCacheKey(
   return `${platform}\u0000${home}\u0000${cliPath ?? ''}\u0000${envCliPath}\u0000${pathValue}\u0000${winExtras}`
 }
 
-/** Locate the local Mnemon binary without invoking a shell. */
 export function findMnemonCommand(
   config: { cliPath?: string | undefined },
   options: CommandDiscoveryOptions = {},
@@ -231,8 +213,6 @@ export function findMnemonCommand(
 
   const resolveCommand = (command: string): string | undefined => {
     const expanded = expandHome(command, home, platform)
-    // Explicit paths remain authoritative even when missing, so execution
-    // reports the configured path instead of silently choosing another CLI.
     if (expanded.includes('/') || expanded.includes('\\')) return expanded
     const names = platform === 'win32' && paths.extname(expanded) === '' ? [`${expanded}.exe`, `${expanded}.cmd`] : [expanded]
     for (const directory of pathEntries) {

@@ -32,35 +32,23 @@ const NATIVE_REGISTRY_VERSION = 1
 const PROVIDER_REGISTRY_VERSION = 4
 const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9-]{0,127}$/u
 const DISCONNECTS_VERSION = 1
-/** Disconnected namespaces remembered per Provider; the oldest go first past this. */
 const MAX_DISCONNECTED = 1_000
-/** Settings whose value can name a namespace: a bank, workspace, user, tag, URI or folder. */
 const IDENTITY_INPUTS: ReadonlySet<MemoryProviderConfigField['input']> = new Set(['text', 'url', 'path'])
 
 function storedProviderId(value: unknown): value is MemoryProviderId {
   return typeof value === 'string' && PROVIDER_ID_PATTERN.test(value)
 }
 
-/**
- * A namespace a person disconnected on the Memory Spaces page, as asking its Provider again
- * recognises it: by the externalId the Provider reported, by the space's own settings (never a
- * secret), or both. A space made by hand has only its settings.
- */
 interface DisconnectedNamespace {
   externalId?: string
   connection?: MemoryProviderConnection
 }
 
-/**
- * Disconnected namespaces, kept beside the Provider registry rather than in it: a build that
- * predates them rewrites the registry without fields it does not know, and would drop them.
- */
 interface DisconnectsFile {
   version: typeof DISCONNECTS_VERSION
   providers: Partial<Record<MemoryProviderId, DisconnectedNamespace[]>>
 }
 
-/** Disconnected namespaces as a file holds them: sound entries only, newest last. */
 function storedDisconnects(value: unknown): DisconnectedNamespace[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((item): DisconnectedNamespace[] => {
@@ -73,12 +61,6 @@ function storedDisconnects(value: unknown): DisconnectedNamespace[] {
   }).slice(-MAX_DISCONNECTED)
 }
 
-/**
- * One namespace a Provider reported, ready to compare with what this directory holds. `identity`
- * is what names it; without one, `whole` is its entire connection. `distinct` is false when
- * another namespace in the same answer has the same name or connection: then only its externalId
- * tells it apart.
- */
 interface ReportedNamespace {
   candidate: ProviderMemorySpace
   externalId: string
@@ -88,7 +70,6 @@ interface ReportedNamespace {
   distinct: boolean
 }
 
-/** JSON with every object's keys in order, so two equal connections compare equal. */
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
   if (value !== null && typeof value === 'object') {
@@ -119,12 +100,9 @@ interface StoredOpenVikingConnection {
 
 interface StoredMemorySpace extends Omit<MemorySpace, 'dbPath' | 'provider'> {
   providerId: MemoryProviderId
-  /** Stable provider-side namespace used to refresh this local projection. */
   externalId?: string
-  /** Controls whether discovery may refresh presentation metadata. */
   metadataSource?: 'provider' | 'manual' | 'ai'
   connection?: MemoryProviderConnection
-  /** Provider-registry v1 compatibility; migrated to connection on load. */
   openViking?: StoredOpenVikingConnection
 }
 
@@ -185,13 +163,6 @@ function compactProviderMetadataValue(value: unknown): string | undefined {
   return (pathTail ?? normalized).trim() || undefined
 }
 
-/**
- * Normalize uneven provider discovery metadata at the projection boundary.
- * Adapters map the richest native fields they know; the registry then tries
- * the nearest namespace setting before falling back to a stable provider
- * identity. This keeps every discovered namespace usable without teaching the
- * Web UI each provider's response shape.
- */
 function providerProjectionMetadata(providerCatalog: MemoryProviderCatalog, providerId: MemoryProviderId, candidate: ProviderMemorySpace): { name: string; description: string } {
   const descriptor = providerCatalog.descriptor(providerId)
   const externalId = requiredText(candidate.externalId, 'provider externalId', 2000)
@@ -268,18 +239,10 @@ interface RegistryFileState {
   pendingStoreDirs?: string[] | undefined
 }
 
-/**
- * Persistent metadata layered over Mnemon's native named stores.
- *
- * Native metadata lives beside Store directories so existing Mnemon Packs stay
- * compatible. External connection metadata lives under state and is never
- * included in Memory Space Packs.
- */
 export class MemorySpaceRegistry {
   readonly directory: string
   readonly registryPath: string
   readonly providerRegistryPath: string
-  /** The namespaces a person disconnected, which asking a Provider again leaves out (#373). */
   readonly disconnectsPath: string
   private readonly activeStorePath: string
   private refreshing = false
@@ -287,9 +250,6 @@ export class MemorySpaceRegistry {
 
   constructor(
     readonly runner: MnemonRunner,
-    // Provider service configuration and third-party Memory Space projections
-    // are DSH-owned state. Their durability must not depend on whether the
-    // optional native Mnemon CLI happens to be installed.
     private readonly persistent = true,
     private readonly now: () => Date = () => new Date(),
     private readonly providerCatalog: MemoryProviderCatalog = EMPTY_MEMORY_PROVIDER_CATALOG,
@@ -298,7 +258,6 @@ export class MemorySpaceRegistry {
     this.state = sharedState ?? { spaces: [], services: {}, serviceEnabled: {}, disconnected: {} }
     this.directory = join(runner.effectiveDataDir(), MEMORY_SPACES_DIRECTORY)
     this.activeStorePath = join(runner.effectiveDataDir(), MNEMON_ACTIVE_STORE_FILE)
-    // Keep the published v1 filename and serialized bodies key for existing stores and Packs.
     this.registryPath = join(this.directory, MEMORY_SPACE_REGISTRY_FILE)
     this.providerRegistryPath = join(runner.effectiveDataDir(), 'state', MEMORY_PROVIDER_REGISTRY_FILE)
     this.disconnectsPath = join(runner.effectiveDataDir(), 'state', 'memory-provider-disconnects.json')
@@ -314,7 +273,6 @@ export class MemorySpaceRegistry {
   private get disconnected(): Partial<Record<MemoryProviderId, DisconnectedNamespace[]>> { return this.state.disconnected }
   private set disconnected(value: Partial<Record<MemoryProviderId, DisconnectedNamespace[]>>) { this.state.disconnected = value }
 
-  /** One generation-local descriptor view over the same persistent authority. */
   withProviderCatalog(providerCatalog: MemoryProviderCatalog): MemorySpaceRegistry {
     return new MemorySpaceRegistry(this.runner, this.persistent, this.now, providerCatalog, this.state)
   }
@@ -334,8 +292,6 @@ export class MemorySpaceRegistry {
   }
 
   active(): MemorySpace[] {
-    // list() has just refreshed this synchronous authority snapshot. Avoid
-    // restatting both registry files once more for every projected body.
     return this.list().filter(body => body.active && (this.isNative(body.provider.id)
       || Object.hasOwn(this.services, body.provider.id) && this.serviceEnabled[body.provider.id] === true))
   }
@@ -358,7 +314,6 @@ export class MemorySpaceRegistry {
     return this.connectionFor(body)
   }
 
-  /** Used only after a public operation has refreshed the registry authority. */
   private connectionFor(body: StoredMemorySpace): MemoryProviderConnection {
     const legacy = this.providerTypeId(body.providerId) === 'openviking' && body.openViking !== undefined
       ? legacyOpenVikingConnection(body.openViking)
@@ -381,11 +336,6 @@ export class MemorySpaceRegistry {
       : this.providerServiceConfigured(providerId) && this.serviceEnabled[providerId] === true
   }
 
-  /**
-   * The provider used when none is named: Mnemon Native while its CLI is
-   * available, which keeps the long-standing default, otherwise the first
-   * other provider, in catalog order, that can take writes now.
-   */
   defaultProviderId(): MemoryProviderId | undefined {
     const ready = this.providerCatalog.providers.filter(provider => this.providerServiceEnabled(provider.id))
     return (ready.find(provider => this.isNative(provider.id)) ?? ready[0])?.id
@@ -416,11 +366,6 @@ export class MemorySpaceRegistry {
     const previous = this.services[providerId] ?? {}
     this.services[providerId] = this.providerCatalog.normalizeService(providerId, settings, previous, clearSecrets)
     this.serviceEnabled[providerId] = enabled
-    // Third-party Memory Spaces are local projections of provider-owned
-    // namespaces. Once the provider is disconnected those projections are no
-    // longer addressable and must not linger as unhealthy, uneditable cards.
-    // Keep only the reusable service configuration so reconnecting can
-    // discover and rebuild the projections from the source of truth.
     if (!enabled) this.spaces = this.spaces.filter(body => body.providerId !== providerId)
     this.save()
     return this.providerServices().items.find(item => item.providerId === providerId)!
@@ -432,7 +377,6 @@ export class MemorySpaceRegistry {
     return this.providerCatalog.normalizeService(providerId, settings, this.services[providerId] ?? {}, clearSecrets)
   }
 
-  /** Atomically replace one provider's local projections after authoritative discovery. */
   syncProviderService(providerId: MemoryProviderId, service: MemoryProviderConnection, discovered: readonly ProviderMemorySpace[]): MemoryProviderServiceView {
     this.refreshIfChanged()
     if (this.isNative(providerId)) throw new Error('Mnemon Native Stores are discovered from disk')
@@ -463,8 +407,6 @@ export class MemorySpaceRegistry {
       return {
         id,
         externalId,
-        // Discovery owns initial presentation metadata. Once a user or AI has
-        // curated it, reconnect only refreshes provider identity and settings.
         name: preserveLocalMetadata ? previous.name : metadata.name,
         description: preserveLocalMetadata ? previous.description : metadata.description,
         metadataSource,
@@ -475,9 +417,6 @@ export class MemorySpaceRegistry {
         updatedAt: this.nextTimestamp(previous?.updatedAt, timestamp),
       } satisfies StoredMemorySpace
     })
-    // Some non-enumerating Providers declare how their first discovered
-    // namespace seeds a reusable service default. The generic host never
-    // branches on Provider identity.
     for (const field of this.providerCatalog.serviceFields(providerId)) {
       if (field.discoveryDefaultFrom === undefined || String(normalizedService[field.key] ?? '').trim() !== '') continue
       const discoveredValue = projections[0]?.connection?.[field.discoveryDefaultFrom]
@@ -489,28 +428,16 @@ export class MemorySpaceRegistry {
     this.serviceEnabled[providerId] = true
     this.spaces = [...this.spaces.filter(body => body.providerId !== providerId), ...projections]
     this.save()
-    // A save mounts every namespace the Provider reports, the ones disconnected before included.
     this.forgetDisconnected(providerId, this.reportedNamespaces(providerId, normalizedService, discovered))
     return this.providerServices().items.find(item => item.providerId === providerId)!
   }
 
-  /**
-   * Mount the namespaces a Provider reports that this directory has never held, as asking a
-   * Provider again finds them (#373). A space already mounted is left exactly as it is, and so is
-   * a namespace a person disconnected. A new space starts inactive: recall reads it only once a
-   * person turns it on. A space counts as a reported namespace when it has its externalId, or the
-   * settings that name it (see `holds`): a space made by hand for the same bank, or one whose
-   * externalId the Provider now writes differently. A Provider switched off, or saved with other
-   * settings since `service` was read, gets nothing: that save decides. Nothing is written when
-   * nothing is new.
-   */
   mountDiscovered(providerId: MemoryProviderId, service: MemoryProviderConnection, discovered: readonly ProviderMemorySpace[]): { added: MemorySpace[]; disconnected: number } {
     this.refreshIfChanged()
     if (this.isNative(providerId)) throw new Error('Mnemon Native Stores are discovered from disk')
     const current = this.services[providerId]
     if (current === undefined || !this.providerServiceEnabled(providerId)
       || canonicalJson(current) !== canonicalJson(this.providerCatalog.normalizeService(providerId, service))) return { added: [], disconnected: 0 }
-    // Compared with what was held before this answer, so the order of the answer never matters.
     const held: DisconnectedNamespace[] = this.spaces.filter(body => body.providerId === providerId)
       .map(body => ({ ...(body.externalId === undefined ? {} : { externalId: body.externalId }), ...(body.connection === undefined ? {} : { connection: body.connection }) }))
     const disconnected = this.disconnected[providerId] ?? []
@@ -545,7 +472,6 @@ export class MemorySpaceRegistry {
     return { added: added.map(body => this.view(body)), disconnected: stillDisconnected }
   }
 
-  /** The namespaces in one Provider answer this directory could hold; the others are left out. */
   private reportedNamespaces(providerId: MemoryProviderId, service: MemoryProviderConnection, discovered: readonly ProviderMemorySpace[]): ReportedNamespace[] {
     const reported = discovered.flatMap((candidate): ReportedNamespace[] => {
       try {
@@ -574,11 +500,6 @@ export class MemorySpaceRegistry {
     return reported
   }
 
-  /**
-   * What names a namespace in a space's own settings: each text, address or path set for it. A
-   * wildcard (`*`) names nothing, and neither does a choice, a switch, a number such as a recall
-   * budget or a trust floor, or a secret.
-   */
   private namespaceIdentity(providerId: MemoryProviderId, connection: MemoryProviderConnection | undefined): Record<string, string> | undefined {
     if (connection === undefined) return undefined
     const identity: Record<string, string> = {}
@@ -593,7 +514,6 @@ export class MemorySpaceRegistry {
     return Object.keys(identity).length === 0 ? undefined : identity
   }
 
-  /** A whole connection, defaults filled in; one whose own part is empty compares by externalId alone. */
   private wholeConnection(providerId: MemoryProviderId, service: MemoryProviderConnection, memory: MemoryProviderConnection | undefined): string | undefined {
     if (memory === undefined || Object.keys(memory).length === 0) return undefined
     try {
@@ -603,13 +523,6 @@ export class MemorySpaceRegistry {
     }
   }
 
-  /**
-   * Whether `held`, a mounted space or a namespace a person disconnected, already reads the
-   * namespace a Provider reported: the same externalId, or every setting that names the namespace,
-   * whatever else differs; a `*` held reads every value. A hand-made Hindsight space for bank
-   * `team` with another recall budget reads bank `team`; a Honcho space for one peer of workspace
-   * `w1` reads workspace `w1`. Asking again only adds what nothing here reads yet.
-   */
   private holds(providerId: MemoryProviderId, service: MemoryProviderConnection, held: DisconnectedNamespace, reported: ReportedNamespace): boolean {
     if (held.externalId !== undefined && held.externalId === reported.externalId) return true
     if (!reported.distinct || held.connection === undefined) return false
@@ -623,7 +536,6 @@ export class MemorySpaceRegistry {
     return reported.whole !== undefined && this.wholeConnection(providerId, service, held.connection) === reported.whole
   }
 
-  /** Remember a namespace a person disconnected, so asking its Provider again leaves it out. */
   private rememberDisconnected(providerId: MemoryProviderId, body: StoredMemorySpace): void {
     const connection = body.connection === undefined ? {} : this.providerCatalog.publicScoped(providerId, 'memory', body.connection).settings
     const entry: DisconnectedNamespace = { ...(body.externalId === undefined ? {} : { externalId: body.externalId }), ...(Object.keys(connection).length === 0 ? {} : { connection }) }
@@ -633,7 +545,6 @@ export class MemorySpaceRegistry {
     this.saveDisconnects()
   }
 
-  /** Forget the disconnected namespaces a save of the Provider's settings mounted again. */
   private forgetDisconnected(providerId: MemoryProviderId, reported: readonly ReportedNamespace[]): void {
     const remembered = this.disconnected[providerId]
     if (remembered === undefined) return
@@ -774,7 +685,6 @@ export class MemorySpaceRegistry {
     return this.view(body)
   }
 
-  /** Validate every model-authored update before committing the batch. */
   updateMetadata(updates: readonly MemorySpaceMetadataUpdate[]): MemorySpace[] {
     this.refreshIfChanged()
     if (updates.length === 0 || updates.length > 20) throw new Error('metadata maintenance requires 1 through 20 Memory Spaces')
@@ -807,7 +717,6 @@ export class MemorySpaceRegistry {
       const stored = this.spaces.find(entry => entry.id === body.id)
       this.spaces = this.spaces.filter(entry => entry.id !== body.id)
       this.save()
-      // A namespace disconnected here stays disconnected when its Provider is asked again.
       if (stored !== undefined) this.rememberDisconnected(body.provider.id, stored)
       return body
     }
@@ -833,8 +742,6 @@ export class MemorySpaceRegistry {
     }
     commands.push({
       args: ['store', 'remove', body.id],
-      // Mnemon treats --store as the active Store even for `store remove`.
-      // Keep the deletion target out of command context or every removal fails.
       options: { ...(signal === undefined ? {} : { signal }), store: commandStore },
     })
     await this.runner.runTextBatch(commands)
@@ -882,7 +789,6 @@ export class MemorySpaceRegistry {
     return updated.map(body => this.view(body))
   }
 
-  /** Advance the safe catalog checkpoint after provider-backed content changes. */
   touch(id: string): MemorySpace {
     const normalized = validateMemorySpaceId(id)
     const index = this.spaces.findIndex(body => body.id === normalized)
@@ -893,7 +799,6 @@ export class MemorySpaceRegistry {
     return this.view(body)
   }
 
-  /** Refresh metadata after an atomic Pack import replaced the data component. */
   reload(): void {
     this.refreshing = true
     try {
@@ -929,7 +834,6 @@ export class MemorySpaceRegistry {
     return stamps.join('/')
   }
 
-  /** Separate generations and legacy facades observe the same durable authority. */
   private refreshIfChanged(): void {
     if (!this.refreshing && this.persistent && this.state.diskRevision !== this.diskRevision()) this.reload()
   }
@@ -943,11 +847,6 @@ export class MemorySpaceRegistry {
         if ((parsed.version === NATIVE_REGISTRY_VERSION || parsed.version === 2) && Array.isArray(parsed.bodies)) {
           migratedProviderRegistry = parsed.version === 2
           this.spaces = parsed.bodies.filter(body => MEMORY_SPACE_ID_PATTERN.test(body.id)).map(body => {
-            // Earlier dsh-mnemon builds gave an already-existing upstream
-            // `default` Store a synthetic Chinese product name. That made a
-            // compatibility import look like a newly-created default Memory
-            // Space. Preserve the Store and its activation state, but restore
-            // its neutral on-disk identity.
             const syntheticDefault = body.id === 'default'
               && body.name === '默认记忆体'
               && body.description === '从现有 Mnemon Store 自动接入。'
@@ -993,7 +892,6 @@ export class MemorySpaceRegistry {
           })
         }
       } catch {
-        // Rebuild a valid catalog from native stores without touching their DBs.
         this.spaces = []
       }
     }
@@ -1062,7 +960,6 @@ export class MemorySpaceRegistry {
             }))
         }
       } catch {
-        // Ignore an invalid optional provider registry; native Stores remain usable.
       }
     }
     if (this.persistent && existsSync(this.disconnectsPath)) {
@@ -1075,7 +972,6 @@ export class MemorySpaceRegistry {
           }
         }
       } catch {
-        // An unreadable list remembers nothing; the next disconnect writes it again.
       }
     }
     const retainedBodies = this.spaces.filter(body => !this.providerCatalog.has(body.providerId)

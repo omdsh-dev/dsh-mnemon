@@ -3,7 +3,6 @@ import { MAX_SKILL_BYTES, type SkillInvocation } from './contracts.ts'
 
 export { MAX_SKILL_BYTES } from './contracts.ts'
 
-/** DSH's skill name rule, shared by the registry and the filesystem provider. */
 export const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u
 export const MAX_SKILL_NAME = 64
 
@@ -38,10 +37,6 @@ function frontmatterBoolean(data: Record<string, unknown>, key: string): boolean
   throw new Error(`frontmatter field "${key}" must be a boolean`)
 }
 
-/**
- * Parse a skill the way DSH does, so the page never lists a file DSH would
- * skip as if it were loaded: the reason is returned instead.
- */
 export function parseSkill(raw: string): { skill: ParsedSkill } | { problem: string } {
   let split: SplitSkill | undefined
   let data: unknown
@@ -80,16 +75,11 @@ export function parseSkill(raw: string): { skill: ParsedSkill } | { problem: str
   }
 }
 
-// Keys are DSH frontmatter names: letters, digits and hyphens, so nothing needs escaping.
 const KEY_LINE = (key: string) => {
   if (!/^[A-Za-z0-9-]+$/u.test(key)) throw new Error('unsupported frontmatter key: ' + key)
   return new RegExp(`^${key}\\s*:.*(?:\\r?\\n|$)`, 'mu')
 }
 
-/**
- * Set or remove one top-level scalar key in the frontmatter and keep every
- * other byte of the file. Removing restores DSH's default for that key.
- */
 export function setFrontmatterKey(raw: string, key: string, value: string | undefined): string {
   const split = splitFrontmatter(raw)
   if (split === undefined) throw new Error('the skill has no YAML frontmatter')
@@ -104,13 +94,11 @@ export function setFrontmatterKey(raw: string, key: string, value: string | unde
   return before + block + after
 }
 
-/** Write DSH's two invocation switches, leaving each key out when it holds DSH's default. */
 export function withInvocation(raw: string, invocation: SkillInvocation): string {
   const model = setFrontmatterKey(raw, 'disable-model-invocation', invocation.modelInvocable ? undefined : 'true')
   return setFrontmatterKey(model, 'user-invocable', invocation.userInvocable ? undefined : 'false')
 }
 
-/** Validate content about to be written as one skill named `name`. */
 export function validateSkillContent(content: string, name: string): ParsedSkill {
   const bytes = Buffer.byteLength(content, 'utf8')
   if (bytes > MAX_SKILL_BYTES) throw new Error(`SKILL.md is too large (max ${MAX_SKILL_BYTES} bytes); got ${bytes} UTF-8 bytes. For a bundle, move detailed examples/tables into references/ and link them from SKILL.md. For a single .md skill, shorten it in place without adding supporting files. Preserve required steps and information.`)
@@ -120,7 +108,6 @@ export function validateSkillContent(content: string, name: string): ParsedSkill
   return parsed.skill
 }
 
-/** A starting SKILL.md for a new skill, in DSH's format. */
 export function skillTemplate(name: string, description: string, body = ''): string {
   const quoted = JSON.stringify(description.replace(/\s+/gu, ' ').trim())
   const rest = body.trim() === '' ? `# ${name}\n\n## Steps\n1. The first thing to do, with the exact command or tool.\n\n## Pitfalls\n- What tends to go wrong, and how to avoid it.\n\n## Verification\n- How to confirm the result is right.\n` : body.trimStart()

@@ -32,18 +32,15 @@ import {
   SOURCES,
   isNativeProvider,
   normalizeEntityKey,
-  type Category,
   type CreateMemorySpaceRequest,
   type EdgeType,
   type EntityMemoriesView,
   type EntityRelatedView,
   type EntityView,
   type Insight,
-  type Intent,
   type LlmMemoryPlacementSelection,
   type MemorySpace,
   type MemorySpaceCatalog,
-  type MemorySpaceStats,
   type MemorySpaceMetadataSample,
   type MemorySpaceMetadataUpdate,
   type MemorySpaceRediscovery,
@@ -58,7 +55,6 @@ import {
   type MnemonEmbeddingSpaceStatus,
   type MnemonEmbeddingStatus,
   type MemoryPlacementDecision,
-  type MemoryProviderDescriptor,
   type MemoryReadMode,
   type MemoryReadSource,
   type MemoryReadStatus,
@@ -66,7 +62,6 @@ import {
   type RememberRequest,
   type RecallQualityStats,
   type SearchRequest,
-  type Source,
   type UpdateMemorySpaceRequest,
   type MemorySpacesStatus as StatusView,
 } from './contracts.ts'
@@ -76,11 +71,6 @@ interface PreparedRemember {
   request: RememberRequest
 }
 
-/**
- * Providers whose native search is a single bounded request while their browse
- * projection fans out to multiple resources or collections. Prefer search for
- * metadata sampling so AI maintenance never pays for a detailed projection.
- */
 const METADATA_SEARCH_FIRST_PROVIDERS = new Set<MemorySpace['provider']['id']>([
   'openviking',
   'supermemory',
@@ -101,34 +91,17 @@ function number(value: JsonValue | undefined): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
-function stringArray(value: JsonValue | undefined): string[] | undefined {
-  if (!Array.isArray(value)) return undefined
-  return value.filter((entry): entry is string => typeof entry === 'string')
-}
-
-/**
- * How long a selection reuses the Provider health its index was checked with.
- * The rail always checks again; a write through this Source drops both at once.
- */
 const ENTITY_SELECTION_STATUS_REUSE_MS = 10_000
-/** How long an index that statistics cannot check is reused; a write through this Source still drops it. */
 const ENTITY_INDEX_UNCHECKED_REUSE_MS = 10_000
 
-/** How long one Provider may take to list its namespaces when they are asked for again. */
 export const MEMORY_SPACES_REDISCOVERY_PROVIDER_TIMEOUT_MS = 30_000
 export const MAX_REMEMBER_CONTENT_LENGTH = 8 * 1024
 
-/**
- * Rediscovery per data directory, shared by every generation in this process: the pass now
- * running, which a second request joins, and the last one, which the Memory Spaces page shows.
- */
 const rediscoveries = new Map<string, { running?: Promise<MemorySpaceRediscovery>; last?: MemorySpaceRediscovery }>()
 const activeServiceCounts = new Map<string, number>()
 
-/** Settle with `work`, or reject once `signal` aborts, whichever comes first. */
 function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) {
-    // Nobody waits for `work` now, however it ends.
     work.catch(() => {})
     return Promise.reject(signal.reason)
   }
@@ -142,7 +115,6 @@ function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
 interface EntityIndexRead {
   byBody: Map<string, SpaceEntityIndex>
   indexes: SpaceEntityIndex[]
-  /** Healthy entity spaces related recall can query, indexed or query-only. */
   readable: MemorySpace[]
   sources: MemoryReadSource[]
   complete: boolean
@@ -150,7 +122,6 @@ interface EntityIndexRead {
 
 interface CachedEntityIndex {
   fingerprint: string | undefined
-  /** When the read finished; undefined while it runs. */
   settledAt: number | undefined
   index: Promise<SpaceEntityIndex>
 }
@@ -165,11 +136,6 @@ function memoryKey(memoryBodyId: string, id: string): string {
   return `${memoryBodyId}\u0000${id}`
 }
 
-/**
- * What must stay the same for a space's entity index to stay valid: its
- * Provider statistics (Mnemon counts every write in its operation log) and the
- * Source's own record of the space. Without statistics it cannot be checked.
- */
 function entityIndexFingerprint(body: MemorySpace, status: ProviderSpaceStatus): string | undefined {
   const stats = status.stats
   if (stats === undefined) return undefined
@@ -214,11 +180,6 @@ function normalizedExactText(value: string): string {
     .replace(/\s+/gu, '')
 }
 
-/**
- * Extract only high-information lexical values that a semantic paraphrase
- * should not be allowed to erase. This is a deterministic fallback inside an
- * already-authorized search, not another Recall trigger or model decision.
- */
 function exactSearchAnchorPlan(query: string): NativeSearchRecoveryPlan | undefined {
   const anchors = [...new Set([...query.matchAll(EXACT_SEARCH_ANCHOR)].map(match => normalizedExactText(match[0])))]
     .slice(0, MAX_EXACT_SEARCH_ANCHORS)
@@ -267,7 +228,6 @@ function mergeRecoveryResults(
   }).slice(0, limit)
 }
 
-/** Put query-covering evidence first before the smaller model envelope runs. */
 function prioritizeRecoveryEvidence(
   selected: readonly EvaluatedRecallQualityCandidate[],
   plan: NativeSearchRecoveryPlan,
@@ -343,7 +303,6 @@ const PENDING_MUTATION_STATES = new Set([
 const FAILED_MUTATION_STATES = new Set(['canceled', 'cancelled', 'error', 'failed'])
 const COMMITTED_MUTATION_COUNTS = ['created', 'deleted', 'edges_inserted', 'imported', 'removed', 'stored', 'updated'] as const
 
-/** Source-private translation of Provider receipts; Core does not interpret Provider payloads. */
 export function mutationResultCompletion(result: unknown): MemoryMutationCompletion {
   if (typeof result !== 'object' || result === null || Array.isArray(result)) return 'unknown'
   const value = result as Record<string, unknown>
@@ -358,7 +317,6 @@ export function mutationResultCompletion(result: unknown): MemoryMutationComplet
   if (states.some(state => PENDING_MUTATION_STATES.has(state))) return 'accepted'
   if (value.committed === false || value.durable === false || states.includes('skipped')) return 'unknown'
   if (value.committed === true || value.durable === true || states.some(state => COMMITTED_MUTATION_STATES.has(state)) || changed) return 'committed'
-  // A successful HTTP request or an id alone does not prove memory persistence.
   return 'unknown'
 }
 
@@ -366,17 +324,10 @@ export function mutationResultCommitted(result: unknown): boolean {
   return mutationResultCompletion(result) === 'committed'
 }
 
-/** One `mnemon embed --status` answer, strictly validated. */
 function embeddingCounts(value: JsonValue, requireModelProbe = false): MnemonEmbeddingStatus {
   const output = record(value)
-  // Since Mnemon 0.2.13, embedding_available verifies the selected model.
-  // ollama_available only reports provider reachability. Legacy fallback is
-  // useful for backfill counts, but must never certify a model in Test status.
   const available = requireModelProbe ? output?.embedding_available : output?.embedding_available ?? output?.ollama_available
   const model = text(output?.model)?.trim()
-  // Mnemon may report the endpoint protocol it resolved; older binaries
-  // omit the field, so a missing or malformed value is dropped instead of
-  // failing the whole status probe.
   const protocol = text(output?.protocol)?.trim()
   const totalInsights = number(output?.total_insights)
   const embedded = number(output?.embedded)
@@ -392,22 +343,18 @@ function embeddingCounts(value: JsonValue, requireModelProbe = false): MnemonEmb
   return { available, model, totalInsights: totalInsights!, embedded: embedded!, coverage, ...(validProtocol ? { protocol } : {}) }
 }
 
-/** How long one fill of a space's vectors may run, and the longest step of it that holds the storage lock (#392). */
 const EMBED_FILL_BUDGET_MS = 60_000
 const EMBED_FILL_STEP_MS = 10_000
 
-/** A whole percent, as Mnemon writes it, that reads 100% only when every memory has its vector. */
 function coveragePercent(embedded: number, total: number): string {
   return total === 0 ? '0%' : `${Math.floor(embedded * 100 / total)}%`
 }
 
-/** Mnemon's reason for a failed call, without the usage it prints after its `Error:` line. */
 function cliReason(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
   return /\bError: ([^\n]+)/u.exec(detail)?.[1]?.trim() ?? detail.split('\n')[0]!.trim()
 }
 
-/** Whether a CLI call failed for this cause. */
 function cliFailure(error: unknown, reason: MnemonCliError['reason']): boolean {
   return error instanceof MnemonCliError && error.reason === reason
 }
@@ -417,17 +364,12 @@ export class MemorySpacesService {
   private readonly providers: Map<MemorySpace['provider']['id'], MemoryProviderAdapter>
   private readonly recallQualityPolicy: RecallQualityPolicy
   private spacesInFlight: Promise<MemorySpaceCatalog> | undefined
-  /** One entity index per active entity space, valid while its fingerprint holds. */
   private readonly entityIndexCache = new Map<string, CachedEntityIndex>()
-  /** settledAt stays undefined while the read runs, which every caller shares. */
   private readonly entityStatusCache = new Map<string, { settledAt: number | undefined; status: Promise<ProviderSpaceStatus> }>()
-  /** The related read each page view is waiting for; a newer selection cancels the older one. */
   private readonly entityRelatedViews = new Map<string, AbortController>()
   private providersDisposed = false
-  /** The CLI version a full status last read, and the binary it read it from. */
   private cliVersion: { binary: string; version: string } | undefined
 
-  /** The CLI binary as the file system has it; another value after an update replaces it. */
   private cliBinary(): string | undefined {
     try {
       const stat = statSync(this.runner.command)
@@ -456,7 +398,7 @@ export class MemorySpacesService {
     readonly runner: MnemonRunner,
     readonly config: ResolvedConfig,
     memorySpaces?: MemorySpaceRegistry,
-    private readonly recallQualityPolicyRegistry: RecallQualityPolicyRegistry = recallQualityPolicies,
+    recallQualityPolicyRegistry: RecallQualityPolicyRegistry = recallQualityPolicies,
     providerAdapterRegistry: MemoryProviderAdapterRegistry = new MemoryProviderAdapterRegistry(),
     private readonly providerCatalog: MemoryProviderCatalog = EMPTY_MEMORY_PROVIDER_CATALOG,
   ) {
@@ -469,7 +411,6 @@ export class MemorySpacesService {
     activeServiceCounts.set(registryKey, (activeServiceCounts.get(registryKey) ?? 0) + 1)
   }
 
-  /** Release clients owned by one composable Memory Spaces generation. */
   async dispose(): Promise<void> {
     if (this.providersDisposed) return
     this.providersDisposed = true
@@ -506,7 +447,6 @@ export class MemorySpacesService {
     }
   }
 
-  /** Coalesce simultaneous Status/Memory-page probes without caching mutations. */
   private async collectSpaces(signal?: AbortSignal): Promise<MemorySpaceCatalog> {
     const directory = this.spaceDirectory()
     const items: MemorySpaceView[] = await Promise.all(directory.items.map(async body => {
@@ -567,7 +507,6 @@ export class MemorySpacesService {
     }
   }
 
-  /** Return the control-plane directory without waiting for provider I/O. */
   spaceDirectory(): MemorySpaceCatalog {
     return this.buildSpaceDirectory(this.metadataSnapshot())
   }
@@ -577,19 +516,15 @@ export class MemorySpacesService {
     return { running: entry?.running !== undefined, ...(entry?.last === undefined ? {} : { last: entry.last }) }
   }
 
-  /** Stable, secret-free checkpoint for the projected Memory Space authority. */
   memoryRevision(): string {
     return this.memoryState().revision
   }
 
-  /** One local metadata observation supplies membership and its revision. */
   memoryState(): { all: MemorySpace[]; active: MemorySpace[]; providerReady: boolean; revision: string } {
     const all = this.memorySpaces.list()
     const serviceItems = this.memorySpaces.providerServices().items
     const enabled = new Set(serviceItems.filter(service => service.enabled).map(service => service.providerId))
     const commandFound = this.runner.commandFound
-    // A Mnemon Native space takes part only while its CLI is found: without it,
-    // every read and write of that space fails (#336).
     const active = all.filter(body => body.active && (this.isNativeSpace(body) ? commandFound : enabled.has(body.provider.id)))
       .sort((left, right) => left.id.localeCompare(right.id))
     const spaces = [...all]
@@ -607,16 +542,13 @@ export class MemorySpacesService {
       .map(service => ({ providerId: service.providerId, enabled: service.enabled, configured: service.configured }))
       .sort((left, right) => left.providerId.localeCompare(right.providerId))
     const providerReady = this.providerCatalog.providers.some(provider => isNativeProvider(provider) ? commandFound : enabled.has(provider.id))
-    // The revision stays as it was while the CLI is found, so a working setup sees no change.
     const revision = createHash('sha256').update(JSON.stringify({ bodies: spaces, services, ...(commandFound ? {} : { nativeUnavailable: true }) })).digest('hex')
     return { all, active, providerReady, revision }
   }
 
-  /** Return a usable system snapshot without waiting for any Provider I/O. */
   statusSummary(): StatusView {
     const snapshot = this.metadataSnapshot()
     const catalog = this.buildSpaceDirectory(snapshot)
-    // Reuse the version a full status read while the same binary is installed.
     const version = this.cliVersion !== undefined && this.cliBinary() === this.cliVersion.binary ? this.cliVersion.version : undefined
     const active = catalog.items.filter(body => body.active && body.providerEnabled !== false)
     const dshActiveStores = active.map(body => body.id)
@@ -636,8 +568,6 @@ export class MemorySpacesService {
       }
     })
     return {
-      // Provider availability is projected below and must never make the
-      // dsh-mnemon engine itself appear disconnected.
       healthy: true,
       cliPath: this.runner.command,
       commandFound: snapshot.commandFound,
@@ -657,15 +587,7 @@ export class MemorySpacesService {
     }
   }
 
-  /**
-   * Probe Mnemon's embedding runtime, and count the vectors of every Mnemon Native space:
-   * `mnemon embed --status` counts only one Store, so a full count for it could read as the
-   * health of every space while another one lacked vectors (#392).
-   */
   async embeddingStatus(signal?: AbortSignal): Promise<MnemonEmbeddingStatus> {
-    // Older binaries use both availability fields for reachability, so field
-    // presence alone cannot prove model usability. Recheck the actual command
-    // on each explicit test, including after an update or rollback in place.
     const version = (await this.runner.runText(['--version'], { globalFlags: false, ...(signal === undefined ? {} : { signal }) })).trim()
     const match = /^(?:mnemon version\s+)?v?(\d+)\.(\d+)\.(\d+)(?:\+[0-9A-Za-z.-]+)?$/u.exec(version)
     const parts = match?.slice(1).map(Number)
@@ -673,7 +595,6 @@ export class MemorySpacesService {
       || !(parts[0]! > 0 || parts[1]! > 2 || (parts[1] === 2 && parts[2]! >= 13))) {
       throw new Error('Embedding model checks require Mnemon CLI 0.2.13 or newer. Update the configured CLI and test again.')
     }
-    // Mnemon creates the Store it opens, so a space whose database is missing is not read.
     const native = this.memorySpaces.list().filter(body => this.isNativeSpace(body) && existsSync(body.dbPath))
     let runtime: MnemonEmbeddingStatus | undefined
     const spaces: MnemonEmbeddingSpaceStatus[] = []
@@ -685,20 +606,17 @@ export class MemorySpacesService {
         spaces.push({ ...space, totalInsights: counts.totalInsights, embedded: counts.embedded, coverage: coveragePercent(counts.embedded, counts.totalInsights) })
       } catch (error) {
         if (signal?.aborted === true) throw error
-        // A space removed since the list was read has nothing left to count.
         if (cliFailure(error, 'no-database')) continue
         spaces.push({ ...space, totalInsights: 0, embedded: 0, coverage: '0%', error: cliReason(error) })
       }
     }
     runtime ??= await this.embeddingRuntime(signal)
-    // A space that could not be read stays out of the total, which the list then says.
     const counted = spaces.filter(space => space.error === undefined)
     const totalInsights = counted.reduce((sum, space) => sum + space.totalInsights, 0)
     const embedded = counted.reduce((sum, space) => sum + space.embedded, 0)
     return { ...runtime, totalInsights, embedded, coverage: coveragePercent(embedded, totalInsights), spaces }
   }
 
-  /** Mnemon's embedding runtime, asked in a scratch data directory: no space could be counted, and Mnemon creates the Store it opens. */
   private async embeddingRuntime(signal?: AbortSignal): Promise<MnemonEmbeddingStatus> {
     const directory = mkdtempSync(join(tmpdir(), 'dsh-mnemon-embedding-'))
     try {
@@ -710,13 +628,6 @@ export class MemorySpacesService {
     }
   }
 
-  /**
-   * Fill in the vectors a Mnemon Native space lacks, through the Host's own data directory and
-   * embedding settings, which a terminal `mnemon embed --all` may not share (#392). Mnemon fills at
-   * most 100 a call and keeps the vectors it wrote when a call is stopped, so the fill goes in steps
-   * no longer than one CLI call, letting other memory work take the storage lock between them,
-   * until none is missing, a step writes none, or a minute is up.
-   */
   async embedMissing(memoryBodyId: string, signal?: AbortSignal): Promise<MnemonEmbeddingFill> {
     this.assertWritable()
     const body = this.memorySpaces.get(validateMemorySpaceId(memoryBodyId))
@@ -740,7 +651,6 @@ export class MemorySpacesService {
       try {
         await this.runner.runText(['embed', '--all'], { ...options, timeoutMs: step })
       } catch (error) {
-        // A stopped step keeps the vectors it wrote; the count after it says how far it got.
         if (!cliFailure(error, 'timeout')) throw failed(error)
       }
       const next = await count()
@@ -756,7 +666,6 @@ export class MemorySpacesService {
   }
 
   async status(signal?: AbortSignal): Promise<StatusView> {
-    // Mnemon Native reports a version once its CLI is installed or one of its spaces exists.
     const initialCommandFound = this.runner.commandFound
     const nativeInUse = initialCommandFound || this.memorySpaces.list().some(body => this.isNativeSpace(body))
     let versionError: unknown
@@ -833,7 +742,6 @@ export class MemorySpacesService {
         topEntities: [...topEntities].map(([entity, count]) => ({ entity, count })).sort((left, right) => right.count - left.count),
         ...(active.length === 1 ? { dbPath: active[0]!.dbPath } : {}),
       }
-      // A missing or failing Mnemon CLI affects only its own spaces; other providers keep their stats.
       const errors = [
         ...(versionError === undefined ? [] : [versionError instanceof Error ? versionError.message : String(versionError)]),
         ...active.filter(body => !body.healthy).map(body => `${body.name}: ${body.error ?? 'unavailable'}`),
@@ -856,8 +764,6 @@ export class MemorySpacesService {
     if (!this.isNativeSpace(body)) {
       if (!this.memorySpaces.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled on the dsh-mnemon page under Plugins`)
     }
-    // Card-level reconnect is deliberately scoped to this projected namespace.
-    // Whole-service discovery only runs when its service is enabled or saved.
     const provider = this.providerFor(body)
     provider.invalidateStatus?.(body.id)
     this.invalidateEntityIndex(body.id)
@@ -870,7 +776,6 @@ export class MemorySpacesService {
     }
   }
 
-  /** exclude: memoryKey()s to leave out before the quality policy selects. */
   async search(request: SearchRequest, signal?: AbortSignal, options: { exclude?: ReadonlySet<string> } = {}): Promise<{ query: string; mode: string; results: Insight[]; hint?: string; sources: MemoryReadSource[] }> {
     const query = required(request.query, 'query', 2000)
     const limit = integer(request.limit, this.config.defaultRecallLimit, 1, 50)
@@ -966,8 +871,6 @@ export class MemorySpacesService {
             },
           }
         } catch {
-          // Deterministic Native recovery is an optional local fallback. The original
-          // successful result remains authoritative if it is unavailable.
           return batch
         }
       }))
@@ -985,7 +888,6 @@ export class MemorySpacesService {
       droppedLowScore: 0, droppedNonPositiveScore: 0, droppedInvalidScore: 0,
       unscored: 0, unscaled: 0,
     })
-    // Each candidate contributes once, rather than rescanning all candidates per space.
     for (const { candidate, decision } of quality.evaluated) {
       const stats = qualityStats.get(candidate.memoryBodyId)
       if (stats === undefined) continue
@@ -1022,11 +924,6 @@ export class MemorySpacesService {
     }
   }
 
-  /**
-   * Read a deliberately small metadata sample through the cheapest useful path
-   * exposed by the owning Provider. This avoids federated ranking, graph
-   * expansion, and large browse projections before an LLM metadata pass.
-   */
   async metadataSample(memoryBodyId: string, signal?: AbortSignal): Promise<MemorySpaceMetadataSample> {
     const body = this.readSpaces([memoryBodyId])[0]!
     const provider = this.providerFor(body)
@@ -1161,10 +1058,6 @@ export class MemorySpacesService {
     }
   }
 
-  /**
-   * The entities of the active spaces, each counted once per memory that
-   * carries it. With an entity, also the first page of those memories.
-   */
   async entities(entity?: string, limit?: number, signal?: AbortSignal): Promise<EntityView> {
     const selected = entity === undefined ? '' : entityName(entity)
     const read = await this.readEntityIndexes(signal, 0)
@@ -1181,7 +1074,6 @@ export class MemorySpacesService {
     return { ...view, selected: page.entity, insights: page.items }
   }
 
-  /** One page of the memories that carry an entity, by importance and then recency. */
   async entityMemories(entity: string, offset?: number, limit?: number, signal?: AbortSignal): Promise<EntityMemoriesView> {
     const selected = entityName(entity)
     if (selected === '') throw new Error('entity is required')
@@ -1189,15 +1081,9 @@ export class MemorySpacesService {
     return this.entityPage(read, selected, integer(offset, 0, 0, 1_000_000), integer(limit, 50, 1, 200))
   }
 
-  /**
-   * What recall relates to an entity, without the memories that carry it.
-   * Those are left out before the quality policy selects, so they cannot use up
-   * its places and leave the related list empty.
-   */
   async entityRelated(entity: string, limit?: number, signal?: AbortSignal, view?: string): Promise<EntityRelatedView> {
     const selected = entityName(entity)
     if (selected === '') throw new Error('entity is required')
-    // Recall queues behind the store lock; a view's newer selection should not wait for one it left.
     const superseding = view === undefined ? undefined : new AbortController()
     if (view !== undefined) {
       this.entityRelatedViews.get(view)?.abort(new Error('superseded by a newer entity selection'))
@@ -1212,7 +1098,6 @@ export class MemorySpacesService {
       const display = mergeEntityCounts(read.indexes).names.get(key) ?? selected
       const readableIds = read.readable.map(body => body.id)
       if (readableIds.length === 0) return { entity: display, items: [], sources: [] }
-      // The Entities page looks; it does not use what it shows.
       const result = await this.search(
         { query: selected, intent: 'ENTITY', limit: integer(limit, 20, 1, 50), memoryBodyIds: readableIds, inspect: true },
         combined,
@@ -1238,11 +1123,6 @@ export class MemorySpacesService {
     }
   }
 
-  /**
-   * One entity index per active space that has an entity index, read
-   * concurrently. A space keeps its index while its Provider statistics and
-   * metadata stay the same; a write through this Source drops it.
-   */
   private async readEntityIndexes(signal: AbortSignal | undefined, statusMaxAgeMs: number): Promise<EntityIndexRead> {
     signal?.throwIfAborted()
     const active = this.memorySpaces.active()
@@ -1256,7 +1136,6 @@ export class MemorySpacesService {
       if (!status.healthy) return { body, recall: false, source: readSource(body, 'entities', 'unavailable', 0, { hint: status.error ?? 'Provider unavailable.' }) }
       const recall = body.provider.capabilities.search
       if (this.providerFor(body).entityIndex === undefined && !body.provider.capabilities.browse) {
-        // Nothing to count from: its memories reach the page only through related recall.
         return { body, recall, source: readSource(body, 'query-only', 'query-required', 0, { hint: 'This provider can only be queried; its memories appear among related memories.' }) }
       }
       try {
@@ -1280,7 +1159,6 @@ export class MemorySpacesService {
     }
   }
 
-  /** Provider health for the entity reads: a read in flight is shared, a finished one reused for less than maxAgeMs. */
   private entitySpaceStatus(body: MemorySpace, maxAgeMs: number): Promise<ProviderSpaceStatus> {
     const recent = this.entityStatusCache.get(body.id)
     if (recent !== undefined && (recent.settledAt === undefined || Date.now() - recent.settledAt < maxAgeMs)) return recent.status
@@ -1299,7 +1177,6 @@ export class MemorySpacesService {
     const fingerprint = entityIndexFingerprint(body, status)
     const cached = this.entityIndexCache.get(body.id)
     if (cached !== undefined && cached.fingerprint === fingerprint) {
-      // Without statistics a finished index cannot be checked, so it is trusted only briefly.
       if (fingerprint !== undefined || cached.settledAt === undefined || Date.now() - cached.settledAt < ENTITY_INDEX_UNCHECKED_REUSE_MS) return cached.index
     }
     const entry: CachedEntityIndex = { fingerprint, settledAt: undefined, index: Promise.resolve(undefined as never) }
@@ -1324,7 +1201,6 @@ export class MemorySpacesService {
     return buildSpaceEntityIndex(listed.map(memory => this.entityMemory(memory, body)), listed.length, listed.length < ENTITY_INDEX_LIST_LIMIT)
   }
 
-  /** A listed memory, not a query result: no relevance fields. */
   private entityMemory(memory: Insight, body: MemorySpace): Insight {
     const {
       score: _score, normalizedScore: _normalized, relevanceTier: _tier, federatedScore: _federated,
@@ -1346,14 +1222,8 @@ export class MemorySpacesService {
     return this.annotateResult(result, prepared.body)
   }
 
-  /**
-   * Persist a host-authorized set of exact memories without involving a model
-   * in the data plane. Mnemon Native requests share one import per destination;
-   * other Providers retain their adapter-defined write semantics.
-   */
   async rememberMany(requests: readonly RememberRequest[], signal?: AbortSignal): Promise<JsonValue[]> {
     this.assertWritable()
-    // Preparation is synchronous. Share destination resolution only within this batch.
     const destinations = new Map<string, MemorySpace>()
     const prepared = requests.map(request => this.prepareRemember(request, destinations))
     const results = new Array<JsonValue>(prepared.length)
@@ -1394,10 +1264,6 @@ export class MemorySpacesService {
     return results
   }
 
-  /**
-   * The memories held under an exact id among the given spaces that can be
-   * read now, asked of the Providers that can look ids up.
-   */
   async locate(id: string, memoryBodyIds: readonly string[], signal?: AbortSignal): Promise<Insight[]> {
     const exact = required(id, 'id', 2000)
     const readable = new Map(this.memorySpaces.active()
@@ -1466,11 +1332,6 @@ export class MemorySpacesService {
     return await this.memorySpaces.create(request, signal, placement)
   }
 
-  /**
-   * Create a Memory Space from the configured distillation policy. The model
-   * may choose only among candidates already filtered by the host; manual mode
-   * ignores model preference and always uses the configured fixed provider.
-   */
   async createSpaceForPersistence(
     body: { name: string; description: string },
     selection: LlmMemoryPlacementSelection | undefined,
@@ -1503,7 +1364,6 @@ export class MemorySpacesService {
     return this.createSpace(request, signal, decision)
   }
 
-  /** A chosen provider stays fixed; the built-in default follows whichever provider is ready. */
   private persistenceProviderId(): MemorySpace['provider']['id'] | undefined {
     const strategy = this.config.persistenceStrategy
     return strategy.providerDefaulted === true ? this.memorySpaces.defaultProviderId() : strategy.providerId
@@ -1520,14 +1380,6 @@ export class MemorySpacesService {
     return this.memorySpaces.syncProviderService(providerId, connection, discovered)
   }
 
-  /**
-   * Ask every enabled Provider service again for its namespaces, as saving its settings does, and
-   * mount the ones this directory has never held, inactive (#373). Nothing mounted changes and a
-   * namespace a person disconnected stays disconnected. Providers are asked side by side, each
-   * for at most 30 seconds; one that cannot answer keeps its spaces and says why. A pass already
-   * running for this directory, at start-up or from the page, is joined rather than run twice; a
-   * request that joined one its starter then stopped asks again, unless it was stopped itself.
-   */
   async rediscoverProviders(trigger: MemorySpaceRediscovery['trigger'], signal?: AbortSignal, providerTimeoutMs = MEMORY_SPACES_REDISCOVERY_PROVIDER_TIMEOUT_MS): Promise<MemorySpaceRediscovery> {
     this.assertWritable()
     const key = this.memorySpaces.providerRegistryPath
@@ -1575,7 +1427,6 @@ export class MemorySpacesService {
       try {
         const connection = this.memorySpaces.resolveProviderService(item.providerId, {})
         const discovered = await untilAborted(provider.discover(connection, bounded), bounded)
-        // A pass cut short writes nothing more.
         signal?.throwIfAborted()
         const mounted = this.memorySpaces.mountDiscovered(item.providerId, connection, discovered)
         return { providerId: item.providerId, label, found: discovered.length, added: mounted.added.map(body => ({ id: body.id, name: body.name })), disconnected: mounted.disconnected }
@@ -1680,7 +1531,6 @@ export class MemorySpacesService {
     if (ids === undefined || ids.length === 0) return this.memorySpaces.active()
     const requested = [...new Set(ids.map(id => id.trim()).filter(id => id !== ''))]
     const available = new Map<string, MemorySpace>()
-    // One live catalog snapshot for the pinned read; preserve first-match lookup semantics.
     for (const body of this.memorySpaces.list()) if (!available.has(body.id)) available.set(body.id, body)
     return requested.map(id => {
       const normalized = validateMemorySpaceId(id)
@@ -1719,11 +1569,7 @@ export class MemorySpacesService {
     const key = request.memoryBodyId?.trim() ?? ''
     const body = destinations?.get(key) ?? this.writeSpace(request.memoryBodyId)
     destinations?.set(key, body)
-    // Runtime entries are capped at 8 KiB. Keep the service boundary large
-    // enough for the Host to archive any valid hot-memory entry byte-for-byte;
-    // the UI remains at its existing 8,000-character limit.
     const content = required(request.content, 'content', MAX_REMEMBER_CONTENT_LENGTH)
-    // Keep omission distinct from an explicit level so Provider defaults apply.
     const importance = request.importance === undefined ? undefined : integer(request.importance, 3, 1, 5)
     const category = allowed(request.category, CATEGORIES, 'category') ?? 'general'
     const source = allowed(request.source, SOURCES, 'source') ?? 'user'
@@ -1766,7 +1612,6 @@ export class MemorySpacesService {
   }
 
   private activateAfterWrite(body: MemorySpace, providerChanged: boolean): void {
-    // Even an unconfirmed write may have reached the Provider; rebuild the index on the next read.
     this.invalidateEntityIndex(body.id)
     if (!providerChanged) return
     if (!body.active) this.memorySpaces.setActive(body.id, true)

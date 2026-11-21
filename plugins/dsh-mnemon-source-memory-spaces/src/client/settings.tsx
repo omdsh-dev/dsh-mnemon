@@ -24,21 +24,12 @@ import { ProviderSettingsSection } from './provider-settings.tsx'
 import { memorySpacesSettingsClient } from './settings-client.ts'
 import { mergeProviderDefaults } from './widgets.tsx'
 
-/** The package these settings belong to, as Memory Spaces' plugin declaration names it. */
 const PACKAGE_NAME = 'dsh-mnemon-source-memory-spaces'
 
-/**
- * Whether dsh-mnemon yields the settings it keeps for Memory Spaces to these.
- * One that exports the priority it keeps them at promises both that they do
- * not collide with these and that it lends these `host`. dsh-mnemon 0.5.31 and
- * earlier draw them itself and lend nothing, so registering them there would
- * show a second, unworkable copy.
- */
 export function yieldsComponentSettings(client: { readonly MNEMON_COMPONENT_FALLBACK_PRIORITY?: unknown }): boolean {
   return typeof client.MNEMON_COMPONENT_FALLBACK_PRIORITY === 'number'
 }
 
-/** Memory Spaces' own settings on its page under Plugins: its Providers and the embedding Mnemon Native reads. */
 export function installMemorySpacesSettings(ctx: MemoryComponentUIContext & { locale?: DshLocale | undefined }): () => void {
   const { locale } = ctx
   return installMemoryComponentUI(ctx, { packageName: PACKAGE_NAME, settings: props => <MemorySpacesSettings {...props} {...(locale === undefined ? {} : { locale })} /> })
@@ -51,7 +42,6 @@ function isRecallPolicyId(value: string | undefined): value is RecallPolicyId {
   return value !== undefined && (RECALL_POLICY_IDS as readonly string[]).includes(value)
 }
 
-/** The configuration keys these settings read, as dsh-mnemon lends them. */
 interface SpacesConfiguration {
   embedding?: MnemonEmbeddingSettingsView
   persistenceStrategy?: MemoryPersistenceStrategy
@@ -68,7 +58,6 @@ interface SpacesConfiguration {
   writeEnabled?: boolean
 }
 
-/** The embedding connection DSH manages for Mnemon Native. */
 interface EmbeddingDraft {
   endpoint: string
   model: string
@@ -164,7 +153,6 @@ function recallProblem(draft: RecallDraft, t: Translate): string | null {
   return null
 }
 
-/** The stored value: a switched-off override keeps only the fields that are valid. */
 function embeddingValue(enabled: boolean, draft: EmbeddingDraft, secure: boolean, legacyKey = ''): MemoryJsonValue {
   const auth = secure ? { apiKey: draft.apiKey.trim(), apiKeyEnv: draft.apiKeyEnv.trim(), ...(draft.clearApiKey ? { clearApiKey: true } : {}) } : { apiKey: legacyKey }
   const endpoint = draft.endpoint.trim().replace(/\/+$/u, '')
@@ -178,13 +166,6 @@ function embeddingValue(enabled: boolean, draft: EmbeddingDraft, secure: boolean
   }
 }
 
-/**
- * Memory Spaces' own settings: the Providers that store its spaces, Mnemon
- * Native first with the embedding runtime only Native reads, default Space
- * placement policy, and recall/timeout parameters. They need what dsh-mnemon
- * lends them; without it they show nothing. With DSH's language service they
- * translate as dsh-mnemon drew them, through its language chain.
- */
 export function MemorySpacesSettings(props: MemoryComponentSettingsProps & { locale?: DshLocale | undefined }): ReactNode {
   if (props.host === undefined) return null
   return <MemorySourcePageFrame locale={props.language}>
@@ -197,7 +178,6 @@ const noLocaleChanges = (): (() => void) => () => {}
 function SettingsTranslation(props: { locale: DshLocale | undefined; language: string; children: ReactNode }): JSX.Element {
   const { locale, language } = props
   const subscribe = useCallback((listener: () => void) => locale?.subscribe?.(listener) ?? noLocaleChanges(), [locale])
-  // The chain as text, so a changed snapshot that keeps the chain renders nothing again.
   const getChain = useCallback(() => {
     const snapshot = locale?.getSnapshot?.()
     return snapshot === undefined ? '' : languageChain(snapshot).join('\n')
@@ -207,15 +187,11 @@ function SettingsTranslation(props: { locale: DshLocale | undefined; language: s
   return <SourceTranslation value={translate}>{props.children}</SourceTranslation>
 }
 
-// Whether the Host found the Mnemon CLI, in the host's retained store under a name every Memory Spaces version
-// reads alike. It is kept only while a mount lasts, for the mount that replaces it.
 const RETAINED_CLI = 'status-summary'
 const RETAINED_PROVIDERS = 'provider-services'
 
 function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; host: MemoryComponentHost }): JSX.Element {
   const t = useT()
-  // Read where it is drawn: a dsh-mnemon without this export (0.5.31) never draws these settings, and this
-  // bundle's pages must still load beside it.
   const css = memorySettingsStyles
   const { configuration, retained } = host
   const snapshot = useSyncExternalStore(configuration.subscribe, configuration.getSnapshot, configuration.getSnapshot)
@@ -226,12 +202,9 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
   const legacy = value?.embedding?.apiKeyStorage === 'legacy'
   const connectionValue = (enabled: boolean, draft: EmbeddingDraft) => embeddingValue(enabled, draft, secure, value?.embedding?.apiKey)
   const managedSaved = value?.embedding?.enabled === true
-  // Whether DSH manages the embedding is a switch: it applies at once, with the saved connection.
   const managed = useLive(managedSaved, async enabled => { await configuration.set('embedding', connectionValue(enabled, saved)) })
-  // The connection is typed, so it waits for its Apply.
   const form = useStaged(saved, async draft => {
     await configuration.set('embedding', connectionValue(managedSaved, draft))
-    // A saved key is write-only; never leave it in the staged editor after success.
     form.edit({ apiKey: '', clearApiKey: false })
   })
   const [nativeCliFound, setNativeCliFound] = useState<boolean | undefined>(() => (retained.get(RETAINED_CLI) as { commandFound?: boolean } | undefined)?.commandFound)
@@ -248,7 +221,6 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
     if (page.section === 'recall') setRecallOpen(true)
   }, [page.section])
   const on = page.component.enabled
-  // As dsh-mnemon's isWorkspaceStorageScope, which lives in its Host protocol, outside its public client.
   const activeScope = value?.storageScope === 'workspace' || value?.storageScope === 'workspaces' ? 'workspace' : 'global'
   const workspaceIdentity = activeScope === 'workspace'
     ? ((page.workspace as { id?: string; path?: string; label?: string } | undefined)?.id
@@ -337,7 +309,6 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
     return () => { current = false }
   }, [activeScope, client, on, retained, workspaceIdentity])
 
-  // A page opened again finds out anew, as it always has; only a mount that replaces this one starts from it.
   useEffect(() => () => {
     retained.delete(RETAINED_CLI)
   }, [retained])
@@ -348,21 +319,18 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
     setFill(undefined)
   }, [activeScope, client, embeddingSignature, on, workspaceIdentity])
 
-  // Providers are read only while their Source runs; the page's switch turns it on.
   if (!on) return <p className={css.panelNote}>{t('spaces.offNote')}</p>
 
   const test = (): void => {
     if (client === undefined) return
     const request = statusRequest.current + 1
     statusRequest.current = request
-    // The list stays while it is counted again, so a fill's refresh does not make it jump.
     setStatus(previous => ({ state: 'loading', ...(previous.value === undefined ? {} : { value: previous.value }) }))
     void client.embeddingStatus().then(
       value => { if (statusRequest.current === request) setStatus({ state: 'ready', value }) },
       reason => { if (statusRequest.current === request) setStatus({ state: 'error', error: message(reason) }) },
     )
   }
-  // A fill runs through the Host, with its data directory and embedding settings; the counts are read again after it.
   const fillSpace = (space: MnemonEmbeddingSpaceStatus): void => {
     if (client === undefined || fill?.state === 'running') return
     const target = { memoryBodyId: space.memoryBodyId, name: space.name }
@@ -481,10 +449,6 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
   </>
 }
 
-/**
- * Self-contained preference row & selector so Memory Spaces settings never
- * depend on post-0.5.46 `dsh-mnemon/client` exports when upgraded standalone.
- */
 function SpacesSettingRow(props: { title: string; titleId?: string | undefined; hint?: ReactNode; htmlFor?: string | undefined; children?: ReactNode }): JSX.Element {
   const title = props.htmlFor === undefined
     ? <strong id={props.titleId}>{props.title}</strong>
@@ -528,7 +492,6 @@ function SpacesSelectRow<T extends string>(props: {
   </SpacesSettingRow>
 }
 
-/** Mnemon Native, listed first among the Providers; its body holds the settings only Native reads. */
 function NativeProviderCard(props: { activeScope: 'global' | 'workspace'; cliMissing: boolean; t: Translate; children: ReactNode }): JSX.Element {
   const css = memorySettingsStyles
   return <details className={css.providerRow} data-provider={NATIVE_PROVIDER_ID} data-native="">
@@ -544,7 +507,6 @@ function NativeProviderCard(props: { activeScope: 'global' | 'workspace'; cliMis
   </details>
 }
 
-/** Selected-model usability and stored-vector coverage; the protocol appears only when the Host reports one. */
 function embeddingStatusText(t: Translate, status: MnemonEmbeddingStatus): string {
   const coverage = { embedded: status.embedded, total: status.totalInsights, coverage: status.coverage }
   return status.protocol === undefined
@@ -552,7 +514,6 @@ function embeddingStatusText(t: Translate, status: MnemonEmbeddingStatus): strin
     : t(status.available ? 'config.embeddingStatusAvailableWithProtocol' : 'config.embeddingStatusUnavailableWithProtocol', { model: status.model, protocol: status.protocol, ...coverage })
 }
 
-/** The embedding runtime: the switch applies at once; the connection fields, shown while DSH manages it, wait for Apply. */
 function EmbeddingEditor(props: {
   secure: boolean
   credentialSaved: boolean
@@ -560,11 +521,9 @@ function EmbeddingEditor(props: {
   draft: EmbeddingDraft
   disabled: boolean
   connectionAvailable: boolean
-  /** The test runs the Mnemon CLI, which only Mnemon Native needs. */
   cliMissing: boolean
   changing: boolean
   status: { state: 'idle' | 'loading' | 'ready' | 'error'; value?: MnemonEmbeddingStatus; error?: string }
-  /** Whether this page may fill in a space's vectors: it is writable and Mnemon takes writes. */
   canFill: boolean
   fill: EmbeddingFillState | undefined
   onFill: (space: MnemonEmbeddingSpaceStatus) => void
@@ -628,20 +587,13 @@ function EmbeddingEditor(props: {
   </section>
 }
 
-/** A fill of one space's vectors: running, done with what it did, or failed with its reason (#392). */
 type EmbeddingFillState = { memoryBodyId: string; name: string }
   & ({ state: 'running' } | { state: 'done'; result: MnemonEmbeddingFill } | { state: 'failed'; error: string })
 
-/**
- * Each Mnemon Native space's vectors under the status line. Mnemon counts one Store at a
- * time, so the total alone could read as every space's health while one lacked vectors (#392).
- * A space that lacks them can have them filled in here while the embedding service answers.
- */
 function EmbeddingSpaces(props: {
   spaces: readonly MnemonEmbeddingSpaceStatus[]
   available: boolean
   canFill: boolean
-  /** The counts are being read again; the list stays, its buttons wait. */
   counting: boolean
   fill: EmbeddingFillState | undefined
   onFill: (space: MnemonEmbeddingSpaceStatus) => void
@@ -671,7 +623,6 @@ function EmbeddingSpaces(props: {
   </div>
 }
 
-/** What the last fill did. It stays while the counts are read again, and reads as a failure when it wrote no vector. */
 function EmbeddingFillOutcome(props: { fill: EmbeddingFillState | undefined; t: Translate }): JSX.Element | null {
   const { fill, t } = props
   const css = memorySettingsStyles

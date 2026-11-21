@@ -1,4 +1,3 @@
-/** Memory Spaces-owned recall quality policy. */
 import type { Insight, MemoryProviderId, RecallRelevanceTier, ResolvedRecallQualityConfig } from '../contracts.ts'
 import type { ProviderScoreSemantics } from '../providers/adapter.ts'
 
@@ -39,7 +38,6 @@ export interface RecallQualityPolicyContext {
   config: ResolvedRecallQualityConfig
 }
 
-/** Pure, bounded policy applied before recall rows are serialized to an Agent. */
 export interface RecallQualityPolicy {
   readonly id: string
   candidateLimit(context: RecallQualityPolicyContext): number

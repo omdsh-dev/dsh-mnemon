@@ -1,23 +1,13 @@
 import { normalizeEntityKey, type Insight } from './contracts.ts'
 
-/**
- * The most memories one space's derived index asks list() for. Mnemon Native
- * lists a whole store; a Provider that stops earlier reports what it listed.
- */
 export const ENTITY_INDEX_LIST_LIMIT = 100_000
 
-/** The rail lists at most this many entities; the rest stay reachable by name. */
 export const ENTITY_RAIL_LIMIT = 5_000
 
-/** One Memory Space's entity index: its memories that carry entities. */
 export interface SpaceEntityIndex {
-  /** Memories with at least one entity, in the Provider's order. */
   memories: Insight[]
-  /** Normalized entity key to positions in memories, each memory once per key. */
   byKey: Map<string, number[]>
-  /** Normalized entity key to its spellings and how many memories use each. */
   spellings: Map<string, Map<string, number>>
-  /** Memories the index covers, with or without entities. */
   memoryCount: number
   complete: boolean
 }
@@ -50,7 +40,6 @@ export function buildSpaceEntityIndex(memories: readonly Insight[], memoryCount:
   return { memories: kept, byKey, spellings, memoryCount, complete }
 }
 
-/** The spelling most memories use; the first one seen wins a tie. */
 function preferredSpelling(names: ReadonlyMap<string, number>): string {
   let preferred = ''
   let most = 0
@@ -58,7 +47,6 @@ function preferredSpelling(names: ReadonlyMap<string, number>): string {
   return preferred
 }
 
-/** Merge per-space indexes into one entity list, most frequent first. */
 export function mergeEntityCounts(indexes: readonly SpaceEntityIndex[]): { items: Array<{ entity: string; count: number }>; names: Map<string, string> } {
   const counts = new Map<string, number>()
   const spellings = new Map<string, Map<string, number>>()
@@ -78,7 +66,6 @@ export function mergeEntityCounts(indexes: readonly SpaceEntityIndex[]): { items
   return { items, names }
 }
 
-/** Importance first, then the newest; the order Mnemon Native lists a store in. */
 export function compareEntityMemories(left: Insight, right: Insight): number {
   return (right.importance ?? 0) - (left.importance ?? 0)
     || (right.createdAt ?? '').localeCompare(left.createdAt ?? '')
@@ -86,7 +73,6 @@ export function compareEntityMemories(left: Insight, right: Insight): number {
     || left.id.localeCompare(right.id)
 }
 
-/** Every memory across the indexes that carries the entity key. */
 export function memoriesWithEntity(indexes: readonly SpaceEntityIndex[], key: string): Insight[] {
   const memories: Insight[] = []
   for (const index of indexes) for (const position of index.byKey.get(key) ?? []) memories.push(index.memories[position]!)

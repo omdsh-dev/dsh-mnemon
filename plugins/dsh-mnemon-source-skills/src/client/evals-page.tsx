@@ -10,32 +10,23 @@ import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
 
 interface Row {
   name: string
-  /** Cases a backtest runs; the switched-off ones are counted apart. */
   cases: number
   off: number
   description?: string
   lastScore?: number
   lastRunAt?: string
-  /** Cases can wait for a skill not written yet: one a suggestion proposes. */
   exists: boolean
 }
 
-/** A score's tone: good from 80, poor under 50. */
 export function scoreTone(score: number | undefined): 'good' | 'bad' | undefined {
   return score === undefined ? undefined : score >= 0.8 ? 'good' : score < 0.5 ? 'bad' : undefined
 }
 
-/**
- * Every skill's tests in one place: the skills with cases first, each with
- * its last score against the version DSH loads, and the ones a suggestion
- * proposes after them; on the right, the chosen skill's cases and backtests.
- */
 export function EvalsPage(props: { context: SkillsPageContext; location: SkillsLocation }): JSX.Element {
   const t = useT()
   const { context, location } = props
   const [catalog, setCatalog] = useState<CatalogView | null>(null)
   const [cases, setCases] = useState<EvalCase[]>([])
-  /** Skills a waiting suggestion proposes to create. */
   const [proposed, setProposed] = useState<ReadonlySet<string>>(new Set())
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<string | undefined>(location.skillName)
@@ -81,8 +72,6 @@ export function EvalsPage(props: { context: SkillsPageContext; location: SkillsL
   if (rows.length === 0) return <Empty glyph="✓" title={t('evals.empty')}>{t('evals.emptyBody')}</Empty>
   const current = activeRow!
   const currentCases = cases.filter(entry => entry.skillName === current.name)
-  // The pick for this skill, else the global one: a backtest runs on the first
-  // that is set, and on the task Agent's own route when neither is.
   const runOverride = Object.hasOwn(choice.preferences.skillRunModels, current.name) ? choice.preferences.skillRunModels[current.name]! : null
   const effectiveRunModel = runOverride ?? choice.preferences.runModel ?? null
   const saveSkillRun = (value: string) => choice.saveSkillRunModel(current.name, modelOptionPick(value))

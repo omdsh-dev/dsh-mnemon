@@ -21,7 +21,6 @@ function size(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-/** One field of a `SKILL.md` frontmatter, plain or folded, without a YAML parser in the page. */
 function frontmatterField(content: string, key: string): string | undefined {
   const split = splitFrontmatter(content)
   if (split === undefined) return undefined
@@ -40,7 +39,6 @@ function frontmatterField(content: string, key: string): string | undefined {
 const STATE_TONE = { installed: 'success', update: 'info', modified: 'warning', conflict: 'quiet', available: 'outline' } as const
 const SEARCH_DELAY_MS = 300
 
-/** The id a market skill is previewed and installed by: its index id when a search found it. */
 function itemKey(item: MarketItem): string {
   return item.source.type === 'indexed' ? item.source.id : item.name
 }
@@ -69,7 +67,6 @@ export function MarketPage(props: { context: SkillsPageContext; location: Skills
     void context.client.market().then(value => {
       if (!active) return
       setView(value)
-      // A source copy older than the refresh window is fetched once per visit.
       if (!refreshed.current && value.stale.length > 0 && context.writable) {
         refreshed.current = true
         setRefreshing(true)
@@ -80,7 +77,6 @@ export function MarketPage(props: { context: SkillsPageContext; location: Skills
   }, [context.client, context.revision])
   const needle = query.trim()
   const index = view?.registries.find(registry => registry.kind === 'search' && registry.enabled)
-  // The search index answers as the user types, a moment after they stop.
   useEffect(() => {
     if (needle.length < 2 || index === undefined) { setRemote({ query: '', loading: false }); return }
     let active = true
@@ -97,7 +93,6 @@ export function MarketPage(props: { context: SkillsPageContext; location: Skills
     return (view?.items ?? []).filter(item => (category === '' || item.category === category)
       && (lower === '' || [item.name, text(item.title, language), text(item.description, language), item.author ?? ''].some(value => value.toLowerCase().includes(lower))))
   }, [view, needle, category, language])
-  // A pasted repository, URL or path can become a source right from the search box.
   const detected = useMemo(() => {
     const found = detectSource(query)
     if (found === undefined || (found.kind !== 'github' && !/^(?:https?:\/\/|\/|[A-Za-z]:[\\/])/u.test(needle))) return undefined
@@ -159,7 +154,6 @@ export function MarketPage(props: { context: SkillsPageContext; location: Skills
   </div>
 }
 
-/** One skill of the market: what it is, where it comes from, and installing it or its state. */
 function MarketCard(props: { item: MarketItem; position: number; language: string; writable: boolean; footnote: string | undefined; onOpen: () => void }): JSX.Element {
   const t = useT()
   const { item } = props
@@ -184,7 +178,6 @@ function MarketCard(props: { item: MarketItem; position: number; language: strin
   </article>
 }
 
-/** Reviewers' verdicts on a skill, worst first, each a dot and the reviewer's name. */
 function Audits(props: { audits: readonly MarketAudit[] }): JSX.Element | null {
   const t = useT()
   if (props.audits.length === 0) return null
@@ -286,7 +279,6 @@ function SourceIcon(props: { kind: DetectedSource['kind'] | MarketRegistry['kind
   return <span className={css.skSourceIcon} aria-hidden="true">{KIND_ICON[props.kind](16)}</span>
 }
 
-/** How the page names a source: the built-in ones by role, the rest by what they call themselves, else where they live. */
 function sourceName(registry: MarketRegistry | undefined, language: string, t: SkillsTranslate): string {
   if (registry === undefined) return ''
   if (registry.kind === 'search') return 'skills.sh'
@@ -294,7 +286,6 @@ function sourceName(registry: MarketRegistry | undefined, language: string, t: S
   return text(registry.name, language) || registry.location.replace(/^https?:\/\/(?:github\.com\/)?/u, '')
 }
 
-/** One line on a source: what kind it is, how many skills, how fresh; or why it failed. */
 function sourceMeta(t: SkillsTranslate, registry: MarketRegistry): string {
   if (registry.kind === 'search') return t('sources.searchMeta')
   return [
@@ -304,11 +295,6 @@ function sourceMeta(t: SkillsTranslate, registry: MarketRegistry): string {
   ].join(' · ')
 }
 
-/**
- * The market's sources: the built-in catalog and search index, and the ones
- * added — each with a switch, refreshed or removed from its menu — and one
- * field that adds a repository, a site or a JSON file, saying what it read.
- */
 function SourcesDialog(props: { context: SkillsPageContext; view: MarketView; onClose: () => void }): JSX.Element {
   const t = useT()
   const language = useLocale()

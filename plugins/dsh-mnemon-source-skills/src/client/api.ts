@@ -16,7 +16,6 @@ export interface CaseDraft {
   enabled?: boolean
 }
 
-/** Everything the Skills page asks of its Source and of the Host's assistance. */
 export interface SkillsPageClient {
   overview(): Promise<SkillsOverview>
   catalog(): Promise<CatalogView>
@@ -37,49 +36,34 @@ export interface SkillsPageClient {
   saveSkill(key: string, content: string, expectedHash: string): Promise<SkillSummary>
   setInvocation(key: string, invocation: { modelInvocable: boolean; userInvocable: boolean }, expectedHash: string): Promise<SkillSummary>
   deleteSkill(key: string, expectedHash: string): Promise<{ trashedTo: string }>
-  /** Removed skills waiting in the Trash, newest first. */
   trash(): Promise<TrashEntry[]>
-  /** Put a removed skill back; a new root moves it out of the one it came from. */
   previewTrashRestore(input: TrashRestoreInput): Promise<TrashRestorePreview>
   restoreTrash(input: TrashRestoreInput): Promise<{ key: string; path: string }>
-  /** Delete a Trash entry for good. */
   purgeTrash(id: string): Promise<{ purged: string }>
-  /** Delete everything waiting in the Trash. */
   emptyTrash(): Promise<{ purged: number }>
   restoreVersion(key: string, versionId: string, expectedHash: string): Promise<SkillSummary>
   dismissSuggestion(id: string): Promise<SkillSuggestion>
-  /** Delete a waiting suggestion and any draft written for it. */
   deleteSuggestion(id: string): Promise<{ deleted: string }>
-  /** Delete a draft; its suggestion goes back to waiting. */
   deleteDraft(id: string): Promise<{ deleted: string }>
   pinTrajectory(id: string, pinned: boolean): Promise<TrajectorySummary>
   deleteTrajectory(id: string): Promise<{ deleted: string }>
   saveCase(input: CaseDraft): Promise<EvalCase>
   deleteCase(id: string): Promise<{ deleted: string }>
   updateDraft(id: string, content: string): Promise<SkillDraft>
-  /** Adopt a draft; a new skill goes to `root` when given. */
   adoptDraft(id: string, root?: SkillRootKind): Promise<{ skill: SkillSummary; version: SkillVersion }>
   discardDraft(id: string): Promise<SkillDraft>
-  /** Attach a baseline run to the draft it is compared with. */
   linkRun(draftId: string, runId: string): Promise<void>
   cancelRun(id: string): Promise<BacktestRun>
 
-  /** The model each piece of model work follows: the two global picks and their per-item overrides. */
   draftPreferences(): Promise<DraftPreferencesView>
-  /** Pick the model for drafts, for backtests, or for one suggestion or skill; `null` follows the task Agent again. */
   saveDraftModel(model: ModelRoute | null): Promise<DraftPreferencesView>
   saveSuggestionModel(id: string, model: ModelRoute | null): Promise<DraftPreferencesView>
   saveRunModel(model: ModelRoute | null): Promise<DraftPreferencesView>
   saveSkillRunModel(skillName: string, model: ModelRoute | null): Promise<DraftPreferencesView>
-  /**
-   * The routes and model directory a page may offer. Rejects when the Host
-   * offers none, which is also when the page hides its pickers.
-   */
   models(): Promise<TaskAgentModelCatalog>
 
   market(): Promise<MarketView>
   marketPreview(registryId: string, name: string): Promise<MarketPreview>
-  /** Search the search sources; the page filters the listed ones itself. */
   searchMarket(query: string): Promise<MarketSearchResult>
   refreshMarket(ids?: string[]): Promise<MarketRegistry[]>
   installMarket(input: { registryId: string; name: string; root?: SkillRootKind; overwrite?: boolean }): Promise<{ skill: SkillSummary; updated: boolean }>
@@ -87,16 +71,13 @@ export interface SkillsPageClient {
   removeRegistry(id: string): Promise<{ removed: string }>
   toggleRegistry(id: string, enabled: boolean): Promise<MarketRegistry>
 
-  /** Whether the Host offers a task Agent for this model work. */
   canAssist(operation: 'skill-draft' | 'skill-backtest' | 'skill-derive-cases' | 'skill-review-now'): boolean
   generateDraft(input: { suggestionId?: string; draftId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; backtest?: boolean; provider?: string; model?: string }): Promise<{ started: true }>
   backtest(input: { skillName: string; target: RunTarget; caseIds?: string[]; provider?: string; model?: string }): Promise<{ runId: string }>
   deriveCases(input: { trajectoryId: string; skillName: string; steps?: number[] }): Promise<{ added: EvalCase[]; skipped: number }>
   reviewNow(): Promise<ReviewRecordResult>
 
-  /** Clear cached static preferences when resuming from another window or manual refresh. */
   invalidatePreferences?(): void
-  /** Track read revisions across a poll wave so completion reconciles only when a card saw an older ledger (#448). */
   beginReadWave?(onLateStaleRead?: () => void): void
   markWaveIdleAndCheckStale?(): boolean
 }
@@ -118,11 +99,6 @@ function json(value: unknown): MemoryJsonValue {
 const CONFLICT = /revision conflict|Skills Source changed since it was read; reload/u
 const MAX_TRAJECTORY_CACHE = 64
 
-/**
- * The Source's revision is tracked from every read and mutation response so
- * writes use the cached revision immediately, fetching `'revision'` only when
- * uninitialized or retrying once on a concurrent background conflict.
- */
 export function skillsPageClient(management: MnemonSourceManagementClient): SkillsPageClient {
   let cachedRevision: string | undefined = typeof management.revision === 'string' && management.revision !== ''
     ? management.revision
@@ -237,8 +213,6 @@ export function skillsPageClient(management: MnemonSourceManagementClient): Skil
     trajectoryInFlight.delete(id)
   }
 
-  // Detail cards have no pickers of their own. Resolve their saved choice here
-  // too, while leaving explicit (including invalid partial) routes to the Host.
   const savedModel = async (slot: 'draft' | 'run', input: { provider?: string; model?: string; suggestionId?: string; skillName?: string }): Promise<ModelRoute | undefined> => {
     if (input.provider !== undefined || input.model !== undefined) return undefined
     const preferences = await readDraftPreferences()

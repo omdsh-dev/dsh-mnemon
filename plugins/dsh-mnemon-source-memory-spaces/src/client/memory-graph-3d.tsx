@@ -118,7 +118,6 @@ function sliceVisibleGraph(graph: MemoryGraphSnapshot, selectedId: string | unde
   return { nodes, edges, neighborIds: directNeighbors }
 }
 
-/** Compute deterministic 3D force-directed coordinates grouped around spherical category anchors. */
 export function compute3DLayout(nodes: readonly MemoryGraphNode[], edges: readonly MemoryGraphEdge[]): Map<string, Point3D> {
   const positions = new Map<string, Point3D>()
   if (nodes.length === 0) return positions
@@ -242,7 +241,6 @@ export function compute3DLayout(nodes: readonly MemoryGraphNode[], edges: readon
   return positions
 }
 
-/** Project one 3D point onto viewport screen space with perspective scaling. */
 export function project3DPoint(
   point: Point3D,
   camera: Camera3D,
@@ -254,17 +252,16 @@ export function project3DPoint(
   const cosP = Math.cos(camera.pitch)
   const sinP = Math.sin(camera.pitch)
 
-  const x1 = point.x * cosY - point.z * sinY
-  const z1 = point.x * sinY + point.z * cosY
-  const y2 = point.y * cosP - z1 * sinP
-  const z2 = point.y * sinP + z1 * cosP
-  const depth = camera.distance + z2
+  const yawX = point.x * cosY - point.z * sinY
+  const yawZ = point.x * sinY + point.z * cosY
+  const pitchY = point.y * cosP - yawZ * sinP
+  const pitchZ = point.y * sinP + yawZ * cosP
+  const depth = camera.distance + pitchZ
   if (depth <= 48) return undefined
   const scale = (FOCAL_LENGTH / depth) * (Math.min(width, height) / 520)
-  return { sx: width / 2 + x1 * scale, sy: height / 2 + y2 * scale, rz: z2, scale }
+  return { sx: width / 2 + yawX * scale, sy: height / 2 + pitchY * scale, rz: pitchZ, scale }
 }
 
-/** Hit-test projected 3D nodes front-to-back and return the top match. */
 export function pickProjectedNode(projected: readonly ProjectedNode[], x: number, y: number): MemoryGraphNode | undefined {
   for (let i = projected.length - 1; i >= 0; i--) {
     const item = projected[i]!
@@ -296,7 +293,6 @@ function readThemePalette(canvas: HTMLCanvasElement) {
 
 type ThemePalette = ReturnType<typeof readThemePalette>
 
-/** Zero-dependency interactive HTML5 2D-canvas 3D perspective renderer for multi-space memory graphs. */
 export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps): JSX.Element {
   const t = useT()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -385,7 +381,6 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps
       })
       .sort((a, b) => b.depth - a.depth)
 
-    // Single save/restore around the edge pass avoids 240+ context stack pushes per drag frame.
     ctx.save()
     let dashed = false
     for (const { edge, s, tgt, depth } of drawableEdges) {
@@ -490,7 +485,6 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps
       paletteRef.current = null
       drawRef.current()
     })
-    // DSH's ThemePresenter publishes its palette and token overrides on body.
     observer.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme', 'style'] })
     return () => observer.disconnect()
   }, [])
@@ -510,7 +504,6 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [])
 
-  // Camera controls update once per interaction, without an animation loop.
   const setCamera = (camera: Camera3D) => {
     cameraRef.current = camera
     drawRef.current()

@@ -12,7 +12,6 @@ export function validOrigin(key: string, origin: SkillOrigin): boolean {
     && (key.startsWith('project-') ? typeof origin.workspace === 'string' && isAbsolute(origin.workspace) : origin.workspace === undefined)
 }
 
-/** Old reviews kept their cwd in the cited trajectory, even before origins existed. */
 export function legacySuggestionWorkspace(ledger: LedgerFile, suggestion: SkillSuggestion): string | undefined {
   if (!suggestion.skillKey?.startsWith('project-')) return undefined
   const cited = new Set(suggestion.evidence.map(reference => reference.trajectoryId))
@@ -24,7 +23,6 @@ export function legacySuggestionWorkspace(ledger: LedgerFile, suggestion: SkillS
   return roots.size === 1 ? [...roots][0] : undefined
 }
 
-/** A name alone, or identical contents in another project, is not an identity. */
 export function sameSuggestionSkill(ledger: LedgerFile, suggestion: SkillSuggestion, catalog: SkillCatalog, skill: SkillSummary): boolean {
   if (suggestion.skillKey !== skill.key) return false
   if (suggestion.origin !== undefined) {

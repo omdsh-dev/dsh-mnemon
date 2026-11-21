@@ -21,7 +21,6 @@ export const memoryPlugin = defineMemoryPlugin({
 })
 
 export interface Config extends SourceConfig {
-  /** Explicit Source-private children; resolved by DSH's module Loader. */
   providers: Array<string | MemorySpaceProviderDeclaration>
 }
 
@@ -35,7 +34,6 @@ export const Config = z.intersect([MemorySpacesConfig, z.object({
   providers: z.array(z.union([z.string(), MemorySpaceProviderDeclarationSchema] as const)).default([]),
 })]) as unknown as z<Config>
 
-/** DSH's cordis-plugin-loader always provides these members. */
 interface LoaderLike {
   locate(fiber?: unknown): string | undefined
   import(specifier: string): Promise<unknown>
@@ -57,11 +55,8 @@ export interface InstallMemorySpacesOptions {
 }
 
 export interface MemorySpaceProviderDeclaration {
-  /** Installed package specifier; no built-in implementation registry. */
   use: string
-  /** Stable child identity; defaults to the module type id when omitted. */
   instanceId?: string
-  /** Validated by the child module's Cordis Config schema, when supplied. */
   config?: unknown
 }
 
@@ -73,7 +68,6 @@ function importedProviderModule(loader: LoaderLike, value: unknown, specifier: s
   return defineMemorySpaceProvider(unwrapped as MemorySpaceProviderModule<unknown>)
 }
 
-/** Resolve only the explicitly listed children; no dependency scanning occurs. */
 export async function resolveMemorySpaceProviderEntries(
   ctx: Context,
   declarations: readonly (string | MemorySpaceProviderDeclaration)[],
@@ -99,7 +93,6 @@ export async function resolveMemorySpaceProviderEntries(
   return entries
 }
 
-/** Compose an explicit Provider child list into one effective Source. */
 export async function installMemorySpaces(
   ctx: Context,
   entries: readonly MemorySpaceProviderEntry[],
@@ -131,11 +124,6 @@ export async function installMemorySpaces(
   }
 }
 
-/**
- * dshmarket's client-only mount of a Memory Spaces package installed on its own
- * in a profile, `include:dsh-market:mkt-client-<package>`: it is meant to run no
- * host code, and the Starter's own Entry composes the Source with its Providers (#359).
- */
 function isMarketClientShim(ctx: Context): boolean {
   const loader = ctx.get('loader', false) as LoaderLike | undefined
   return /(?:^|:)mkt-client-[^:]*$/u.test(loader?.locate(ctx.fiber)?.trim() ?? '')

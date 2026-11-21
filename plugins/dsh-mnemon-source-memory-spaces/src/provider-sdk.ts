@@ -1,4 +1,3 @@
-/** Source-owned private-child SPI. Core never imports or registers Providers. */
 export { CATEGORIES, SOURCES, EDGE_TYPES, INTENTS } from './contracts.ts'
 export type {
   JsonValue, Category, Source, EdgeType, Intent, Insight,
@@ -18,5 +17,4 @@ export type {
 export * from './providers/http.ts'
 export * from './providers/process.ts'
 
-// Compatibility exports for existing Provider declarations.
 export type { MemoryBody, MemoryBodyProvider, MemoryBodyStats, OpenVikingBodyConnection } from './contracts.ts'

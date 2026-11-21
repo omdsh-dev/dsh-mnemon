@@ -1,7 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { lstatSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-// This projection concern belongs to the Runtime Source, not the Mnemon Core.
 
 const GIT_BRANCH_TIMEOUT_MS = 2_000
 const MAX_HEAD_CACHE_ENTRIES = 256
@@ -104,11 +103,6 @@ function readGitHeadFast(root: string): { hit: true; branch: string | undefined 
   }
 }
 
-/**
- * Git takes the repository location from the environment, so a launcher that
- * exports `GIT_DIR` for its own reasons would point this probe at a directory
- * that is not the workspace. The probe runs with those variables removed.
- */
 export function gitEnvironment(environment: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const sanitized: NodeJS.ProcessEnv = {}
   for (const [name, value] of Object.entries(environment)) {
@@ -118,11 +112,6 @@ export function gitEnvironment(environment: NodeJS.ProcessEnv = process.env): No
   return sanitized
 }
 
-/**
- * Resolve the current git branch of a workspace root. Returns undefined when
- * the directory is not a git working tree, HEAD is detached, or the probe
- * fails or times out, so callers fall back to the unfiltered view.
- */
 export function resolveGitBranch(cwd?: string): string | undefined {
   const root = cwd?.trim()
   if (root === undefined || root === '') return undefined

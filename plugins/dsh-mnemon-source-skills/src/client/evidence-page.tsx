@@ -6,17 +6,10 @@ import { css, relative, stamp, useT } from './presentation.ts'
 import { Busy, Clamp, Confirm, Empty, MoreMenu, SignalTag, StepTimeline } from './shared.tsx'
 import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
 
-/**
- * 进化's third view: the conversations reviews read, the evidence every
- * suggestion and case cites. Pinned and newest first, narrowed to a skill
- * they used; each opens to its steps as the review numbered and marked them.
- * `bar` is 进化's own list header, so switching views keeps it in place.
- */
-export function EvidenceView(props: { context: SkillsPageContext; location: SkillsLocation; bar: ReactNode }): JSX.Element {
+export function EvidenceView(props: { context: SkillsPageContext; location: SkillsLocation; listHeader: ReactNode }): JSX.Element {
   const t = useT()
   const { context, location } = props
   const [records, setRecords] = useState<TrajectorySummary[] | null>(null)
-  // A link may narrow the view to one skill; one to a record shows it among all.
   const [skill, setSkill] = useState(location.filter === 'evidence' && location.trajectoryId === undefined ? location.skillName ?? '' : '')
   const [selected, setSelected] = useState<string | undefined>(location.trajectoryId)
   const paneRef = useRef<HTMLDivElement | null>(null)
@@ -35,7 +28,7 @@ export function EvidenceView(props: { context: SkillsPageContext; location: Skil
   }, [current?.id])
   return <div className={appearanceClass(css.skSplit, css.skEvolutionSplit)}>
     <aside className={css.skList}>
-      {props.bar}
+      {props.listHeader}
       {records === null ? <div className={css.skListNote}><Busy label={t('common.loading')} /></div> : <>
         {(skills.length > 1 || skill !== '') && <div className={css.skListFilter}>
           <SelectField size="sm" hideLabel label={t('evidence.skill')} value={skill} onChange={value => { setSkill(value); setSelected(undefined) }}
@@ -58,15 +51,10 @@ export function EvidenceView(props: { context: SkillsPageContext; location: Skil
   </div>
 }
 
-/**
- * One recorded conversation: the steps the review read, with what it marked,
- * and making test cases from chosen steps.
- */
 function RecordDetail(props: { context: SkillsPageContext; id: string; focus: number[] | undefined; onDeleted: () => void }): JSX.Element {
   const t = useT()
   const { context } = props
   const [loadedTrajectory, setLoadedTrajectory] = useState<Trajectory | null>(null)
-  // A link's steps are highlighted, not chosen: making cases from them is the reader's call.
   const [chosen, setChosen] = useState<Set<number>>(() => new Set())
   const [target, setTarget] = useState('')
   const [names, setNames] = useState<string[]>([])

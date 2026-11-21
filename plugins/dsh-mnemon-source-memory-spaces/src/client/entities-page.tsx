@@ -6,14 +6,11 @@ import type { MemorySpacesPageClient } from './api.ts'
 import { useRequestVersion, appearanceClass, message, PageHeader, SectionSpinner, ProgressiveFooter, EmptyState, SearchField } from 'dsh-mnemon/client'
 import { InsightCard, ReadSourcePanel, insightKey } from './widgets.tsx'
 
-/** Show a loading placeholder only when a read outlasts this, so a quick read never flashes one. */
 const ENTITY_PLACEHOLDER_DELAY_MS = 160
 const ENTITY_RAIL_PAGE = 10
 const ENTITY_CARD_PAGE = 6
-/** Memories one entity-memories read returns; more pages load as the list is revealed. */
 const ENTITY_MEMORY_BATCH = 48
 const ENTITY_RELATED_LIMIT = 20
-/** The choice to find related memories lasts for this browser session; each new session starts collapsed. */
 const RELATED_PREFERENCE_KEY = 'dsh-mnemon.memory-spaces.entities.related'
 
 function readRelatedPreference(): boolean {
@@ -24,7 +21,7 @@ function writeRelatedPreference(open: boolean): void {
   try {
     if (open) globalThis.sessionStorage?.setItem(RELATED_PREFERENCE_KEY, 'open')
     else globalThis.sessionStorage?.removeItem(RELATED_PREFERENCE_KEY)
-  } catch { /* Without storage the choice lasts until the page closes. */ }
+  } catch { }
 }
 
 function useDelayedFlag(active: boolean, delayMs = ENTITY_PLACEHOLDER_DELAY_MS): boolean {
@@ -41,7 +38,6 @@ function InsightSkeletons(props: { count: number }): JSX.Element {
   return <div aria-hidden="true" data-placeholder="">{Array.from({ length: props.count }, (_, index) => <div key={index} className={css.insightSkeleton}><span /><span /><span /></div>)}</div>
 }
 
-/** ProgressiveFooter's layout, with a busy button while the next page loads. */
 function EntityFooter(props: { visible: number; total: number; pageSize: number; busy: boolean; onMore: () => void }): JSX.Element | null {
   const t = useT()
   if (props.total === 0) return null
@@ -49,7 +45,6 @@ function EntityFooter(props: { visible: number; total: number; pageSize: number;
   return <div className={css.listProgress}><span>{t('common.showing', { visible: props.visible, total: props.total })}</span>{remaining > 0 && <button type="button" className={css.secondaryButton} disabled={props.busy} aria-busy={props.busy || undefined} onClick={props.onMore}>{t('common.showMore', { count: Math.min(props.pageSize, remaining) })}</button>}</div>
 }
 
-/** The active spaces from the directory, shown while their entity indexes are read. */
 function pendingEntitySources(catalog: MemorySpaceCatalog): MemoryReadSource[] {
   return catalog.items.filter(body => body.active && body.providerEnabled !== false).map(body => ({
     memoryBodyId: body.id,
@@ -82,10 +77,8 @@ export function EntitiesPage(props: { client: MemorySpacesPageClient; revision: 
   const [relatedLoading, setRelatedLoading] = useState(false)
   const [relatedError, setRelatedError] = useState<string | null>(null)
   const [visibleRelatedLimit, setVisibleRelatedLimit] = useState(ENTITY_CARD_PAGE)
-  // Related memories cost a recall per space, so they load only when asked for; the choice is remembered.
   const [relatedOpen, setRelatedOpen] = useState(readRelatedPreference)
   const relatedOpenRef = useRef(relatedOpen)
-  // Whether related memories show by themselves, because nothing carries the selection.
   const relatedAutoRef = useRef(false)
   const relatedId = useId()
   const railRequests = useRequestVersion()
@@ -95,7 +88,6 @@ export function EntitiesPage(props: { client: MemorySpacesPageClient; revision: 
   const relatedRequests = useRequestVersion()
   const selectedRef = useRef<string | undefined>(undefined)
   const revisionRef = useRef(props.revision)
-  // One id per page view, so its next selection cancels the related read it is still waiting for; other tabs keep theirs.
   const [view] = useState(() => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`)
   const split = client.entityMemories !== undefined && client.entityRelated !== undefined
 
@@ -125,10 +117,6 @@ export function EntitiesPage(props: { client: MemorySpacesPageClient; revision: 
     })
   }, [client, relatedRequests, view])
 
-  /**
-   * The carrying memories load at once; related memories only when they were asked for, or when
-   * nothing carries the name. A refresh keeps the current cards until they are replaced.
-   */
   const loadSelection = useCallback((name: string, refresh: boolean) => {
     const memoryRequest = memoryRequests.begin()
     relatedRequests.begin()
@@ -140,7 +128,6 @@ export function EntitiesPage(props: { client: MemorySpacesPageClient; revision: 
       setVisibleMemoryLimit(ENTITY_CARD_PAGE); setVisibleRelatedLimit(ENTITY_CARD_PAGE)
       relatedAutoRef.current = false
     }
-    // Related memories from before a refresh stay while shown, until replaced; collapsed, they are read again when opened.
     if (!refresh || !(relatedOpenRef.current || relatedAutoRef.current)) setRelated(null)
     setMemoriesLoading(true); setMemoriesError(null)
     const memoryRead: Promise<EntityMemoriesView> = split
@@ -149,7 +136,6 @@ export function EntitiesPage(props: { client: MemorySpacesPageClient; revision: 
     void memoryRead.then(next => {
       if (!memoryRequests.isCurrent(memoryRequest)) return
       setMemories(next)
-      // Nothing carries a name the user asked for: related memories are all the page can offer.
       const auto = split && next.total === 0
       if (auto && !relatedOpenRef.current) loadRelated(name)
       else if (relatedAutoRef.current && !relatedOpenRef.current) setRelated(null)
@@ -171,7 +157,6 @@ export function EntitiesPage(props: { client: MemorySpacesPageClient; revision: 
     loadSelection(trimmed, false)
   }
 
-  // The directory needs no Provider I/O, so the spaces show before their indexes are read.
   useEffect(() => {
     const request = directoryRequests.begin()
     void client.bodyDirectory().then(catalog => {
@@ -222,7 +207,6 @@ export function EntitiesPage(props: { client: MemorySpacesPageClient; revision: 
     writeRelatedPreference(false)
   }
 
-  /** A forgotten memory leaves both lists at once; the refresh that follows replaces them. */
   const forget = async (insight: Insight) => {
     await props.onForget(insight)
     const key = insightKey(insight)
@@ -244,7 +228,6 @@ export function EntitiesPage(props: { client: MemorySpacesPageClient; revision: 
   const hasEntityProvider = sources.length === 0 || sources.some(source => source.mode === 'entities' && source.status !== 'unavailable')
   const railPlaceholder = useDelayedFlag(rail === null && railLoading)
   const memoryPlaceholder = useDelayedFlag(memories === null && memoriesLoading)
-  // When nothing carries the entity, related memories open by themselves and need no toggle.
   const relatedAuto = memories !== null && memories.total === 0
   const relatedShown = split && (relatedOpen || relatedAuto)
   const relatedPlaceholder = useDelayedFlag(relatedShown && related === null && relatedLoading)

@@ -1,5 +1,3 @@
-/** Memory Spaces lexical fallback; no Core dependency. */
-/** Small deterministic tokenizer shared by local Document and Native recovery. */
 export function lexicalSearchTokens(value: string, maximum = 64): string[] {
   const normalized = value.normalize('NFKC').toLocaleLowerCase()
   const tokens: string[] = []
@@ -20,7 +18,6 @@ export function lexicalTokenMatchCount(value: string, tokens: readonly string[])
   return tokens.filter(token => available.has(token)).length
 }
 
-/** Require broader coverage only after a query is focused enough to support it. */
 export function lexicalRequiredMatchCount(tokens: readonly string[]): number {
   if (tokens.length === 0) return 0
   if (tokens.length < 4) return 1

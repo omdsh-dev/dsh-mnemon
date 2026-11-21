@@ -33,7 +33,6 @@ export function StatusTag(props: { status: SuggestionStatus }): JSX.Element {
   return <Tag tone={STATUS_TONE[props.status]}>{t(`status.${props.status}` as SkillsKey)}</Tag>
 }
 
-/** New skill or improvement, the first thing a suggestion says about itself. */
 export function ActionTag(props: { action: 'create' | 'update' }): JSX.Element {
   const t = useT()
   return <Tag tone={props.action === 'create' ? 'success' : 'info'}>{t(`action.${props.action}`)}</Tag>
@@ -44,11 +43,6 @@ export function RunStatusDot(props: { status: RunStatus }): JSX.Element {
   return <StateDot state={state[props.status]} />
 }
 
-/**
- * Follows each link the page is given once, as soon as what it points into
- * has loaded. A link is known by its nonce, so reloading the page's data
- * leaves whatever the reader chose since alone.
- */
 export function useLink(nonce: number | undefined, ready: boolean, follow: () => void): void {
   const followed = useRef<number | undefined>(undefined)
   useEffect(() => {
@@ -77,10 +71,6 @@ export function Confirm(props: { title: string; body: string; confirmLabel: stri
   </>}><p className={css.skProse}>{props.body}</p></SidebarModal>
 }
 
-/**
- * A section that stays closed until asked for: its title and a short summary
- * on one row, the content below it once open.
- */
 export function Fold(props: { title: string; meta?: ReactNode; defaultOpen?: boolean; actions?: ReactNode; children: ReactNode }): JSX.Element {
   const [open, setOpen] = useState(props.defaultOpen === true)
   const id = useId()
@@ -97,7 +87,6 @@ export function Fold(props: { title: string; meta?: ReactNode; defaultOpen?: boo
   </section>
 }
 
-/** A row among the folds that leads elsewhere instead of opening in place. */
 export function FoldLink(props: { title: string; meta?: ReactNode; onOpen: () => void }): JSX.Element {
   return <section className={css.skFold} data-link="">
     <header>
@@ -110,15 +99,10 @@ export function FoldLink(props: { title: string; meta?: ReactNode; onOpen: () =>
   </section>
 }
 
-/**
- * A paragraph that shows its first lines and opens to the rest, so a long
- * reason or note never pushes what follows out of view.
- */
 export function Clamp(props: { text: string; lines?: number }): JSX.Element {
   const t = useT()
   const [open, setOpen] = useState(false)
   const lines = props.lines ?? 3
-  // A paragraph short enough to fit needs no toggle.
   const long = props.text.length > lines * 60 || props.text.split('\n').length > lines
   return <div className={css.skClamp}>
     <p className={css.skProse} data-clamped={long && !open ? '' : undefined} style={{ ['--sk-lines' as string]: lines }}>{props.text}</p>
@@ -126,7 +110,6 @@ export function Clamp(props: { text: string; lines?: number }): JSX.Element {
   </div>
 }
 
-/** A list that shows its first items and opens to the rest. */
 export function MoreList(props: { items: readonly string[]; shown: number }): JSX.Element {
   const t = useT()
   const [open, setOpen] = useState(false)
@@ -145,7 +128,6 @@ export interface MoreItem {
   disabled?: boolean
 }
 
-/** The less frequent actions behind one quiet button. */
 export function MoreMenu(props: { label: string; items: readonly MoreItem[]; disabled?: boolean; onSelect: (id: string) => void }): JSX.Element | null {
   const [open, setOpen] = useState(false)
   if (props.items.length === 0) return null
@@ -159,10 +141,6 @@ export function MoreMenu(props: { label: string; items: readonly MoreItem[]; dis
 
 const STEP_GLYPH: Record<TrajectoryStep['kind'], string> = { user: '›', assistant: '‹', tool: '⚙', skill: '✦' }
 
-/**
- * A conversation's steps as a numbered timeline. Annotated steps carry their
- * signal and note; selectable steps get a checkbox, for making test cases.
- */
 export function StepTimeline(props: {
   steps: readonly TrajectoryStep[]
   annotations?: readonly TrajectoryAnnotation[]
@@ -204,7 +182,6 @@ export function StepTimeline(props: {
   </ol>
 }
 
-/** A labelled form control with an optional hint, associated for assistive technology. */
 export function Field(props: { label: string; hint?: string; children: (control: { id: string; 'aria-describedby'?: string }) => ReactNode }): JSX.Element {
   const id = useId()
   const hintId = useId()
@@ -224,7 +201,6 @@ export function diffLabels(t: SkillsTranslate) {
   }
 }
 
-/** The SKILL.md body as Markdown, without its frontmatter. */
 export function SkillMarkdown(props: { body: string }): JSX.Element {
   const locale = useLocale()
   const labels = useMemo<MarkdownLabels>(() => {
@@ -241,7 +217,6 @@ const CATEGORY_GLYPH: Record<string, string> = {
   'docs-writing': '✎', 'content-creation': '✦', 'design-ui': '◐', development: '⌘', devops: '⇪', 'research-analysis': '⌕', productivity: '✓', marketing: '◎',
 }
 
-/** A square with the category's glyph, or the skill's initial. */
 export function SkillIcon(props: { name: string; category?: string | undefined }): JSX.Element {
   const glyph = props.category === undefined ? undefined : CATEGORY_GLYPH[props.category]
   return <span className={css.skIcon} aria-hidden="true">{glyph ?? props.name.slice(0, 1).toUpperCase()}</span>

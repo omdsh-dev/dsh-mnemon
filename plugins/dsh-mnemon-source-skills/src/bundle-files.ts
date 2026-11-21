@@ -20,7 +20,6 @@ function insideDirectory(rootReal: string, candidateReal: string): boolean {
   return candidateReal === rootReal || candidateReal.startsWith(rootReal.endsWith(sep) ? rootReal : `${rootReal}${sep}`)
 }
 
-/** Validate and canonicalize one relative supporting-file path inside a skill bundle. */
 export function normalizeBundleRelativePath(raw: string): string {
   if (typeof raw !== 'string' || raw.includes('\0')) throw new Error('invalid supporting file path')
   const normalized = raw.trim().replaceAll('\\', '/').replace(/^\.\//u, '').replace(/\/+$/u, '')
@@ -56,7 +55,6 @@ function ensureContainedParents(bundleReal: string, relPath: string): string {
   return join(bundleReal, ...segments)
 }
 
-/** Both model previews and backups traverse the same editable, contained files. */
 function* bundleFiles(root: string, strict: boolean, directory = root, depth = 0): Generator<{ path: string; full: string; bytes: number; mode: number }> {
   let entries
   try { entries = readdirSync(directory, { withFileTypes: true }) } catch (error) { if (strict) throw error; return }
@@ -66,7 +64,6 @@ function* bundleFiles(root: string, strict: boolean, directory = root, depth = 0
     if (entry.isDirectory()) { if (depth < 3) yield* bundleFiles(root, strict, full, depth + 1); continue }
     if (!entry.isFile()) continue
     const path = relative(root, full).replaceAll('\\', '/')
-    // Hidden, linked and otherwise uneditable paths remain outside restore scope.
     try { if (normalizeBundleRelativePath(path) !== path) continue } catch { continue }
     try {
       const info = lstatSync(full)
@@ -76,7 +73,6 @@ function* bundleFiles(root: string, strict: boolean, directory = root, depth = 0
   }
 }
 
-/** Best-effort, bounded model preview; backups below never use these limits. */
 export function readSkillResourceFiles(summary: Pick<SkillSummary, 'path' | 'layout'>): SkillResourceFile[] {
   if (summary.layout !== 'bundle') return []
   let root: string
@@ -93,12 +89,11 @@ export function readSkillResourceFiles(summary: Pick<SkillSummary, 'path' | 'lay
       if (text) textBytes += data.length
       resources.push({ path, hash: sha256Hex(data), bytes: data.length,
         ...(binary ? { binary: true } : {}), ...(text ? { content: data.toString('utf8') } : {}) })
-    } catch { /* Transient or unreadable files are omitted only from model previews. */ }
+    } catch { }
   }
   return resources
 }
 
-/** Read one exact supporting file inside a bundle directory, rejecting symlinks and traversal. */
 export function readBundleResourceState(bundleDir: string, relPath: string): { exists: boolean; hash: string | null; content?: string } {
   const canonical = normalizeBundleRelativePath(relPath)
   const bundleReal = realpathSync(bundleDir)
@@ -118,7 +113,6 @@ export function readBundleResourceState(bundleDir: string, relPath: string): { e
   return { exists: true, hash, ...(buf.includes(0) || buf.byteLength > MAX_DRAFT_RESOURCE_FILE_BYTES ? {} : { content: buf.toString('utf8') }) }
 }
 
-/** Complete recoverable bytes for editable paths, independent of model preview limits. */
 export function snapshotBundleFiles(bundleDir: string): SkillBundleSnapshot {
   const files: SkillBundleSnapshot['files'] = Object.create(null)
   let bytes = 0, count = 0
@@ -155,14 +149,12 @@ export function restoreBundleFiles(bundleDir: string, target: SkillBundleSnapsho
   const changes: BundleFileMutation[] = Object.entries(target.files).map(([path, file]) => ({
     path, action: 'upsert', content: Buffer.from(file.base64, 'base64'), ...(file.mode === undefined ? {} : { mode: file.mode }),
   }))
-  // Legacy text previews never described a complete bundle: absence is not a deletion.
   if (target.complete) for (const path of Object.keys(current.files)) {
     if (!Object.hasOwn(target.files, path)) changes.push({ path, action: 'delete' })
   }
   return { ...applyBundleFileChanges(bundleDir, changes), snapshot }
 }
 
-/** Backtests get the same bounded text preview, never persisted binary/base64 data. */
 export function snapshotResourcePreview(snapshot: SkillBundleSnapshot): Array<{ path: string; content: string }> {
   let bytes = 0
   return Object.keys(snapshot.files).sort((a, b) => a.localeCompare(b)).slice(0, MAX_READ_RESOURCES).flatMap(path => {
@@ -178,7 +170,6 @@ const REFERENCE_CODE = /`((?:\.\/)?(?:references|scripts|assets)\/[^`\s]+)`/gu
 const TEMPLATE_HINT = /[*<>{}$[\]]|\.\.\./u
 const CONCRETE_EXT = /\.[a-z0-9]{1,10}$/iu
 
-/** Extract concrete relative `references/...`, `scripts/...`, or `assets/...` file paths referenced in SKILL.md. */
 export function extractConcreteBundleReferences(markdown: string): string[] {
   const found = new Set<string>()
   const consider = (raw: string) => {
@@ -188,7 +179,6 @@ export function extractConcreteBundleReferences(markdown: string): string[] {
     try {
       found.add(normalizeBundleRelativePath(stripped))
     } catch {
-      // Malformed traversal paths stay ignored here or caught when drafted as files.
     }
   }
   for (const match of markdown.matchAll(REFERENCE_LINK)) consider(match[1]!)
@@ -200,7 +190,6 @@ export function brokenBundleReferences(markdown: string, existingPaths: Readonly
   return extractConcreteBundleReferences(markdown).filter(path => !existingPaths.has(path))
 }
 
-/** Validate supporting-file ops, hash fences, and SKILL.md reference integrity before saving a draft. */
 export function prepareDraftFileChanges(input: {
   action: 'create' | 'update'
   isFlatSkill: boolean
@@ -268,7 +257,6 @@ export function prepareDraftFileChanges(input: {
     : { files: normalized, ...(input.action === 'update' ? { baseFileHashes } : {}) }
 }
 
-/** Apply supporting-file upserts/deletes inside `bundleDir` and return a rollback handle. */
 type BundleFileMutation = Omit<SkillDraftFileChange, 'content'> & { content?: string | Buffer; mode?: number }
 
 export function applyBundleFileChanges(bundleDir: string, changes: readonly BundleFileMutation[]): { rollback: () => void } {
@@ -301,7 +289,6 @@ export function applyBundleFileChanges(bundleDir: string, changes: readonly Bund
           writeFileAtomic(entry.full, entry.previous, { dirMode: 0o700, fileMode: entry.mode })
         }
       } catch {
-        // Best-effort rollback of prior files in reverse order.
       }
     }
   }

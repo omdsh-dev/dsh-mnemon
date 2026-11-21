@@ -104,9 +104,6 @@ export class SupermemoryProvider extends HttpMemoryProvider implements MemoryPro
     })
     const memories = firstArray(payload, 'memoryEntries', 'results').map(insight).filter((item): item is Insight => item !== undefined)
 
-    // Supermemory exposes extracted memories and their source documents as
-    // separate read surfaces. Lite may extract only some documents, so merge
-    // both surfaces instead of hiding documents as soon as one memory exists.
     const documents = await this.request(body, '/v3/documents/documents', {
       headers: this.headers(connection),
       json: {

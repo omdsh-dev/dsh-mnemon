@@ -1,4 +1,3 @@
-/** Memory Spaces-owned recall quality policy. */
 import type { RecallQualityPolicy } from './contracts.ts'
 import { BUILTIN_RECALL_QUALITY_POLICIES } from './policies.ts'
 

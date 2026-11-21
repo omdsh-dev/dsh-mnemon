@@ -10,7 +10,6 @@ export type SkillsTranslate = (key: SkillsKey, params?: Record<string, unknown>)
 export const css: Readonly<Record<string, string>> = { ...memoryPageStyles, ...page }
 export const sidebarCss: Readonly<Record<string, string>> = memorySidebarStyles
 
-/** Older Core versions have generic settings navigation but no model or market section. */
 export function supportsSettingsSection(section: 'models' | 'market'): boolean {
   if (!('supportsMemoryComponentSettingsSection' in mnemonClient)) return false
   const supports = (mnemonClient as { supportsMemoryComponentSettingsSection?: (packageName: string, section: string) => boolean }).supportsMemoryComponentSettingsSection
@@ -22,7 +21,6 @@ export function translate(locale: string): SkillsTranslate {
   return (key, params) => {
     const text = dictionary[key] ?? copy.en[key] ?? key
     if (params === undefined) return text
-    // English words after a count: {count:case|cases} follows the parameter it names.
     return text
       .replace(/\{(\w+):([^|{}]*)\|([^{}]*)\}/gu, (match, name: string, one: string, other: string) => name in params ? (Number(params[name]) === 1 ? one : other) : match)
       .replace(/\{(\w+)\}/gu, (match, name: string) => name in params ? String(params[name]) : match)
@@ -46,7 +44,6 @@ export function percent(value: number | undefined): string {
   return value === undefined ? '—' : `${Math.round(value * 100)}%`
 }
 
-/** A large count the way the language says it short: 21.4万, 214K. */
 export function compactCount(count: number, language: string): string {
   return new Intl.NumberFormat(language.startsWith('zh') ? 'zh-CN' : 'en', { notation: 'compact', maximumSignificantDigits: 3 }).format(count)
 }
@@ -55,7 +52,6 @@ export function points(value: number | undefined): string {
   return value === undefined ? '—' : String(Math.round(value * 100))
 }
 
-/** "3 min ago" in the page's language; older than a week shows the date. */
 export function relative(t: SkillsTranslate, iso: string | undefined, now = Date.now()): string {
   if (iso === undefined) return '—'
   const time = Date.parse(iso)

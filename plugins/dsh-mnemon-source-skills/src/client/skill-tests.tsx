@@ -7,7 +7,6 @@ import { css, errorText, points, relative, useT, type SkillsTranslate } from './
 import { Busy, Confirm, Field, MoreMenu, RunStatusDot } from './shared.tsx'
 import type { SkillsPageContext } from './ui.tsx'
 
-/** How many earlier backtests the history keeps on screen. */
 const HISTORY = 6
 
 function completedRunSummary(run: BacktestRun, t: SkillsTranslate): string {
@@ -20,11 +19,6 @@ function completedRunSummary(run: BacktestRun, t: SkillsTranslate): string {
   ].join(' · ')
 }
 
-/**
- * A skill's test cases and its backtests: the cases with a switch each, one
- * button that backtests the current version, and the runs, newest first, each
- * opening to its per-case verdicts. A draft is backtested from its review.
- */
 export function SkillTests(props: {
   context: SkillsPageContext
   skillName: string
@@ -34,8 +28,6 @@ export function SkillTests(props: {
 }): JSX.Element {
   const t = useT()
   const { context, skillName } = props
-  // The pick the page holds for this skill; a run asks the task Agent's own
-  // route when it is null.
   const runModel = props.runModel ?? null
   const hasProvidedCases = props.cases !== undefined
   const hasProvidedFile = props.hasFile !== undefined
@@ -122,7 +114,6 @@ export function SkillTests(props: {
   </div>
 }
 
-/** One run's cases: the verdict, each check with the judge's note, and what the simulated run did and answered. */
 export function RunDetail(props: { run: BacktestRun }): JSX.Element {
   const t = useT()
   if (props.run.error !== undefined && props.run.results.length === 0) return <p className={css.inlineError}>{props.run.error}</p>

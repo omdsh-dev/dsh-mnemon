@@ -22,7 +22,6 @@ export interface DocumentRecord {
 
 export interface DocumentView extends DocumentRecord {
   content: string
-  /** Digest of the exact managed file read; deletion also fences external edits. */
   fileRevision?: string
 }
 
@@ -71,19 +70,10 @@ export interface DocumentCapacityPlan {
 export const DOCUMENTS_VERSION = 1
 export const DOCUMENTS_ACTIVE_LIMIT_BYTES = 10 * 1024 * 1024
 
-// The files below are this Source's own. A Host that copies them, as a Mnemon Pack or a sync
-// does, or counts them for a storage inventory, reads their names and rules from here instead
-// of keeping a copy that drifts when the Source changes.
-
-/** The Documents Source's directory under a storage root; each document sits in `<status>/<filename>` below it. */
 export const DOCUMENTS_DIRECTORY = 'documents'
-/** The metadata of every document, the source of truth for which files belong to the Source. */
 export const DOCUMENTS_INDEX_FILE = 'index.json'
-/** Created exclusively while the index or a document is read or written; whoever copies them takes it too. */
 export const DOCUMENTS_LOCK_FILE = '.index.lock'
-/** A lock file older than this was left by a process that stopped, and may be taken over. */
 export const DOCUMENTS_LOCK_STALE_MS = 30_000
-/** The file name a document may have: one path segment, so it never leaves its status directory. */
 export const DOCUMENT_FILENAME_PATTERN = /^[a-zA-Z0-9._-]+\.md$/u
 
 export interface DocumentIndex {
@@ -95,13 +85,6 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/**
- * Read an index as a copy of it carries it, such as a Mnemon Pack or a sync branch: every record
- * complete, each id unique and each file name safe, or the whole index is refused. A record's path
- * is where its status puts it, whatever the copy says. Unknown fields are dropped, and so are
- * list items that are not strings. Reading the index does not judge a record's content hash: a
- * store that needs repair still has to be copied as one.
- */
 export function parseDocumentIndex(value: unknown): DocumentIndex {
   const index = isObject(value) ? value : undefined
   if (index?.version !== DOCUMENTS_VERSION || !Array.isArray(index.documents)) throw new Error('Documents index.json is invalid')
@@ -129,20 +112,13 @@ export function parseDocumentIndex(value: unknown): DocumentIndex {
   return { version: DOCUMENTS_VERSION, documents }
 }
 
-/** What a stored index.json holds, counted without judging each record. */
 export interface DocumentIndexSummary {
-  /** Whether the index has a record list at all. Without one, every count is 0. */
   valid: boolean
-  /** Every record that is an object, whatever its status. */
   documents: number
   active: number
   archived: number
 }
 
-/**
- * Count the records of a parsed index.json for a read-only inventory. It never throws: an index
- * without a record list is not `valid`, and a malformed record is counted or skipped, never refused.
- */
 export function summarizeDocumentIndex(value: unknown): DocumentIndexSummary {
   const documents = isObject(value) && Array.isArray(value.documents) ? value.documents.filter(isObject) : []
   return {

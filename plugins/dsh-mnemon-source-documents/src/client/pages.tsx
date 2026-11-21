@@ -13,7 +13,6 @@ function PathText(props: { path: string }): JSX.Element {
   return canRenderPathLabel ? <PathLabel path={props.path} /> : <>{props.path}</>
 }
 
-/** Render managed Markdown through the official DSH Markdown pipeline without raw HTML or unsafe links. */
 function DocumentMarkdown(props: { content: string }): JSX.Element {
   const locale = useLocale()
   const labels = useMemo<MarkdownLabels>(() => {
@@ -102,8 +101,6 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
         current = await props.client.documents()
         records = current.documents
       } else if (snapshotRef.current !== null && !reloadIndex) {
-        // Reuse the loaded index and merge searched record metadata/revision in place
-        // without issuing a sequential snapshot RPC waterfall.
         const existing = snapshotRef.current
         const searchResponse = await props.client.searchDocuments(nextQuery, nextStatus === 'archived')
         const byId = new Map(searchResponse.results.map(item => [item.id, item]))
@@ -253,7 +250,6 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
     setSaving(true); setError(null); setNotice(null)
     try {
       const result = await props.client.archiveDocument(activeSelected.id)
-      // A local archive keeps the original without an index in any Memory Space.
       const spaces = result.maintenance?.memoryBodyIds ?? []
       setNotice(spaces.length === 0 ? t('documents.archivedLocally') : t('documents.archived', { spaces: spaces.join(', ') }))
       setConfirmArchive(false); setStatus('archived'); setQuery('')
@@ -332,8 +328,6 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
         </div>
 
       </section>
-
-
 
       <div className={css.documentWorkspace}>
         <aside className={css.documentList} aria-label={t('documents.list')}>

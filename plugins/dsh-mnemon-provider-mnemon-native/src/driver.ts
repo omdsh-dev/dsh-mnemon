@@ -3,12 +3,6 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { NORMALIZED_RELEVANCE_SCORE, type MemorySpaceNativeRunner, type MemoryProviderAdapter, type JsonValue, type Insight, type MemoryBody as MemorySpace, type MemoryBodyStats as MemorySpaceStats, type MemoryGraphEdge, type MemoryGraphNode, type MemoryGraphSnapshot, type MemoryListRequest, type EdgeType, type RememberRequest, type SearchRequest, type ProviderBodyStatus as ProviderSpaceStatus, type ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 
-/**
- * Output cap for the two whole-Store reads: the full readonly recall and the
- * HTML graph. Their size grows with the Store, not with a misbehaving command,
- * and a Store of about 1,000 insights already produces 3–9 MB (issue #320).
- * Every other command keeps the Source's 2 MiB default.
- */
 export const STORE_DUMP_MAX_OUTPUT_BYTES = 128 * 1024 * 1024
 
 function record(value: JsonValue | undefined): Record<string, JsonValue> | undefined {
@@ -33,9 +27,6 @@ function stringArray(value: JsonValue | undefined): string[] | undefined {
 function normalizeInsight(value: JsonValue): Insight | undefined {
   const item = record(value)
   if (item === undefined) return undefined
-  // Mnemon <=0.1.2 returns full recall rows as
-  // `{ insight: { id, content, ... }, score, intent, via, signals }`; newer
-  // builds default to a compact flat row. Accept both without version gates.
   const nested = record(item.insight)
   const core = nested ?? item
   const id = text(core.id)
@@ -81,7 +72,6 @@ function decodeJsString(value: string): string {
   return decoded
 }
 
-/** Parse the official Mnemon vis.js export without executing its HTML or loading its CDN script. */
 export function parseMemoryGraph(html: string, now = new Date()): MemoryGraphSnapshot {
   const nodes: MemoryGraphNode[] = []
   const edges: MemoryGraphEdge[] = []
@@ -116,8 +106,6 @@ function commaList(values: string[] | undefined, label: string, limit: number): 
   return normalized.length === 0 ? undefined : normalized.join(',')
 }
 
-
-/** Native CLI data plane owned and independently testable by this Provider. */
 export class MnemonNativeProvider implements MemoryProviderAdapter {
   readonly id = 'mnemon-native'
   readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
@@ -166,8 +154,6 @@ export class MnemonNativeProvider implements MemoryProviderAdapter {
       this.runner.runText(['viz', '--format', 'html', '--output', '-'], {
         ...(signal === undefined ? {} : { signal }), store: body.id, maxOutputBytes: STORE_DUMP_MAX_OUTPUT_BYTES,
       }),
-      // Mnemon's HTML visualization omits tags and entities. A readonly recall
-      // supplies that metadata without incrementing access counters.
       this.allNativeInsights(body, signal, true),
     ])
     const snapshot = parseMemoryGraph(html)
@@ -206,10 +192,7 @@ export class MnemonNativeProvider implements MemoryProviderAdapter {
     const mode = request.mode ?? 'smart'
     const semantic = mode === 'smart'
     const limit = request.limit ?? this.config.defaultRecallLimit
-    // The CLI truncates by hybrid score. Keep a bounded wider pool before
-    // applying the similarity signal consumed by the Source's quality policy.
     const candidateLimit = semantic ? Math.max(limit, Math.min(50, Math.max(20, limit * 4))) : limit
-    // An inspection reads a snapshot: no access counts, no row in the store's operation log.
     const readonly = request.inspect === true ? ['--readonly'] : []
     const args = mode === 'keyword'
       ? [...readonly, 'search', request.query, '--limit', String(candidateLimit)]
@@ -226,8 +209,6 @@ export class MnemonNativeProvider implements MemoryProviderAdapter {
     try {
       payload = await this.runner.runJson(args, options)
     } catch (error) {
-      // Mnemon <=0.1.2 already returned the full signal-bearing response and
-      // rejects this newer flag before running a query. Do not retry I/O errors.
       if (!semantic || signal?.aborted || !(error instanceof Error)) throw error
       const prefix = `mnemon ${args.join(' ')} exited `
       const detail = error.message.startsWith(prefix) ? error.message.slice(prefix.length) : error.message
@@ -245,20 +226,14 @@ export class MnemonNativeProvider implements MemoryProviderAdapter {
       const similarity = number(record(item?.signals)?.similarity)
       return [{ insight, similarity, superseded: item?.superseded === true }]
     })
-    // Missing embeddings and unavailable embedding services emit absent or
-    // all-zero similarities. Preserve native order/scores in that fallback.
     if (semantic && candidates.some(candidate => candidate.similarity !== undefined && candidate.similarity > 0)) {
       for (const candidate of candidates) {
         const { insight, similarity } = candidate
-        delete insight.confidence // A compact CLI label described the old hybrid score.
+        delete insight.confidence
         if (similarity === undefined) {
-          // Unknown relevance must not inherit an optimistic hybrid score;
-          // retain an explicit supersession demotion even without a vector.
           if (!candidate.superseded) delete insight.score
         } else {
           const relevance = Math.min(1, Math.max(0, similarity))
-          // A corrected fact must retain the CLI's demotion, even when its
-          // old wording is the closest vector match to the new question.
           insight.score = candidate.superseded ? Math.min(relevance, insight.score ?? 0) : relevance
         }
       }
@@ -282,10 +257,6 @@ export class MnemonNativeProvider implements MemoryProviderAdapter {
 
   async rememberMany(body: MemorySpace, requests: readonly RememberRequest[], signal?: AbortSignal): Promise<JsonValue[]> {
     if (requests.length === 0) return []
-    // Bulk archival preserves exact committed facts. Native's normal semantic
-    // deduplication can skip a distinct configuration or correction that merely
-    // resembles an earlier entry. Reuse only byte-identical persisted content,
-    // and import the remaining originals without semantic replacement.
     const existing = new Map((await this.allNativeInsights(body, signal, true)).map(entry => [entry.content, entry]))
     const ordered = new Array<JsonValue>(requests.length)
     const reused = new Set<number>()
@@ -306,10 +277,6 @@ export class MnemonNativeProvider implements MemoryProviderAdapter {
     }
     while (pending.size > 0) {
       const pruned = await this.importExact(body, [...pending.values()], ordered, signal)
-      // At its capacity Mnemon prunes its weakest memories after an import, and a
-      // copy reused above can be one of them. Import that entry again rather than
-      // name a copy that is gone (#339). Each round only takes reused entries, so
-      // it ends.
       pending = new Map()
       for (const index of reused) {
         const id = record(ordered[index])?.id
@@ -322,7 +289,6 @@ export class MnemonNativeProvider implements MemoryProviderAdapter {
     return ordered
   }
 
-  /** Import entries as written, record their receipts and return what Mnemon pruned after it. */
   private async importExact(body: MemorySpace, batch: ReadonlyArray<{ request: RememberRequest; indexes: number[] }>, ordered: JsonValue[], signal?: AbortSignal): Promise<Set<string>> {
     const temporary = mkdtempSync(join(tmpdir(), 'dsh-mnemon-runtime-archive-'))
     const draftPath = join(temporary, 'memory-draft.json')
@@ -374,12 +340,10 @@ export class MnemonNativeProvider implements MemoryProviderAdapter {
     }
   }
 
-  /** One stored memory by exact id, read from a snapshot without touching access counts or the log. */
   async get(body: MemorySpace, id: string, signal?: AbortSignal): Promise<Insight | undefined> {
     try {
       return normalizeInsight(await this.runner.runJson(['--readonly', 'show', id], { ...(signal === undefined ? {} : { signal }), store: body.id }))
     } catch (error) {
-      // `mnemon show` exits 1 with SQL's "no rows" for an id the store does not hold, or has forgotten.
       if (error instanceof Error && /no rows in result set/u.test(error.message)) return undefined
       throw error
     }

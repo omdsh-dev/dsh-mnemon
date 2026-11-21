@@ -11,7 +11,6 @@ import type { MemorySpacesPageClient } from './api.ts'
 import { cleanJson } from './placement-policy.tsx'
 import { installMemorySpacesSettings, yieldsComponentSettings } from './settings.tsx'
 
-/** The adapter never gets a transport or chooses another Source instance. */
 export function memorySpacesPageClient(management: MnemonSourceManagementClient): MemorySpacesPageClient & { status(): Promise<MemorySpacesStatus>; canAssist(operation: string): boolean } {
   const client = createMemorySourcePageClient(management)
   const input = cleanJson
@@ -25,7 +24,6 @@ export function memorySpacesPageClient(management: MnemonSourceManagementClient)
     entities: (entity, limit) => client.read('entities', input({ entity, limit })),
     entityMemories: (entity, offset, limit) => client.read('entity-memories', input({ entity, offset, limit })),
     entityRelated: (entity, limit, view) => client.read('entity-related', input({ entity, limit, view })),
-    // The page's own searches look at memory; Ask Agent below uses it.
     search: request => client.read('search', input({ ...request, inspect: true })),
     related: (id, memoryBodyId) => client.read('related', input({ id, memoryBodyId })),
     reconnectBody: memoryBodyId => client.read('body-reconnect', { memoryBodyId }),
@@ -95,8 +93,6 @@ function MemorySpacesSourceView(props: MemorySourcePageProps & { page: Page }): 
     })
     notifyParentRefresh()
   }, [notifyParentRefresh])
-  // The workspace's refresh reloads these pages as well, the directory included;
-  // a change made here reloads only what it touched without echoing refreshKey.
   useEffect(() => {
     if (lastRefreshKey.current === props.refreshKey) return
     lastRefreshKey.current = props.refreshKey
@@ -183,7 +179,6 @@ export function installMemorySpacesUI(ctx: Parameters<typeof installMemorySource
   ] as const
   return installMemorySourceUI(ctx, { sourceTypeId: 'memory-spaces', pages: pages.map(page => ({
     id: page.id, order: page.order, label: () => t(page.key),
-    // This Source pins its compound title/tab header; nested page headings scroll with their content.
     navigation: { stickyHeader: false, group: page.id === 'spaces' ? 'storage' : 'tools', primary: page.id === 'spaces', glyph: page.glyph },
     component: props => <MemorySpacesSourcePage {...props} page={page.id} />,
   })) })

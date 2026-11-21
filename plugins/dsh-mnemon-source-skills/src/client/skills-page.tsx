@@ -17,8 +17,6 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
   const [creating, setCreating] = useState(false)
   const [collapsed, setCollapsed] = useState<ReadonlySet<SkillRootKind>>(() => new Set())
   const selectedRoot = catalog?.skills.find(skill => skill.key === selected)?.root
-  // A direct link or a newly created skill must be visible in its source group.
-  // Catalog polling refreshes objects without changing the user's selection.
   useEffect(() => {
     if (selectedRoot !== undefined) setCollapsed(current => {
       if (!current.has(selectedRoot)) return current
@@ -36,7 +34,6 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
     }).catch(context.fail)
     return () => { active = false }
   }, [context.client, context.revision])
-  // A link names a skill by key, or by name for the one DSH loads.
   useLink(location.nonce, catalog !== null, () => {
     if (location.skillKey !== undefined) setSelected(location.skillKey)
     else if (location.skillName !== undefined) {
@@ -98,7 +95,6 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
   </div>
 }
 
-/** What a skill's two DSH switches allow, as one choice. */
 type Invocation = 'both' | 'slash' | 'model' | 'off'
 
 function invocationOf(value: SkillInvocation): Invocation {
@@ -109,11 +105,6 @@ function switchesOf(value: Invocation): SkillInvocation {
   return { modelInvocable: value === 'both' || value === 'model', userInvocable: value === 'both' || value === 'slash' }
 }
 
-/**
- * One skill: its icon, name and description open it; "Use" (on hover or
- * focus) brings it into the conversation; the switch turns it on or off for
- * both the model and the / menu.
- */
 function SkillRow(props: { context: SkillsPageContext; skill: SkillSummary; stats: Stats; selected: boolean; onSelect: () => void }): JSX.Element {
   const t = useT()
   const { skill, stats, context } = props
@@ -246,7 +237,6 @@ function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stat
   </article>
 }
 
-/** Ask for an improvement draft of a skill, with an optional note on what to change. */
 function ImproveDialog(props: { context: SkillsPageContext; name: string; onClose: () => void }): JSX.Element {
   const t = useT()
   const [note, setNote] = useState('')

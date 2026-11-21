@@ -1,6 +1,5 @@
 import type { SkillSuggestion, SuggestionTriage, TrajectorySummary } from './contracts.ts'
 
-/** Only admitted evidence counts. Signals and model-supplied reuse labels do not. */
 export function triageSuggestion(suggestion: SkillSuggestion, trajectories: readonly TrajectorySummary[]): SuggestionTriage {
   const windows = new Set<string>()
   const sessions = new Set<string>()

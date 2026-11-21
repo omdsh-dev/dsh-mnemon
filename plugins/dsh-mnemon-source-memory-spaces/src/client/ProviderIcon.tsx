@@ -16,7 +16,6 @@ function GenericProviderMark(): JSX.Element {
   </svg>
 }
 
-/** Only the owning plugin supplies image data; unknown brands get a neutral mark. */
 export function ProviderIcon({ providerId, icon, className, title }: ProviderIconProps): JSX.Element {
   const accessibility = title === undefined ? { 'aria-hidden': true as const } : { role: 'img' as const, 'aria-label': title }
   return <span className={className} data-provider-icon={providerId} {...accessibility}>{

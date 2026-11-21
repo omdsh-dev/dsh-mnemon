@@ -18,20 +18,17 @@ export const MAX_CASES_PER_SKILL = 40
 
 export interface LedgerFile {
   version: 1
-  /** Bumped by every write this Source makes; part of the management revision. */
   generation: number
   suggestions: SkillSuggestion[]
   drafts: SkillDraft[]
   reviews: ReviewLogEntry[]
   versions: SkillVersion[]
   trajectories: TrajectorySummary[]
-  /** Skills installed from a market, by skill key. */
   installs: MarketInstall[]
 }
 
 export interface RegistryRecord {
   id: string
-  /** How the source publishes; records written before kinds existed are catalogs. */
   kind?: MarketSourceKind
   location: string
   enabled: boolean
@@ -66,12 +63,10 @@ function array<T>(value: unknown): T[] {
   return Array.isArray(value) ? value as T[] : []
 }
 
-/** An opaque, filesystem-safe directory name for one skill key. */
 export function keyDirectory(skillKey: string): string {
   return createHash('sha256').update(skillKey).digest('hex').slice(0, 16)
 }
 
-/** A dangling symlink still occupies its name and must never be overwritten. */
 export function entryExists(path: string): boolean {
   try { lstatSync(path); return true } catch (error) {
     if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) return false
@@ -79,7 +74,6 @@ export function entryExists(path: string): boolean {
   }
 }
 
-/** Where a trashed entry came from, as recorded beside it. */
 interface TrashSource {
   root?: SkillRootKind
   key?: string
@@ -87,7 +81,6 @@ interface TrashSource {
   workspace?: string
 }
 
-/** The sidecar a trashed entry keeps, so the page can name and restore it later. */
 interface TrashRecord extends TrashSource {
   version: 1
   name: string
@@ -95,7 +88,6 @@ interface TrashRecord extends TrashSource {
   trashedAt: string
 }
 
-/** Bytes an entry occupies on disk; an unreadable entry reports 0. */
 function trashSize(path: string): number {
   try {
     const info = lstatSync(path)
@@ -105,19 +97,16 @@ function trashSize(path: string): number {
   } catch { return 0 }
 }
 
-/** The removal time encoded in an entry id, for entries that predate sidecars. */
 function trashStamp(id: string): string | undefined {
   const match = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z-/u.exec(id)
   return match === null ? undefined : `${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}Z`
 }
 
-/** References are navigation links, not evidence: keep the records when a suggestion is deleted. */
 function pruneSuggestionLinks(ledger: LedgerFile): LedgerFile {
   const ids = new Set(ledger.suggestions.map(suggestion => suggestion.id))
   for (const review of ledger.reviews) {
     if (review.suggestionIds === undefined) continue
     const kept = review.suggestionIds.filter(id => ids.has(id))
-    // A review can strengthen evidence without counting an inserted/updated suggestion.
     if (kept.length !== review.suggestionIds.length) review.suggestions = Math.min(review.suggestions, kept.length)
     if (kept.length === 0) delete review.suggestionIds
     else review.suggestionIds = kept
@@ -126,7 +115,6 @@ function pruneSuggestionLinks(ledger: LedgerFile): LedgerFile {
   return ledger
 }
 
-/** Replace a file atomically via a unique sibling temp file, cleaning up on failure. */
 export function writeFileAtomic(path: string, content: string | Buffer, options?: { dirMode?: number; fileMode?: number }): void {
   mkdirSync(dirname(path), options?.dirMode === undefined ? { recursive: true } : { recursive: true, mode: options.dirMode })
   const temporary = `${path}.${process.pid}-${randomUUID()}.tmp`
@@ -148,10 +136,6 @@ function fileStamp(path: string): string {
   }
 }
 
-/**
- * The Skills Source's own files under `<dataDir>/skills`. Every file is
- * replaced atomically; callers serialize writes with the storage lock.
- */
 export class SkillsStore {
   private readonly jsonCache = new Map<string, { stamp: string; value: unknown }>()
 
@@ -161,7 +145,6 @@ export class SkillsStore {
     return join(this.directory, name)
   }
 
-  /** A directory beside the data, for staging a download before it is moved into place. */
   stagingDirectory(): string {
     return this.path('staging')
   }
@@ -196,7 +179,6 @@ export class SkillsStore {
     this.writeAtomic(this.path(name), `${JSON.stringify(value, null, 2)}\n`)
   }
 
-  /** Name, size and time of each file the revision depends on. */
   fingerprint(): string {
     const tracked = [
       'ledger.json',
@@ -230,7 +212,6 @@ export class SkillsStore {
   ledger(): LedgerFile {
     const value = object(this.readJson('ledger.json'))
     if (value === undefined) return emptyLedger()
-    // Normalize legacy links in memory; reads must not write or invalidate management revisions.
     return pruneSuggestionLinks({
       version: 1,
       generation: typeof value.generation === 'number' ? value.generation : 0,
@@ -243,10 +224,6 @@ export class SkillsStore {
     })
   }
 
-  /**
-   * What the user picked for draft and backtest runs, kept out of `fingerprint()`
-   * on purpose: changing a picker must not invalidate an open page's revision.
-   */
   preferences(): DraftPreferences {
     const stored = object(this.readJson('preferences.json')) ?? {}
     const route = (value: unknown): ModelRoute | undefined => {
@@ -299,7 +276,6 @@ export class SkillsStore {
 
   saveEvals(evals: EvalsFile): void {
     const counts = new Map<string, number>()
-    // Runs are newest first; keep the newest per skill, and every running one.
     evals.runs = evals.runs.filter(run => {
       const count = (counts.get(run.skillName) ?? 0) + 1
       counts.set(run.skillName, count)
@@ -403,10 +379,6 @@ export class SkillsStore {
     if (/^[a-z0-9][a-z0-9-]{0,62}$/u.test(id)) rmSync(this.path(join('market', 'cache', `${id}.json`)), { force: true })
   }
 
-  /**
-   * Move a bundle or a flat file out of DSH's reach, never deleting it, and
-   * record where it came from so the page can offer to put it back.
-   */
   trash(path: string, name: string, source: TrashSource = {}): string {
     const file = basename(path).endsWith('.md') && !existsSync(join(path, 'SKILL.md'))
     const trashedAt = new Date()
@@ -426,14 +398,12 @@ export class SkillsStore {
       cpSync(path, target, { recursive: true, errorOnExist: true })
       rmSync(path, { recursive: true, force: true })
     }
-    // The entry is already safe; a record is a convenience, so never fail the removal over it.
     try {
       this.writeJson(join('trash', `${id}.json`), { version: 1, name, kind: file ? 'file' : 'bundle', trashedAt: trashedAt.toISOString(), ...source } satisfies TrashRecord)
-    } catch { /* an entry without a record still lists, but only as a name */ }
+    } catch { }
     return target
   }
 
-  /** Every entry waiting in the Trash, newest first; entries removed before records existed still list. */
   trashEntries(): TrashEntry[] {
     let names: string[]
     try { names = readdirSync(this.path('trash')) } catch { return [] }
@@ -441,7 +411,7 @@ export class SkillsStore {
     for (const id of names) {
       if (id.endsWith('.json')) continue
       let record: Record<string, unknown> | undefined
-      try { record = object(this.readJson(join('trash', `${id}.json`))) } catch { /* Older or damaged optional metadata must not hide the entry. */ }
+      try { record = object(this.readJson(join('trash', `${id}.json`))) } catch { }
       const stored = record === undefined ? undefined : record as Partial<TrashRecord>
       const name = typeof stored?.name === 'string' ? stored.name : /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-(.+)$/u.exec(id)?.[1]?.replace(/\.md$/u, '') ?? id
       entries.push({
@@ -459,14 +429,12 @@ export class SkillsStore {
     return entries.sort((a, b) => b.trashedAt.localeCompare(a.trashedAt) || b.id.localeCompare(a.id))
   }
 
-  /** The entry with this id, or a refusal: the caller names what it wants back or gone. */
   trashEntry(id: string): TrashEntry {
     const entry = this.trashEntries().find(candidate => candidate.id === id)
     if (entry === undefined) throw new Error('trash entry not found: ' + id)
     return entry
   }
 
-  /** Stage a complete restore beside the target before removing the recoverable entry. */
   restoreTrash(entry: TrashEntry, to: string, content?: string): string {
     const from = this.path(join('trash', entry.id))
     if (entryExists(to)) throw new Error(`${entry.name} already exists there; rename or remove it first`)
@@ -494,14 +462,12 @@ export class SkillsStore {
     return readFileSync(this.path(join('trash', entry.id, ...(entry.kind === 'file' ? [] : ['SKILL.md']))), 'utf8')
   }
 
-  /** Delete an entry for good. */
   purgeTrash(entry: TrashEntry): void {
     rmSync(this.path(join('trash', entry.id)), { recursive: true, force: true })
     rmSync(this.path(join('trash', `${entry.id}.json`)), { force: true })
   }
 }
 
-/** Version-only byte snapshots; never sent as model evidence. */
 export interface SkillBundleSnapshot {
   version: 1
   complete: boolean

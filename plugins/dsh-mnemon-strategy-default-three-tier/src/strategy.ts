@@ -6,7 +6,6 @@ import { boundedRuntimeMemoryProtocol, classicRuntimeGuidance, SCOPED_READ_ONLY_
 import { threeTierContributions, type ThreeTierExtensionValues } from './extension-sdk.ts'
 
 const VIEW_ROLES = ['working-context', 'narrative', 'durable-evidence'] as const
-/** The Host accepts at most 32 ViewSpec diagnostics; the summary keeps us inside it. */
 const MAX_DIAGNOSTICS = 32
 
 function soleSource(sources: readonly MemorySourceFacts[], role: typeof VIEW_ROLES[number]): MemorySourceFacts | undefined {
@@ -17,12 +16,6 @@ function soleSource(sources: readonly MemorySourceFacts[], role: typeof VIEW_ROL
   return matches[0]
 }
 
-/**
- * Why an installed Source stays out of this View (#504). A custom role is not a
- * failure, so it is explained instead of silently dropped; an unavailable Source
- * already carries the Host's own diagnostic. Sorted by instance key so repeated
- * composition stays deterministic.
- */
 function unsupportedRoleDiagnostics(sources: readonly MemorySourceFacts[]): MemoryCompositionDiagnostic[] {
   const unsupported = sources
     .filter(source => source.availability !== 'unavailable' && !VIEW_ROLES.includes(source.role as typeof VIEW_ROLES[number]))
@@ -40,7 +33,6 @@ function unsupportedRoleDiagnostics(sources: readonly MemorySourceFacts[]): Memo
   ]
 }
 
-/** Pure View composition; no dependency on any Source implementation. */
 export const DEFAULT_THREE_TIER_VIEW_STRATEGY = defineMemoryStrategy({
   createTurn: createThreeTierTurn,
   manifest: {
@@ -88,9 +80,6 @@ function composeThreeTier(request: MemoryViewRequest, sources: readonly MemorySo
     const documents = soleSource(sources, 'narrative')
     const memorySpaces = soleSource(sources, 'durable-evidence')
     const durable = memorySpaces?.sourceTypeId === 'memory-spaces'
-    // The guidance names mnemon_recall only while Memory Spaces offer recall, and
-    // archiving into them only while one takes writes here (#336). Both follow the
-    // View's facts, after the layer's participation settings.
     const recall = durable && memorySpaces.routeIds.includes('recall')
     const hints = memorySpaces?.hints
     const count = (key: string): number | undefined => {
@@ -129,12 +118,10 @@ function composeThreeTier(request: MemoryViewRequest, sources: readonly MemorySo
     }
 }
 
-/** One priority list, one shared allocation, and no changes to Source storage scopes. */
 function composeSelected(request: MemoryViewRequest, sources: readonly MemoryAvailableSource[], selection: ThreeTierExtensionValues['selection']): MemoryViewSpec {
   const selected = selection.sourceKeys.map(key => {
     const source = sources.find(source => source.sourceInstanceKey === key)
     if (source === undefined) throw new Error(`scoped three-tier Source is not installed: ${key}`)
-    // Rejecting is unchanged; the message now names the Source and the way out.
     if (!VIEW_ROLES.includes(source.role as typeof VIEW_ROLES[number])) throw new Error(`unsupported scoped three-tier Source role: ${source.role} (${source.sourceInstanceKey}); default-three-tier admits ${VIEW_ROLES.join(', ')} only, so remove it from the selection or select the general Strategy`)
     return source
   }).filter(source => source.availability !== 'unavailable')
@@ -146,7 +133,6 @@ function composeSelected(request: MemoryViewRequest, sources: readonly MemoryAva
   const totalWeight = projected.reduce((sum, source) => sum + weight(source), 0)
   const allocation = new Map(projected.map(source => [source.sourceInstanceKey, Math.floor(request.budget.maxProjectionCharacters * weight(source) / totalWeight)]))
   let remaining = request.budget.maxProjectionCharacters - [...allocation.values()].reduce((sum, value) => sum + value, 0)
-  // Rounding remainder belongs to the earlier, explicitly preferred Sources.
   for (const source of projected) {
     if (remaining <= 0) break
     allocation.set(source.sourceInstanceKey, allocation.get(source.sourceInstanceKey)! + 1)

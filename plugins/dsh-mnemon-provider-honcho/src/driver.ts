@@ -67,9 +67,6 @@ export class HonchoProvider extends HttpMemoryProvider implements MemoryProvider
       json: {
         query: request.query,
         top_k: Math.min(request.limit ?? 10, 100),
-        // Honcho semantic query requires both peers even when discovery mapped
-        // the workspace-wide body with wildcard scope. Use the same stable
-        // DSH peer defaults as explicit writes so native recall remains valid.
         filters: this.scope(connection, true),
       },
       signal,

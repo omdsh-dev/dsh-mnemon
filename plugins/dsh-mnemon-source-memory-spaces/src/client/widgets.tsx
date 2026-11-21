@@ -27,18 +27,15 @@ export function providerDraftComplete(provider: MemoryProviderDescriptor | undef
   return provider.origin === 'native' || memoryProviderFields(provider).every(field => !field.required || String(connection?.[field.key] ?? '').trim() !== '')
 }
 
-/** Keep a ready provider; otherwise Mnemon Native while its CLI is available, then the first other ready one. */
 export function readyProviderId(providers: readonly MemoryProviderDescriptor[], current?: MemoryProviderId): MemoryProviderId | undefined {
   const ready = providers.filter(provider => provider.serviceConfigured !== false)
   return ready.find(provider => provider.id === current)?.id ?? (ready.find(provider => provider.origin === 'native') ?? ready[0])?.id
 }
 
-/** Ready Providers first, in catalog order, so the choices that work lead the list. */
 export function readyFirst(providers: readonly MemoryProviderDescriptor[]): MemoryProviderDescriptor[] {
   return [...providers].sort((left, right) => Number(left.serviceConfigured === false) - Number(right.serviceConfigured === false))
 }
 
-/** Why a provider cannot be chosen: Mnemon Native needs its CLI, the others a service configured on the dsh-mnemon page under Plugins. */
 export function providerUnavailableKey(provider: MemoryProviderDescriptor): 'overview.nativeCliRequired' | 'overview.providerServiceRequired' {
   return provider.origin === 'native' ? 'overview.nativeCliRequired' : 'overview.providerServiceRequired'
 }
@@ -47,7 +44,6 @@ export function nativeSpaceProvider(provider: MemorySpaceProvider): boolean {
   return provider.origin === 'native'
 }
 
-/** Shared memory-level Provider form used by manual creation, editing, and distillation policy. */
 export function ProviderMemoryFields(props: {
   provider: MemoryProviderDescriptor
   connection: MemoryProviderConnection

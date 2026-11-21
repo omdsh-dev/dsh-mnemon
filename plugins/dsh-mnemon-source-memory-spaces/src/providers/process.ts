@@ -22,7 +22,6 @@ export type ProcessRunner = (
   options: ProcessOptions,
 ) => Promise<ProcessResult>
 
-/** Why a process did not produce a result, so callers can explain each case differently. */
 export type ProcessFailureReason = 'launch' | 'timeout' | 'aborted' | 'output-limit'
 
 export class ProcessError extends Error {
@@ -34,7 +33,6 @@ export class ProcessError extends Error {
 
 export const DEFAULT_MAX_OUTPUT_BYTES = 2 * 1024 * 1024
 
-/** Spawn without a shell, with bounded output and cooperative cancellation. */
 export const runProcess: ProcessRunner = (command, args, options) => new Promise((resolve, reject) => {
   const label = options.label ?? 'mnemon'
   const child = spawn(command, [...args], {

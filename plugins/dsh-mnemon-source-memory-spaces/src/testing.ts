@@ -14,7 +14,6 @@ export interface MemorySpaceProviderTest {
   dispose(): Promise<void>
 }
 
-/** Real private-child registration and factory validation, without exposing its Host/Registry. */
 export async function mountMemorySpaceProvider<C>(
   module: MemorySpaceProviderModule<C>,
   options: { instanceId?: string; sourceInstanceId?: string; config: C },
@@ -60,7 +59,6 @@ export async function mountMemorySpaceProvider<C>(
   }
 }
 
-/** Driver fixture only: real descriptor validation, no Core or service singleton. */
 export function createMemorySpaceProviderFixture(
   descriptor: MemoryProviderDescriptor,
   input: MemoryProviderConnection = {},
