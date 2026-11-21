@@ -73,14 +73,21 @@ export function memoryGenerationOptions(
     sourceConfiguration: (installed, strategyTypeId) => {
       const type = installed.definition.manifest.typeId
       if (!isDefaultSourceInstance(installed.instanceKey, type)) return {}
-      const bm25 = strategyTypeId === 'default-three-tier' && config.lifecycleEnabled && config.runtimeMemory.bm25Recall
+      const layered = strategyTypeId === 'default-three-tier' && config.lifecycleEnabled
+      const bm25 = layered && config.runtimeMemory.bm25Recall
         && (type === 'runtime' || type === 'documents')
         && allowsParticipation(config, type, 'project', 'automatic') && allowsParticipation(config, type, 'search', 'automatic')
         ? { bm25Recall: true } : {}
+      const indexPush = layered && config.runtimeMemory.indexPush
+        && allowsParticipation(config, type, 'project', 'automatic')
+        && ((type === 'documents' && allowsParticipation(config, 'documents', 'search', 'automatic'))
+          || (type === 'memory-spaces' && allowsParticipation(config, 'memory-spaces', 'recall', 'automatic')))
+        ? { bm25IndexPush: true } : {}
       if (type === 'runtime') return { dataDir: directory, userDataDir: userDirectory, memoryLimitBytes: config.runtimeMemory.memoryLimitBytes, userLimitBytes: config.runtimeMemory.userLimitBytes, deferLowPriority: config.runtimeMemory.deferLowPriority, ...bm25 }
       if (type === 'documents') return {
         dataDir: documentsDirectory,
         ...bm25,
+        ...indexPush,
         ...(config.documents?.limitBytes === undefined ? {} : { limitBytes: config.documents.limitBytes }),
         ...(config.documents === undefined ? {} : { documents: config.documents }),
       }
@@ -93,7 +100,7 @@ export function memoryGenerationOptions(
       }
       if (type === 'memory-spaces') return JSON.parse(JSON.stringify({
         dataDir: memorySpacesDirectory, cliPath: config.cliPath, store: config.store, timeoutMs: config.timeoutMs,
-        defaultRecallLimit: config.defaultRecallLimit, writeEnabled: config.writeEnabled,
+        defaultRecallLimit: config.defaultRecallLimit, writeEnabled: config.writeEnabled, ...indexPush,
         embedding: config.embedding, recallQuality: config.recallQuality, persistenceStrategy: config.persistenceStrategy,
       }))
       return {}

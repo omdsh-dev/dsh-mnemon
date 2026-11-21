@@ -45,20 +45,58 @@ function missing(kind: StorageAreaKind, path: string): StorageAreaInventory {
 // Each area is read through its Source's own names and counting rules, so an inventory follows
 // the Source when its files change instead of reporting a store it no longer understands. The
 // Source says whether a file can be counted; the messages the Status page shows stay here.
-function runtimeArea(root: string): StorageAreaInventory {
+function runtimeArea(root: string, userRoot: string = root): StorageAreaInventory {
   const path = join(root, RUNTIME_DIRECTORY)
+  const resolvedUserRoot = canonical(userRoot)
+  const sharedUser = resolvedUserRoot !== root
   const source = join(path, RUNTIME_MEMORIES_FILE)
-  if (!existsSync(source)) return missing('runtime', path)
+  if (!sharedUser) {
+    if (!existsSync(source)) return missing('runtime', path)
+    try {
+      const stored = summarizeRuntimeMemories(readJson(source))
+      if (!stored.valid) throw new Error('memories.json is not a valid runtime-memory source')
+      const projectionsHealthy = existsSync(join(path, RUNTIME_PROJECTION_FILES.user)) && existsSync(join(path, RUNTIME_PROJECTION_FILES.memory))
+      return {
+        kind: 'runtime', path,
+        status: stored.entries === 0 ? 'empty' : projectionsHealthy ? 'ready' : 'invalid',
+        bytes: safeBytes(path), itemCount: stored.entries,
+        details: { userEntries: stored.user, memoryEntries: stored.memory, projectionsHealthy, source: RUNTIME_MEMORIES_FILE },
+        ...(projectionsHealthy ? {} : { issue: 'USER.md or MEMORY.md projection is missing' }),
+      }
+    } catch (error) {
+      return { kind: 'runtime', path, status: 'invalid', bytes: safeBytes(path), itemCount: 0, details: {}, issue: error instanceof Error ? error.message : String(error) }
+    }
+  }
+  const userPath = join(resolvedUserRoot, RUNTIME_DIRECTORY)
+  const userSource = join(userPath, RUNTIME_MEMORIES_FILE)
+  const hasLocal = existsSync(source)
+  const hasGlobal = existsSync(userSource)
+  if (!hasLocal && !hasGlobal) return missing('runtime', path)
   try {
-    const stored = summarizeRuntimeMemories(readJson(source))
-    if (!stored.valid) throw new Error('memories.json is not a valid runtime-memory source')
-    const projectionsHealthy = existsSync(join(path, RUNTIME_PROJECTION_FILES.user)) && existsSync(join(path, RUNTIME_PROJECTION_FILES.memory))
+    const local = hasLocal ? summarizeRuntimeMemories(readJson(source)) : undefined
+    if (local !== undefined && !local.valid) throw new Error('memories.json is not a valid runtime-memory source')
+    const global = hasGlobal ? summarizeRuntimeMemories(readJson(userSource)) : undefined
+    if (global !== undefined && !global.valid) throw new Error('shared USER.md memories.json is not a valid runtime-memory source')
+    const userEntries = global?.user ?? 0
+    const memoryEntries = local?.memory ?? 0
+    const itemCount = userEntries + memoryEntries
+    if (!hasLocal && userEntries === 0) return missing('runtime', path)
+    const memoryProjection = !hasLocal || existsSync(join(path, RUNTIME_PROJECTION_FILES.memory))
+    const userProjection = !hasGlobal || existsSync(join(userPath, RUNTIME_PROJECTION_FILES.user))
+    const projectionsHealthy = memoryProjection && userProjection
+    const issue = projectionsHealthy
+      ? undefined
+      : !memoryProjection && !userProjection
+        ? 'USER.md or MEMORY.md projection is missing'
+        : !memoryProjection
+          ? 'MEMORY.md projection is missing'
+          : 'shared USER.md projection is missing'
     return {
       kind: 'runtime', path,
-      status: stored.entries === 0 ? 'empty' : projectionsHealthy ? 'ready' : 'invalid',
-      bytes: safeBytes(path), itemCount: stored.entries,
-      details: { userEntries: stored.user, memoryEntries: stored.memory, projectionsHealthy, source: RUNTIME_MEMORIES_FILE },
-      ...(projectionsHealthy ? {} : { issue: 'USER.md or MEMORY.md projection is missing' }),
+      status: itemCount === 0 ? 'empty' : projectionsHealthy ? 'ready' : 'invalid',
+      bytes: safeBytes(path), itemCount,
+      details: { userEntries, memoryEntries, projectionsHealthy, sharedUserProfile: true, source: RUNTIME_MEMORIES_FILE },
+      ...(issue === undefined ? {} : { issue }),
     }
   } catch (error) {
     return { kind: 'runtime', path, status: 'invalid', bytes: safeBytes(path), itemCount: 0, details: {}, issue: error instanceof Error ? error.message : String(error) }
@@ -136,6 +174,7 @@ function stateArea(root: string): StorageAreaInventory {
 }
 
 interface SplitRoots {
+  userRoot?: string
   documentsRoot?: string
   memorySpacesRoot?: string
 }
@@ -144,7 +183,7 @@ function inspect(kind: StorageScopeKind, rawRoot: string | undefined, activeRoot
   if (rawRoot === undefined) return { kind, configured: false, active: false, available: false, totalBytes: 0, areas: [], issue: 'scope is not configured' }
   const root = canonical(rawRoot)
   const areas = [
-    runtimeArea(root),
+    runtimeArea(root, split?.userRoot ?? root),
     memorySpacesArea(root, split?.memorySpacesRoot ?? root),
     documentsArea(root, split?.documentsRoot ?? root),
     stateArea(root),
@@ -162,7 +201,7 @@ function inspect(kind: StorageScopeKind, rawRoot: string | undefined, activeRoot
 export class StorageScopeInspector {
   constructor(
     private readonly runner: Pick<StorageRoot, 'effectiveDataDir'>,
-    private readonly config: Pick<ResolvedConfig, 'dataDir' | 'storageScope'> & Partial<Pick<ResolvedConfig, 'documentsScope' | 'memorySpacesScope'>>,
+    private readonly config: Pick<ResolvedConfig, 'dataDir' | 'storageScope'> & Partial<Pick<ResolvedConfig, 'runtimeUserScope' | 'documentsScope' | 'memorySpacesScope'>>,
   ) {}
 
   catalog(workspaceRoot?: string): StorageScopeCatalog {
@@ -173,12 +212,11 @@ export class StorageScopeInspector {
     const activeKind: StorageScopeKind = this.config.storageScope
     const custom = configuredDataDir !== undefined && configuredDataDir !== global && configuredDataDir !== workspace ? configuredDataDir : undefined
     const workspaces = workspace === undefined ? undefined : createStorageRoot({ ...this.config, storageScope: 'workspaces' }, workspaceRoot).effectiveDataDir()
-    const split: SplitRoots | undefined = this.config.documentsScope === 'global' || this.config.memorySpacesScope === 'global'
-      ? {
-          ...(this.config.documentsScope === 'global' ? { documentsRoot: global } : {}),
-          ...(this.config.memorySpacesScope === 'global' ? { memorySpacesRoot: global } : {}),
-        }
-      : undefined
+    const split: SplitRoots = {
+      ...(this.config.runtimeUserScope === 'global' ? { userRoot: global } : {}),
+      ...(this.config.documentsScope === 'global' ? { documentsRoot: global } : {}),
+      ...(this.config.memorySpacesScope === 'global' ? { memorySpacesRoot: global } : {}),
+    }
     return {
       activeKind,
       activeRoot,

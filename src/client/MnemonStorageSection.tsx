@@ -241,6 +241,7 @@ export function MnemonStorageSection(props: MnemonStorageSectionProps): JSX.Elem
         </SettingRow>
       )}
       {saved.scope !== 'global' && <>
+        <p className={css.panelNote}>{t('config.componentScopeSwitchHint')}</p>
         <SelectRow id="mnemon-documents-scope" label={t('config.documentsScopeTitle')} value={documentsScope.value} disabled={props.disabled} onChange={documentsScope.set} options={[
           { value: 'storage', label: t('config.componentScopeStorage'), detail: t('config.documentsScopeStorageHint') },
           { value: 'global', label: t('config.componentScopeGlobal'), detail: t('config.documentsScopeGlobalHint') },

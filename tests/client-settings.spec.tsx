@@ -1038,6 +1038,20 @@ describe('MnemonSettingsCard', () => {
     expect(checked(toggle)).toBe(true)
   })
 
+  it('defaults experimental index push off and saves only its setting (issue 701)', async () => {
+    const mutate = vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({ runtimeMemory: { bm25Recall: true } }), mutate)
+    const view = render(runtime(scope))
+    const toggle = screen.getByRole('switch', { name: '推送记忆空间与档案索引（实验）' })
+    expect(checked(toggle)).toBe(false)
+    fireEvent.click(toggle)
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['runtimeMemory', 'indexPush'], value: true }]))
+    expect(checked(toggle)).toBe(true)
+    view.unmount()
+    render(runtime(scope, {}, translateEn))
+    expect(checked(screen.getByRole('switch', { name: 'Push Memory Space and Document indexes (experimental)' }))).toBe(true)
+  })
+
   it('keeps both Runtime recall preferences when their saves overlap', async () => {
     const recallSave = deferred<void>()
     const deferredSave = deferred<void>()
@@ -1776,6 +1790,7 @@ describe('centralized workspace storage settings', () => {
     render(<MnemonSettingsCard scope={scope} />)
 
     const storage = screen.getByRole('region', { name: '存储' })
+    expect(within(storage).getByText(/原有数据保留在原目录/u)).toBeTruthy()
     choose('项目档案范围', '全局共享', storage)
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['documentsScope'], value: 'global' }]))
     choose('记忆空间范围', '全局共享', storage)
@@ -2188,6 +2203,7 @@ describe('Phase 1 converged settings, deep-linking, and lent component host', ()
     const scope = liveSettingsScope<Config>(readySnapshot({}), writes)
     render(<DocumentsSettings scope={scope} page={page(DOCUMENTS_PACKAGE, { language: 'en' })} t={translateEn} />)
 
+    expect(screen.getByText(/Existing data stays in its original directory/u)).toBeTruthy()
     const limitInput = screen.getByLabelText(translateEn('config.documents.limitBytes')) as HTMLInputElement
     expect(limitInput.value).toBe('10485760')
     expect(screen.queryByRole('button', { name: 'Apply' })).toBeNull()

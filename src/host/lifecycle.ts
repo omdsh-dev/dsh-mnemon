@@ -414,7 +414,7 @@ class MnemonAgentLifecycle {
     // Agent step still needs its own durable turn's View before tools or Wake.
     if (!this.disposed && openAgentTurn(this.agent) === payload.turn) await this.memoryTurn?.begin(payload.turn, payload.signal)
     const view = this.memoryTurn?.current?.context.view
-    const experiment = this.config.lifecycleEnabled && this.config.runtimeMemory.bm25Recall && !this.memoryTurn?.excluded
+    const experiment = this.config.lifecycleEnabled && (this.config.runtimeMemory.bm25Recall || this.config.runtimeMemory.indexPush) && !this.memoryTurn?.excluded
       ? bm25View(view) : undefined
     if (experiment !== undefined && this.recallCheckpoint === undefined) {
       const latest = findSessionEvent(this.agent.session, event => event.type === 'step/start'
@@ -596,7 +596,7 @@ class MnemonAgentLifecycle {
       if (this.activeSnapshot !== active || active.signal.aborted || step?.turn !== active.turn || step.step !== active.step) return
       try {
         const pinnedView = this.memoryTurn?.current?.context.view
-        const pinnedRecall = this.config.runtimeMemory.bm25Recall ? bm25View(pinnedView) : undefined
+        const pinnedRecall = (this.config.runtimeMemory.bm25Recall || this.config.runtimeMemory.indexPush) ? bm25View(pinnedView) : undefined
         const pinned = memorySnapshotState(pinnedRecall?.view ?? pinnedView)
         const currentState = authority?.state
         const authorized = pinned !== undefined && currentState?.boundary === pinned.boundary
@@ -606,12 +606,13 @@ class MnemonAgentLifecycle {
         // Revalidate the pinned catalog against a fresh View. A compaction made
         // during a step cannot introduce hits from outside that step's pin.
         const currentRecall = authority?.recall
-        const allowed = new Set(currentRecall === undefined ? [] : [...currentRecall.memory, ...currentRecall.documents].map(item => item.key))
+        const allowed = new Set(currentRecall === undefined ? [] : [...currentRecall.memory, ...currentRecall.documents, ...(currentRecall.spaces ?? [])].map(item => item.key))
         const recall = pinnedRecall !== undefined && currentRecall?.scope === pinnedRecall.scope ? {
           view: {
             ...pinnedRecall,
             memory: pinnedRecall.memory.filter(item => allowed.has(item.key)),
             documents: pinnedRecall.documents.filter(item => allowed.has(item.key)),
+            spaces: (pinnedRecall.spaces ?? []).filter(item => allowed.has(item.key)),
           },
           query: active.recallQuery,
           checkpoint: true,
@@ -670,15 +671,26 @@ class MnemonAgentLifecycle {
     const policy = this.reviewPolicy()
     this.idleReviewTimer = setTimeout(() => {
       this.idleReviewTimer = undefined
-      if (epoch !== this.reviewEpoch || policy !== this.reviewPolicy() || !this.idleReviewAllowed() || this.reviewRunning) return
-      if (this.lastReviewAttemptAt !== undefined && Date.now() < this.lastReviewAttemptAt + this.config.idleReview.minIntervalMs) {
-        this.scheduleIdleReview(turn)
-        return
+      try {
+        if (epoch !== this.reviewEpoch || policy !== this.reviewPolicy() || !this.idleReviewAllowed() || this.reviewRunning) return
+        if (this.lastReviewAttemptAt !== undefined && Date.now() < this.lastReviewAttemptAt + this.config.idleReview.minIntervalMs) {
+          this.scheduleIdleReview(turn)
+          return
+        }
+        if (this.agent.status !== 'idle') return
+        const completed = findSessionEvent(this.agent.session, event => event.type === 'turn/end' && eventTurn(event) === turn) !== undefined
+        if (!completed || !this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
+        void this.runIdleReview().catch(error => {
+          if (this.disposed || isInactiveContextError(error)) return
+          try { if (!contextIsActive(this.agent.ctx)) return } catch { return }
+          this.fail(error)
+        })
+      } catch (error) {
+        // Never allow an idle timer error to escape as an uncaught host exception (#702).
+        if (this.disposed || isInactiveContextError(error)) return
+        try { if (!contextIsActive(this.agent.ctx)) return } catch { return }
+        this.fail(error)
       }
-      if (this.agent.status !== 'idle') return
-      const completed = findSessionEvent(this.agent.session, event => event.type === 'turn/end' && eventTurn(event) === turn) !== undefined
-      if (!completed || !this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
-      void this.runIdleReview()
     }, Math.min(2_147_483_647, Math.max(this.config.idleReviewMs, (this.lastReviewAttemptAt ?? -Infinity) + this.config.idleReview.minIntervalMs - Date.now())))
   }
 

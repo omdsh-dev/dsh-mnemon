@@ -2,9 +2,11 @@ import { createHash } from 'node:crypto'
 import {
   closeSync,
   existsSync,
+  fstatSync,
   lstatSync,
   mkdirSync,
   openSync,
+  readSync,
   readFileSync,
   realpathSync,
   renameSync,
@@ -23,6 +25,7 @@ const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024
 const LOCK_TIMEOUT_MS = 5_000
 const LOCK_RETRY_MS = 20
 const MAX_EXCERPT_CACHE_ENTRIES = 2_048
+const INDEX_EXCERPT_READ_BYTES = 16 * 1024
 
 export class DocumentCapacityError extends Error {
   readonly code = 'document-capacity' as const
@@ -134,6 +137,25 @@ function diskIdentity(stat: BigIntStats): string {
   return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}:${stat.mode}`
 }
 
+function needsIndexExcerpt(record: DocumentRecord): boolean {
+  return record.status === 'active' && record.description.trim() === ''
+}
+
+function readIndexExcerpt(path: string, identity: string): string {
+  const descriptor = openSync(path, 'r')
+  try {
+    if (diskIdentity(fstatSync(descriptor, { bigint: true })) !== identity) return ''
+    const buffer = Buffer.allocUnsafe(INDEX_EXCERPT_READ_BYTES)
+    const bytes = readSync(descriptor, buffer, 0, buffer.length, 0)
+    const prefix = new TextDecoder().decode(buffer.subarray(0, bytes), { stream: bytes === buffer.length }).replace(/\r\n/gu, '\n')
+    // Require complete front matter before sampling the body.
+    if (prefix.startsWith('---\n') && !prefix.includes('\n---\n', 4)) return ''
+    return excerpt(documentBody(prefix))
+  } finally {
+    closeSync(descriptor)
+  }
+}
+
 function sleepSync(milliseconds: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds)
 }
@@ -177,6 +199,7 @@ export class DocumentController {
   private readonly managedRelativePrefix: string
   private queue: Promise<unknown> = Promise.resolve()
   private readonly excerpts = new Map<string, { identity: string; value: string }>()
+  private readonly indexExcerpts = new Map<string, { identity: string; value: string }>()
   private indexCache: { identity: string; index: DocumentIndex; revision: string } | undefined
   private readonly indexRevisions = new WeakMap<DocumentIndex, string>()
 
@@ -203,9 +226,9 @@ export class DocumentController {
     return this.withLock(() => this.snapshotUnlocked(this.readIndex()))
   }
 
-  /** Source facts and read-grant membership need metadata, not every document body. */
-  catalog(): DocumentSnapshot {
-    return this.withLock(() => this.snapshotUnlocked(this.readIndex(), false))
+  /** Index push can sample short excerpts for active documents without descriptions. */
+  catalog(includeIndexExcerpts = false): DocumentSnapshot {
+    return this.withLock(() => this.snapshotUnlocked(this.readIndex(), includeIndexExcerpts ? 'index' : false))
   }
 
   revision(): string {
@@ -480,23 +503,28 @@ export class DocumentController {
     return this.indexRevisions.get(index) ?? indexRevision(index)
   }
 
-  private snapshotUnlocked(index: DocumentIndex, includeExcerpts = true): DocumentSnapshot {
+  private snapshotUnlocked(index: DocumentIndex, includeExcerpts: boolean | 'index' = true): DocumentSnapshot {
     // Fix admission before scanning: FIFO insertion on every overflow miss
     // would evict the next body and make every subsequent full scan miss.
-    const cachedPaths = includeExcerpts ? index.documents.slice(0, MAX_EXCERPT_CACHE_ENTRIES).map(record => this.pathFor(record)) : undefined
+    const cache = includeExcerpts === 'index' ? this.indexExcerpts : this.excerpts
+    const excerptRecords = includeExcerpts === 'index' ? index.documents.filter(needsIndexExcerpt) : index.documents
+    const cachedPaths = includeExcerpts === false ? undefined
+      : excerptRecords.slice(0, MAX_EXCERPT_CACHE_ENTRIES).map(record => this.pathFor(record))
     const eligiblePaths = cachedPaths === undefined ? undefined : new Set(cachedPaths)
     if (eligiblePaths !== undefined) {
-      for (const path of this.excerpts.keys()) if (!eligiblePaths.has(path)) this.excerpts.delete(path)
+      for (const path of cache.keys()) if (!eligiblePaths.has(path)) cache.delete(path)
     }
     const documents = index.documents.map((record, position) => {
-      const path = cachedPaths?.[position] ?? this.pathFor(record)
+      const path = (includeExcerpts === true ? cachedPaths?.[position] : undefined) ?? this.pathFor(record)
+      const indexExcerpt = includeExcerpts === 'index' && needsIndexExcerpt(record)
       let stat: BigIntStats
-      try { stat = statSync(path, { bigint: true }) }
+      try { stat = indexExcerpt ? lstatSync(path, { bigint: true }) : statSync(path, { bigint: true }) }
       catch {
-        this.excerpts.delete(path)
+        cache.delete(path)
         return { ...record, healthy: false, excerpt: '' }
       }
-      return { ...record, healthy: true, excerpt: includeExcerpts ? this.bodyExcerpt(record, path, stat, eligiblePaths!.has(path)) : '' }
+      const sample = includeExcerpts === true || indexExcerpt && stat.isFile()
+      return { ...record, healthy: true, excerpt: sample ? this.bodyExcerpt(record, path, stat, eligiblePaths!.has(path), indexExcerpt) : '' }
     })
     const active = documents.filter(record => record.status === 'active')
     return {
@@ -515,18 +543,24 @@ export class DocumentController {
   }
 
   /** Cache only presentation excerpts; reads/search and each health check stay live. */
-  private bodyExcerpt(record: DocumentRecord, path: string, stat: BigIntStats, cacheable: boolean): string {
-    if (!cacheable) return excerpt(this.readBody(record))
+  private bodyExcerpt(record: DocumentRecord, path: string, stat: BigIntStats, cacheable: boolean, indexExcerpt: boolean): string {
     const identity = diskIdentity(stat)
-    const cached = this.excerpts.get(path)
+    const cache = indexExcerpt ? this.indexExcerpts : this.excerpts
+    const cached = cacheable ? cache.get(path) : undefined
     if (cached?.identity === identity) return cached.value
-    this.excerpts.delete(path)
-    const value = excerpt(this.readBody(record))
+    cache.delete(path)
+    let value: string
+    try { value = indexExcerpt ? readIndexExcerpt(path, identity) : excerpt(this.readBody(record)) }
+    catch (error) {
+      if (indexExcerpt) return ''
+      throw error
+    }
+    if (!cacheable) return value
     // An out-of-band writer may replace the body between stat and read. Return
     // the observed body, but never stamp it with an unrelated file's identity.
     try {
       if (diskIdentity(statSync(path, { bigint: true })) === identity) {
-        this.excerpts.set(path, { identity, value })
+        cache.set(path, { identity, value })
       }
     } catch { /* The next snapshot will observe a removed/inaccessible body. */ }
     return value

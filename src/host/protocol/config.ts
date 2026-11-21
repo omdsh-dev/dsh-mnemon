@@ -65,6 +65,8 @@ export interface ResolvedDocumentsConfig {
 export interface RuntimeMemoryConfig {
   /** Rank individual working memories and project Document titles before a main turn. */
   bm25Recall?: boolean
+  /** Push bounded Memory Space and Project Document index summaries before a main turn. */
+  indexPush?: boolean
   /** Omit unpinned low-priority entries from eager prompts; offer scoped search instead. */
   deferLowPriority?: boolean
   /** Automatically project Runtime memory into newly created child Agents; off by default. */
@@ -79,6 +81,7 @@ export interface RuntimeMemoryConfig {
 
 export interface ResolvedRuntimeMemoryConfig {
   bm25Recall: boolean
+  indexPush: boolean
   deferLowPriority: boolean
   inheritToSubagents: boolean
   memoryLimitBytes: number
