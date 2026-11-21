@@ -13,7 +13,7 @@ import type { ComposableMemoryView } from '../src/core/contracts/index.ts'
 import type { HostContextShape, HostMessageSource, HostSession } from '../src/host/dsh.ts'
 import { applyMemoryViewGuidance, registerGuidance, RUNTIME_MEMORY_CONTEXT_NAME, SNAPSHOT_GUIDANCE, withoutMemoryViewContext } from '../src/host/guidance.ts'
 import { prepareMemorySnapshot, runtimeSnapshotRanges, summaryWithoutTransientMemory } from '../src/host/memory-snapshot.ts'
-import type { Bm25View } from '../src/host/bm25-recall.ts'
+import { prepareBm25Recall, readBm25RecallState, type Bm25View } from '../src/host/bm25-recall.ts'
 import { memorySnapshotState, type MemorySnapshotState } from '../src/host/memory-snapshot-state.ts'
 import { modelMemoryWake } from '../src/host/view-presentation.ts'
 import { truncateMemoryText } from '../src/sdk/index.ts'
@@ -64,6 +64,53 @@ describe('memory snapshot surface updates', () => {
     expect(JSON.stringify(f.session.deriveMessages())).toContain('Glacier deployment')
     update(undefined)
     expect(f.session.deriveMessages()).toEqual([keep.data])
+  })
+
+  it('keeps the existing two-title BM25 limit when index push is off', () => {
+    const catalog: Bm25View = {
+      view: {} as ComposableMemoryView, scope: 'e'.repeat(64), memory: [],
+      documents: [1, 2, 3].map(index => ({ key: String(index).repeat(64), text: `Quartz guide ${index}`, documentId: `doc-${index}` })),
+    }
+    const delivered = (view: Bm25View) => readBm25RecallState(prepareBm25Recall([], view, 'Quartz', false).message?.source)?.added
+    expect(delivered(catalog)).toHaveLength(2)
+    expect(delivered({ ...catalog, indexPush: true })).toHaveLength(3)
+  })
+
+  it('bounds and invalidates Memory Space and Document summary index pushes (issue 701)', () => {
+    const f = fixture()
+    const space = {
+      key: '1'.repeat(64), text: 'Release Notes', matchText: 'Release Notes\nAurora rollback procedure',
+      memoryBodyId: 'space-aurora', description: 'Aurora rollback procedure',
+    }
+    const docs = Array.from({ length: 4 }, (_, index) => ({
+      key: String(index + 2).repeat(64),
+      text: `Guide ${index + 1}`,
+      matchText: `Guide ${index + 1}\nAurora deployment guide ${index + 1}`,
+      documentId: `doc-${index + 1}`,
+      summary: `Aurora deployment guide ${index + 1}`,
+    }))
+    const view: Bm25View = { view: {} as ComposableMemoryView, scope: 'e'.repeat(64), memory: [], documents: docs, spaces: [space], indexPush: true }
+    const update = (catalog: Bm25View | undefined, query?: string, checkpoint = false) => {
+      const plan = prepareMemorySnapshot(f.session as unknown as HostSession, undefined, undefined,
+        catalog === undefined ? undefined : { recall: { view: catalog, query, checkpoint } })
+      plan.retire(1, 1)
+      if (plan.recall !== undefined) f.session.append('user/message', plan.recall as never, { surfaceOp: 'append' })
+    }
+    update(view, 'Aurora rollback deployment')
+    const pushed = f.session.deriveMessages()
+    expect(pushed).toHaveLength(1)
+    const text = String((pushed[0]!.content[0] as { text: string }).text)
+    const lines = text.split('\n')
+    expect(lines.slice(1).length).toBeLessThanOrEqual(5)
+    expect(text).toContain('"memoryBodyId":"space-aurora"')
+    expect(text).toContain('"description":"Aurora rollback procedure"')
+    expect(text).toContain('"summary":"Aurora deployment guide')
+    // Deactivating or removing the space invalidates its reference cleanly.
+    update({ ...view, spaces: [] }, 'unrelated query')
+    const invalidated = f.session.deriveMessages()
+    expect(invalidated).toHaveLength(2)
+    expect(JSON.stringify(invalidated[1])).toContain('Disregard superseded or removed references')
+    expect(JSON.stringify(invalidated[1])).toContain('1'.repeat(16))
   })
 
   it('filters attributed Runtime spans, preserving mixed Source text and ordinary messages', () => {

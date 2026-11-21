@@ -123,8 +123,8 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
   create(context) {
     const effective = documentsSourceConfig({ ...context.configuration, ...configured }, context.sourceInstanceKey)
     const documents = new DocumentManager(effective.limitBytes, undefined, () => effective.dataDir)
-    const snapshot = (workspaceId: string | undefined) => workspaceId === undefined ? undefined : documents.forWorkspace(workspaceId).catalog()
-    const prepared = new WeakMap<object, NonNullable<ReturnType<typeof snapshot>>>()
+    const snapshot = (workspaceId: string, indexExcerpts = false) => documents.forWorkspace(workspaceId).catalog(indexExcerpts)
+    const prepared = new WeakMap<object, ReturnType<typeof snapshot>>()
     // Source- and execution-local successful writes, not a broader read grant.
     // Weak keys avoid retaining completed turns; View ids and grant ids can repeat.
     const created = new WeakMap<object, Set<string>>()
@@ -139,7 +139,7 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
           sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'documents', role: 'narrative', availability: 'ready',
           revision: documents.forWorkspace(root).revision(), capabilities: ['status', 'project', 'search', 'read', 'write'], routeIds: ['search'], actionIds: ['manage', 'create'],
         }
-        const current = snapshot(root)!
+        const current = snapshot(root, effective.bm25IndexPush && request.scenario === 'agent.root-turn')
         prepared.set(request.scope, current)
         const active = current.documents.filter(document => document.status === 'active' && document.healthy)
         return {
@@ -151,7 +151,8 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
       project(request) {
         const root = workspace(request.scope)
         if (root === undefined) return { fragments: [] }
-        const current = prepared.get(request.scope) ?? snapshot(root)!
+        const indexPush = request.includeProjection && effective.bm25IndexPush
+        const current = prepared.get(request.scope) ?? snapshot(root, indexPush)
         prepared.delete(request.scope)
         if (current.revision !== request.expectedRevision) throw new Error('Documents projection revision changed during composition')
         const active = current.documents.filter(document => document.status === 'active' && document.healthy).sort((a, b) => a.id.localeCompare(b.id))
@@ -161,10 +162,14 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
           schema: 'dsh-mnemon.documents/v1',
           value: { workspaceRoot: root, documentIds: active.map(document => document.id),
             archivedDocumentIds: current.documents.filter(document => document.status === 'archived' && document.healthy).map(document => document.id).sort(),
-            ...(request.includeProjection && effective.bm25Recall ? { bm25: {
-              scope: createHash('sha256').update(JSON.stringify([effective.dataDir, root])).digest('hex'),
+            ...(request.includeProjection && (effective.bm25Recall || indexPush) ? { bm25: {
+              scope: createHash('sha256').update(JSON.stringify(indexPush ? [effective.dataDir, root, true] : [effective.dataDir, root])).digest('hex'),
               text: truncate('Project Documents can be searched by title or topic.', request.maxCharacters),
-              titles: active.map(document => ({ id: document.id, title: document.title })),
+              ...(indexPush ? { indexPush: true } : {}),
+              titles: active.map(document => {
+                const summary = indexPush ? truncate(document.description.trim() || document.excerpt, 240) : ''
+                return { id: document.id, title: document.title, ...(summary === '' ? {} : { summary }) }
+              }),
             } } : {}),
           },
           revision: current.revision,

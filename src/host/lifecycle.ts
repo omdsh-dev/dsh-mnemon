@@ -414,7 +414,7 @@ class MnemonAgentLifecycle {
     // Agent step still needs its own durable turn's View before tools or Wake.
     if (!this.disposed && openAgentTurn(this.agent) === payload.turn) await this.memoryTurn?.begin(payload.turn, payload.signal)
     const view = this.memoryTurn?.current?.context.view
-    const experiment = this.config.lifecycleEnabled && this.config.runtimeMemory.bm25Recall && !this.memoryTurn?.excluded
+    const experiment = this.config.lifecycleEnabled && (this.config.runtimeMemory.bm25Recall || this.config.runtimeMemory.indexPush) && !this.memoryTurn?.excluded
       ? bm25View(view) : undefined
     if (experiment !== undefined && this.recallCheckpoint === undefined) {
       const latest = findSessionEvent(this.agent.session, event => event.type === 'step/start'
@@ -596,7 +596,7 @@ class MnemonAgentLifecycle {
       if (this.activeSnapshot !== active || active.signal.aborted || step?.turn !== active.turn || step.step !== active.step) return
       try {
         const pinnedView = this.memoryTurn?.current?.context.view
-        const pinnedRecall = this.config.runtimeMemory.bm25Recall ? bm25View(pinnedView) : undefined
+        const pinnedRecall = (this.config.runtimeMemory.bm25Recall || this.config.runtimeMemory.indexPush) ? bm25View(pinnedView) : undefined
         const pinned = memorySnapshotState(pinnedRecall?.view ?? pinnedView)
         const currentState = authority?.state
         const authorized = pinned !== undefined && currentState?.boundary === pinned.boundary
@@ -606,12 +606,13 @@ class MnemonAgentLifecycle {
         // Revalidate the pinned catalog against a fresh View. A compaction made
         // during a step cannot introduce hits from outside that step's pin.
         const currentRecall = authority?.recall
-        const allowed = new Set(currentRecall === undefined ? [] : [...currentRecall.memory, ...currentRecall.documents].map(item => item.key))
+        const allowed = new Set(currentRecall === undefined ? [] : [...currentRecall.memory, ...currentRecall.documents, ...(currentRecall.spaces ?? [])].map(item => item.key))
         const recall = pinnedRecall !== undefined && currentRecall?.scope === pinnedRecall.scope ? {
           view: {
             ...pinnedRecall,
             memory: pinnedRecall.memory.filter(item => allowed.has(item.key)),
             documents: pinnedRecall.documents.filter(item => allowed.has(item.key)),
+            spaces: (pinnedRecall.spaces ?? []).filter(item => allowed.has(item.key)),
           },
           query: active.recallQuery,
           checkpoint: true,
