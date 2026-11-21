@@ -6,6 +6,7 @@ This file summarizes each release. Full release notes and published artifacts ar
 
 ## v0.5
 
+- [v0.5.52 · Maintenance and stable README links](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.52)
 - [v0.5.51 · Shared storage and optional index recall](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.51)
 - [v0.5.50 · Clearer Settings and Memory Workbench](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.50)
 - [v0.5.49 · On-demand Memory and Reliable Idle Review](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.49)

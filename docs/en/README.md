@@ -41,6 +41,7 @@ dsh-mnemon gives DeepSeek Harness three kinds of memory: **runtime memory** in e
 
 ## What is new
 
+- [v0.5.52](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.52) · Cleans up internal code and documentation, and pins the npm README links to the release commit.
 - [v0.5.51](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.51): independent global sharing for Project Documents and Memory Spaces, optional BM25 index recall, and idle-review stability fixes.
 - [v0.5.50](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.50): reorganized settings hierarchy, improved narrow-window layouts and Memory Spaces graph rendering, and fewer repeated reads in Skills.
 - [v0.5.49](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.49): on-demand memory recall, silent managed idle reviews on DSH 0.2.2-rc.5, and watermark retry recovery.
