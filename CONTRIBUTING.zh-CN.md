@@ -58,7 +58,7 @@ fix(client): honor trusted remote management grant
 1. **基于最新 main**：提交前 rebase 或合并最新 `main`，解决冲突并重新验证。
 2. **完整验证**：默认运行 `pnpm run verify`；若无法运行某一项，在 PR 中写明原因、替代验证和剩余风险。
 3. **定向回归**：为缺陷补充失败前和通过后的回归测试；UI 行为同时验证授权和拒绝路径。
-4. **提供真实证据且不膨胀仓库**：用户可见变更的前后对比截图或短视频直接上传附在 GitHub PR 描述中（使用 GitHub 附件）。若通过 CLI 或自动化流程上传，请推送到独立的 orphan 分支或外部素材仓库并以完整 commit SHA 引用，版本发布验收包则挂载到 GitHub Release 或 CI Artifact；不要向 `main` 提交 PR 或 Issue 评审二进制目录。Host、CLI、Headless 变更附脱敏日志或命令结果。
+4. **按需提供评审证据**：截图或短视频能帮助评审判断重要 WebUI 变更时，附上关键界面的前后对比或新状态即可。素材可直接作为 GitHub PR 附件。维护者可以用 `node scripts/upload-pr-evidence.mjs` 上传脱敏证据至 `mnemon-dev/assets`，并用完整提交 SHA 引用。评审用的二进制素材保留在 `main` 之外，发布验收包放在 GitHub Release 或 CI Artifact。Host、CLI、Headless 变更附脱敏日志或命令结果。
 5. **双语同步**：长期文档在 `docs/en/` 和 `docs/zh-CN/` 保持同名、同职责；同步维护 `README.md`、`README.zh-CN.md`、`CHANGELOG.md` 与 `CHANGELOG.zh-CN.md`。产品文档素材统一按语义目录存放在 `docs/assets/` 且不得保留无引用文件。
 6. **编写简洁自解释的代码**：优先用清晰的模块组织、准确的命名、精炼的纯辅助函数与可执行的回归测试表达意图，而不是堆砌叙述性注释。避免过长命名与无意义的代号命名（如 `x1`、`tmp`、`bar`），清理死代码与未用绑定（`tsc --noUnusedLocals --noUnusedParameters`），仅保留机器消费指令（如 shebang、`@ts-expect-error`、`@vitest-environment` 与 `@deprecated`）。
 7. **边界单点校验，拒绝过度防御**：输入、路径、权限与完整性校验只在外部信任边界执行一次（如 CLI/RPC 入口、持久化读盘、外部 HTTP/Provider 响应、发布 workflow 入口），越过边界后信任类型系统与上游不变量。不为“绕过上游门禁的人造调用”在内部多层叠加重复校验、重复哈希或额外子进程检查。

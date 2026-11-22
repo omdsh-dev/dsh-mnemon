@@ -48,21 +48,6 @@ jobs:
               const match = value.match(pattern);
               return match ? cleanText(match[1]) : '';
             };
-            const hasEvidence = (value) => /!\[[^\]]*]\([^)]+\)/i.test(value)
-              || /https?:\/\/\S*(?:github\.com\/user-attachments\/assets\/|github\.com\/[^)\s]+\/assets\/|githubusercontent\.com\/|[./][^)\s]+\.(?:png|jpe?g|gif|webp|mp4|mov|webm))(?:[?#]\S*)?/i.test(value);
-
-            let isMaintainer = false;
-            try {
-              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                username: pr.user.login,
-              });
-              isMaintainer = ['admin', 'maintain', 'write'].includes(data.permission);
-            } catch (error) {
-              core.info(`Contributor permission lookup returned no write grant: ${error.message}`);
-            }
-
             const sections = {
               summary: '摘要 / Summary',
               related: '关联 Issue 或背景 / Related Issue or Context',
@@ -73,7 +58,6 @@ jobs:
               rules: '仓库规范检查 / Repository Rules',
               compatibility: '兼容性与数据安全 / Compatibility and Data Safety',
               validation: '本地验证 / Local Validation',
-              evidence: '用户可见变更证据 / Local Feature Evidence',
             };
             const labels = {
               latestConfirmation: '我已基于最新 `main` 分支开发，或在提交前已 rebase 或合并最新 `main`。 / I developed from the latest `main`, or rebased or merged the latest `main` before submitting.',
@@ -82,7 +66,6 @@ jobs:
               aiTool: '使用的编码 Agent 工具 / Coding Agent tool used',
               commands: '执行的命令 / Commands run',
               result: '结果摘要 / Result summary',
-              userFacing: '面向用户的功能或行为变更 / User-facing feature or behavior change',
             };
 
             const summary = readSection(sections.summary);
@@ -94,7 +77,6 @@ jobs:
             const repoRules = readSection(sections.rules);
             const compatibility = readSection(sections.compatibility);
             const validation = readSection(sections.validation);
-            const evidence = readSection(sections.evidence);
 
             const errors = [];
             const titlePattern = /^(feat|fix|chore|docs|test|refactor|perf|build|ci|revert)(\([^)]+\))?!?:\s+\S.+$/;
@@ -134,11 +116,6 @@ jobs:
             const validationSummary = readLabeledPart(validation, labels.result);
             if (isBlank(validationCommands) || isBlank(validationSummary)) {
               errors.push('请填写“本地验证 / Local Validation”中的执行命令与结果摘要。 / Provide commands and a result summary in “本地验证 / Local Validation”.');
-            }
-
-            const userFacing = hasCheckedLine(prType, labels.userFacing);
-            if (userFacing && !isMaintainer && !hasEvidence(evidence)) {
-              errors.push('外部贡献者提交用户可见变更时，必须附本地截图或短视频证据。 / External contributors must attach local screenshot or short-video evidence for user-facing changes.');
             }
 
             if (errors.length === 0) {

@@ -94,9 +94,10 @@ pnpm run verify
 ## 用户可见变更证据 / Local Feature Evidence
 
 <!--
-面向用户的功能或行为变更必填。 / Required for user-facing feature or behavior changes.
-直接将截图或短视频上传附在 GitHub PR 描述中（自动化上传可托管到独立 orphan 分支或外部素材仓库并以 commit SHA 引用），不要向 `main` 提交 PR 验收图片目录。 / Upload screenshots or short videos directly in the GitHub PR description (automated uploads may use a dedicated orphan branch or external asset repo pinned by commit SHA) instead of committing PR binary asset directories to `main`.
-附截图或短视频，展示 / Attach screenshots or a short video showing:
+截图或短视频有助于判断重要 WebUI 变更时，请附上关键界面的前后对比或新状态。 / Add a before/after comparison or key-state screenshot when it helps reviewers assess a material WebUI change.
+外部贡献者直接将截图或短视频拖拽附在 GitHub PR 描述中即可，无需上传到 `mnemon-dev/assets`；维护者与自动化 CLI 流程可使用 `node scripts/upload-pr-evidence.mjs` 上传至 `mnemon-dev/assets` 并以完整 40 位 commit SHA 引用。禁止向 `main` 提交 PR 验收图片目录。 / External contributors should drag and drop screenshots or short videos directly in the GitHub PR description and do not need to upload to `mnemon-dev/assets`; maintainers and automated CLI workflows may use `node scripts/upload-pr-evidence.mjs` to upload to `mnemon-dev/assets` pinned by full 40-character commit SHA. Never commit PR binary asset directories to `main`.
+提供截图或短视频时，请展示 / If including screenshots or a short video, show:
+- 改动前/后界面对比，或新增视图与关键交互状态 / before/after comparison, or the new view and key interactive states
 - 使用的是本 PR 或最新代码 / the PR or latest code is running
 - 功能已启用或配置 / the feature is enabled or configured
 - 操作成功并出现可见结果 / the action succeeds with a visible result
