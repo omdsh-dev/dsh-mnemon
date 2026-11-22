@@ -165,3 +165,56 @@ it('loads legacy text-only snapshots without deleting files omitted from their p
   expect(readFileSync(join(bundle, 'keep.bin'))).toEqual(Buffer.from([0, 1, 255]))
   if (process.platform !== 'win32') expect(statSync(join(bundle, 'script.sh')).mode & 0o777).toBe(0o755)
 })
+
+it('skips dependency and cache directories during backup, preview, and restore without blocking adoption (#717)', async () => {
+  mkdirSync(join(bundle, 'node_modules', 'pkg'), { recursive: true })
+  mkdirSync(join(bundle, 'scripts', '__pycache__'), { recursive: true })
+  mkdirSync(join(bundle, 'venv', 'lib'), { recursive: true })
+  writeFileSync(join(bundle, 'node_modules', 'pkg', 'huge.bin'), Buffer.alloc(MAX_BUNDLE_SNAPSHOT_BYTES + 1))
+  writeFileSync(join(bundle, 'scripts', '__pycache__', 'helper.pyc'), Buffer.from([1, 2, 3, 4]))
+  writeFileSync(join(bundle, 'venv', 'lib', 'site.py'), 'cached = True\n')
+  mkdirSync(join(bundle, 'references'), { recursive: true })
+  writeFileSync(join(bundle, 'references', 'guide.md'), 'before\n')
+
+  const draft = await skills.recordDraft(undefined, {
+    skillName: 'review-case',
+    content: content + 'Updated.\n',
+    notes: '',
+    changes: [],
+    guidance: [],
+    files: [{ path: 'references/guide.md', action: 'upsert', content: 'after\n' }],
+  })
+  const adopted = await skills.adoptDraft(undefined, draft.id)
+  expect(readFileSync(join(bundle, 'references', 'guide.md'), 'utf8')).toBe('after\n')
+  expect(existsSync(join(bundle, 'node_modules', 'pkg', 'huge.bin'))).toBe(true)
+
+  const original = skills.versions(key).find(version => version.reason === 'original')!
+  await skills.restoreVersion(undefined, { key, versionId: original.id, expectedHash: adopted.skill.hash })
+  expect(readFileSync(join(bundle, 'references', 'guide.md'), 'utf8')).toBe('before\n')
+  expect(existsSync(join(bundle, 'node_modules', 'pkg', 'huge.bin'))).toBe(true)
+  expect(readFileSync(join(bundle, 'scripts', '__pycache__', 'helper.pyc'))).toEqual(Buffer.from([1, 2, 3, 4]))
+  expect(readFileSync(join(bundle, 'venv', 'lib', 'site.py'), 'utf8')).toBe('cached = True\n')
+
+  await expect(skills.recordDraft(undefined, {
+    skillName: 'review-case',
+    content,
+    notes: '',
+    changes: [],
+    guidance: [],
+    files: [{ path: 'node_modules/pkg/index.js', action: 'upsert', content: 'x' }],
+  })).rejects.toThrow('invalid segment in supporting file path')
+})
+
+it('reports the overflowing limit and largest top-level directory when editable files exceed backup bounds (#717)', async () => {
+  mkdirSync(join(bundle, 'assets'), { recursive: true })
+  writeFileSync(join(bundle, 'assets', 'big.bin'), Buffer.alloc(MAX_BUNDLE_SNAPSHOT_BYTES + 1))
+  const draft = await skills.recordDraft(undefined, {
+    skillName: 'review-case',
+    content: content + 'More.\n',
+    notes: '',
+    changes: [],
+    guidance: [],
+    files: [{ path: 'assets/note.txt', action: 'upsert', content: 'note' }],
+  })
+  await expect(skills.adoptDraft(undefined, draft.id)).rejects.toThrow(/over 16 MiB at assets\/big\.bin; largest: assets\//u)
+})
