@@ -25,7 +25,7 @@ import { MnemonActionSeat } from './action-seat.ts'
 import { MnemonComponentListSeat } from './component-list-seat.ts'
 import { reopenAfterStarterUpdate } from './starter-update.ts'
 import { MnemonChangeSignal } from './change-signal.ts'
-import { en, zh, type MnemonKey } from './locales.ts'
+import { mnemonLocales, type MnemonKey, type MnemonLocaleId } from './locales.ts'
 import { MnemonSettingsScope } from './settings.ts'
 import type { MnemonClientContext } from "./dsh-context.ts"
 import {
@@ -326,7 +326,8 @@ export function apply(rawContext: unknown): void {
     skills: { scope: skillsSettings, panel: new SkillsPanelSeat() },
   }
   const namespace: MnemonNamespace = 'mnemon'
-  ctx.effect(() => ctx.locale.register(namespace, { zh: zh as unknown as Record<MnemonKey, string>, en }), 'dsh-mnemon: locale dictionaries')
+  const localeDictionaries: Record<MnemonLocaleId, Record<MnemonKey, string>> & Record<string, Record<MnemonKey, string>> = { ...mnemonLocales }
+  ctx.effect(() => ctx.locale.register(namespace, localeDictionaries), 'dsh-mnemon: locale dictionaries')
   const translate = ctx.locale.bind(namespace)
   ctx.inject(['remoteAccess'], inner => {
     inner.effect(() => bindConnectionRemoteAccess(ctx.connection, (inner as unknown as { remoteAccess?: RemoteAccessCapability }).remoteAccess), 'dsh-mnemon: remote access capability')

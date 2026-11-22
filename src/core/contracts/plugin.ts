@@ -5,6 +5,13 @@ export type MemoryPluginRole = 'source' | 'strategy' | 'strategy-extension'
 export interface MemoryPluginLocalizedText {
   en: string
   'zh-CN': string
+  zh?: string
+  ja?: string
+  es?: string
+  fr?: string
+  de?: string
+  ru?: string
+  pt?: string
 }
 
 export interface MemoryPluginProvidedCapability {

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Mémoire composable (dsh-mnemon)",
+    "description": "Contexte de Vue composable pour DeepSeek Harness avec Sources et Stratégies enfichables, mémoire en couches et compétences auto-évolutives.",
+    "detail": "locale/detail.fr.md"
+  }
+}

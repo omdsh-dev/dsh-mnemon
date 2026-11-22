@@ -21,7 +21,7 @@ import { TaskAgentModelRows, useTaskAgentModel } from './task-agent-model.tsx'
 import { useViewStore } from './view-store.ts'
 import css from './MnemonSettingsCard.module.css'
 import { isRecord } from './is-record.ts'
-import { translateZh, type MnemonTranslate } from './locales.ts'
+import { translateFor, type MnemonTranslate } from './locales.ts'
 import { usePackTarget } from './MnemonPackSection.tsx'
 import { MnemonStorageSection } from './MnemonStorageSection.tsx'
 import type { MnemonDirectoryPicker } from './picker.ts'
@@ -68,7 +68,7 @@ function dataRelevantConfigKey(status: 'loading' | 'ready' | 'unavailable', valu
   ])
 }
 
-export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, connection, directoryPicker, sessionId, workspaceId, workspaceLabel, t = translateZh, language = 'zh', componentChanges = NO_CHANGE_SIGNAL, componentSettings, component, componentList = NO_COMPONENT_LIST }: MnemonSettingsCardProps): JSX.Element | null {
+export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, connection, directoryPicker, sessionId, workspaceId, workspaceLabel, language = 'zh', t = translateFor(language), componentChanges = NO_CHANGE_SIGNAL, componentSettings, component, componentList = NO_COMPONENT_LIST }: MnemonSettingsCardProps): JSX.Element | null {
   const interactionScope = suppliedInteractionScope ?? scope as unknown as ClientSettingsScope<InteractionConfig>
   const coreSnapshot = useScope(scope)
   const interactionSnapshot = useScope(interactionScope)

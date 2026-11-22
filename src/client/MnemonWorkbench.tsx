@@ -17,7 +17,7 @@ import { useSourceCatalog } from './use-source-catalog.ts'
 import { invalidateSkillActivity } from './SkillTurnTail.tsx'
 import { managedSourceTypeId, sourcePageEntryId, stoppedSourceTypeId, useWorkspaceNavigation, type Page, type SourceNavigationEntry } from './use-workspace-navigation.ts'
 import { requestComponentPage } from './component-page-request.ts'
-import { translateEn, translateZh, type MnemonTranslate } from "./locales.ts"
+import { translateFor, type MnemonTranslate } from "./locales.ts"
 
 import { MNEMON_SOURCE_PAGE_SLOT, type MemorySourcePageDirectory, type MemorySourcePageEntry } from "./source-pages.tsx"
 import type { MnemonActionSeat } from './action-seat.ts'
@@ -255,7 +255,7 @@ export function MnemonWorkbench(props: MnemonWorkbenchProps): JSX.Element {
   const active = props.active !== false && visible
   const visibleProps = useRef(props)
   if (active) visibleProps.current = props
-  const t = props.t ?? ((props.locale ?? 'zh').toLowerCase().startsWith('zh') ? translateZh : translateEn)
+  const t = props.t ?? translateFor(props.locale ?? 'zh')
   return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonWorkspace {...visibleProps.current} active={active} /></LocaleContext.Provider></I18nContext.Provider>
 }
 

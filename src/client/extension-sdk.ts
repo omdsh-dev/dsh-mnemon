@@ -23,5 +23,16 @@ export { MnemonDialog, type MnemonDialogProps } from './MnemonDialog.tsx'
 export { MnemonLogo } from './MnemonLogo.tsx'
 export { useRequestVersion } from './use-request-version.ts'
 export { appearanceClass } from './view-styles.ts'
-export { translateEn, translateZh, type MnemonKey, type MnemonTranslate } from './locales.ts'
+export {
+  MNEMON_LOCALE_IDS,
+  pickLocalizedText,
+  resolveMnemonLocale,
+  translateEn,
+  translateFor,
+  translateZh,
+  type LocalizedTextInput,
+  type MnemonKey,
+  type MnemonLocaleId,
+  type MnemonTranslate,
+} from './locales.ts'
 export { IconChevronLeftOutline14 } from './ui-icons.ts'

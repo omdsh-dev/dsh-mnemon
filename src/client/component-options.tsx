@@ -4,6 +4,7 @@ import type { MemoryJsonValue } from '../core/contracts/index.ts'
 import type { MemoryPluginEntryView, MemoryViewDashboard } from '../host/view-protocol.ts'
 import { componentCopy } from './component-copy.ts'
 import type { MnemonTranslate } from './locales.ts'
+import { pickLocalizedText, type LocalizedTextInput } from './localized-text.ts'
 import css from './MnemonSettingsCard.module.css'
 import { PanelActions } from './settings-panel.tsx'
 
@@ -69,8 +70,7 @@ export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
   const id = useId()
   const [draft, setDraft] = useState(() => initial(entry))
   const [confirmEmptySources, setConfirmEmptySources] = useState(false)
-  const zh = props.language.toLowerCase().startsWith('zh')
-  const text = (value: { en: string; 'zh-CN': string } | undefined): string => value === undefined ? '' : zh ? value['zh-CN'] : value.en
+  const text = (value: LocalizedTextInput | undefined): string => pickLocalizedText(value, props.language)
   const results = entry.fields.map(field => ({ field, result: parse(field, draft[field.key]!, t) }))
   const invalid = results.some(({ field, result }) => draft[field.key]!.own && 'error' in result)
   const config: Config = Object.fromEntries(results.flatMap(({ field, result }) => draft[field.key]!.own && 'value' in result ? [[field.key, result.value]] : []))

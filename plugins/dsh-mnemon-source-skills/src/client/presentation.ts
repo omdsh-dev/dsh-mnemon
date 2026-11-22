@@ -16,13 +16,37 @@ export function supportsSettingsSection(section: 'models' | 'market'): boolean {
   return typeof supports === 'function' && supports('dsh-mnemon-source-skills', section)
 }
 
+const SHIPPED_LOCALES = ['en', 'zh', 'ja', 'es', 'fr', 'de', 'ru', 'pt'] as const
+type ShippedLocale = typeof SHIPPED_LOCALES[number]
+const SHIPPED_LOCALE_SET: ReadonlySet<string> = new Set(SHIPPED_LOCALES)
+
+function matchShippedLocale(locale: string): ShippedLocale | undefined {
+  const base = locale.trim().toLowerCase().replaceAll('_', '-').split('-')[0] ?? ''
+  return SHIPPED_LOCALE_SET.has(base) ? base as ShippedLocale : undefined
+}
+
+function selectPlural(locale: ShippedLocale, count: number, forms: readonly string[]): string {
+  if (forms.length === 3) {
+    const category = new Intl.PluralRules(locale).select(count)
+    return category === 'one' ? forms[0]! : category === 'few' ? forms[1]! : forms[2]!
+  }
+  return count === 1 ? forms[0]! : forms[1]!
+}
+
 export function translate(locale: string): SkillsTranslate {
-  const dictionary: Record<string, string> = locale.toLowerCase().startsWith('zh') ? copy.zh : copy.en
+  const resolved: ShippedLocale = matchShippedLocale(locale) ?? 'en'
+  const dictionaries = copy as Record<ShippedLocale, Readonly<Record<string, string>>>
+  const dictionary: Readonly<Record<string, string>> = dictionaries[resolved] ?? copy.en
   return (key, params) => {
     const text = dictionary[key] ?? copy.en[key] ?? key
     if (params === undefined) return text
     return text
-      .replace(/\{(\w+):([^|{}]*)\|([^{}]*)\}/gu, (match, name: string, one: string, other: string) => name in params ? (Number(params[name]) === 1 ? one : other) : match)
+      .replace(/\{(\w+):([^{}]+)\}/gu, (match, name: string, spec: string) => {
+        if (!(name in params)) return match
+        const forms = spec.split('|')
+        if (forms.length !== 2 && forms.length !== 3) return match
+        return selectPlural(resolved, Number(params[name]), forms)
+      })
       .replace(/\{(\w+)\}/gu, (match, name: string) => name in params ? String(params[name]) : match)
   }
 }
@@ -32,7 +56,7 @@ export function useT(): SkillsTranslate {
   const shared = useSharedT()
   return useMemo(() => {
     const fallback = translate(locale)
-    if (/^(en|zh)(-|$)/i.test(locale)) return fallback
+    if (matchShippedLocale(locale) !== undefined) return fallback
     return (key: SkillsKey, params?: Record<string, unknown>) => {
       const text = shared(key as MnemonKey, params)
       return text === key ? fallback(key, params) : text
@@ -45,7 +69,13 @@ export function percent(value: number | undefined): string {
 }
 
 export function compactCount(count: number, language: string): string {
-  return new Intl.NumberFormat(language.startsWith('zh') ? 'zh-CN' : 'en', { notation: 'compact', maximumSignificantDigits: 3 }).format(count)
+  const normalized = language.trim().replaceAll('_', '-')
+  const tag = normalized.toLowerCase().startsWith('zh') ? 'zh-CN' : normalized || 'en'
+  try {
+    return new Intl.NumberFormat(tag, { notation: 'compact', maximumSignificantDigits: 3 }).format(count)
+  } catch {
+    return new Intl.NumberFormat('en', { notation: 'compact', maximumSignificantDigits: 3 }).format(count)
+  }
 }
 
 export function points(value: number | undefined): string {

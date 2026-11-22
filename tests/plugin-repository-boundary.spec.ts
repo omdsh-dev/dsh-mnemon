@@ -218,7 +218,7 @@ describe('component package metadata', () => {
   const read = (path: string): Record<string, unknown> => JSON.parse(readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')) as Record<string, unknown>
 
   it.each(components.map(plugin => [plugin.packageName, plugin] as const))('%s shows DSH the name and description it declares', (pkgName, plugin) => {
-    for (const [file, language] of [['en', 'en'], ['zh', 'zh-CN']] as const) {
+    for (const [file, language] of [['en', 'en'], ['zh', 'zh-CN'], ['ja', 'ja'], ['es', 'es'], ['fr', 'fr'], ['de', 'de'], ['ru', 'ru'], ['pt', 'pt']] as const) {
       expect(read(`plugins/${pkgName}/locale/${file}.json`)).toEqual({ meta: { title: plugin.label?.[language], description: plugin.description?.[language] } })
     }
     const manifest = read(`plugins/${pkgName}/package.json`) as { exports: Record<string, unknown>; files: string[] }

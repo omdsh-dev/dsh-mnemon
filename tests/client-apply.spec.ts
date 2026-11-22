@@ -10,7 +10,7 @@ const { mountBetterSidebar } = vi.hoisted(() => ({
 vi.mock('../src/client/better-sidebar.tsx', () => ({ mountBetterSidebarTab: mountBetterSidebar }))
 
 import { apply, inject } from '../src/client/index.ts'
-import { en, zh } from '../src/client/locales.ts'
+import { mnemonLocales, type MnemonLocaleId, zh } from '../src/client/locales.ts'
 import type { MnemonActionSeat } from '../src/client/action-seat.ts'
 import { MnemonPluginActions } from '../src/client/MnemonPluginActions.tsx'
 import { MnemonComponentListSeat } from '../src/client/component-list-seat.ts'
@@ -29,7 +29,7 @@ afterEach(() => {
 function workspaceContext(initialValue: Record<string, unknown>, load: () => Promise<Record<string, unknown>> = async () => initialValue) {
   let value = initialValue
   let revision = 0
-  let active: 'zh' | 'en' = 'zh'
+  let active: MnemonLocaleId = 'zh'
   const slots: Record<string, unknown>[] = []
   const workspaceStops: ReturnType<typeof vi.fn>[] = []
   /** Scoped `ctx.inject` calls; a test provides a service by applying the matching callbacks. */
@@ -51,7 +51,7 @@ function workspaceContext(initialValue: Record<string, unknown>, load: () => Pro
     layout: { selectPanel: vi.fn() },
     locale: {
       register: vi.fn(() => () => {}),
-      bind: vi.fn(() => (key: keyof typeof zh) => (active === 'zh' ? zh : en)[key]),
+      bind: vi.fn(() => (key: keyof typeof zh) => mnemonLocales[active][key]),
       getSnapshot: vi.fn(() => ({ active, locales: [], revision: 0 })),
       subscribe: vi.fn(() => () => {}),
     },
@@ -73,7 +73,7 @@ function workspaceContext(initialValue: Record<string, unknown>, load: () => Pro
   const provide = (name: string, service: unknown): void => {
     for (const entry of injected) if (entry.deps.includes(name)) entry.apply({ [name]: service, effect: context.effect })
   }
-  return { context, slots, scope, settingsEntry, workspaceStops, provide, setLocale: (locale: 'zh' | 'en') => { active = locale } }
+  return { context, slots, scope, settingsEntry, workspaceStops, provide, setLocale: (locale: MnemonLocaleId) => { active = locale } }
 }
 
 describe('Mnemon Web client composition', () => {
@@ -103,7 +103,7 @@ describe('Mnemon Web client composition', () => {
   it('keeps a locale-bound Sidebar with Source child-render authority and conversation actions', async () => {
     const { context, slots, scope, settingsEntry, setLocale } = workspaceContext({})
     expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'uiSession', 'connection', 'locale', 'layout'])
-    expect(context.locale.register).toHaveBeenCalledWith('mnemon', { zh, en })
+    expect(context.locale.register).toHaveBeenCalledWith('mnemon', mnemonLocales)
     await vi.waitFor(() => expect(slots).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'shell.overlay', id: 'mnemon', children: { 'mnemon.source.page': { kind: 'list', scope: 'root' }, 'mnemon.component.status': { kind: 'keyed', scope: 'root' } } }),
       expect.objectContaining({ name: 'conversation.chat.assistant-actions', id: 'mnemon-save' }),
@@ -114,6 +114,8 @@ describe('Mnemon Web client composition', () => {
     expect((save.inject as (id: string) => { settingsScope: unknown })('session-1').settingsScope).toBe(scope)
     setLocale('en')
     expect(props.t('config.storageTitle')).toBe('Storage')
+    setLocale('ja')
+    expect(props.t('config.storageTitle')).toBe(mnemonLocales.ja['config.storageTitle'])
     expect(slots.some(options => options.name === 'conversation.view')).toBe(false)
   })
 

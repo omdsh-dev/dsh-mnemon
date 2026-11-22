@@ -18,6 +18,7 @@ import { MnemonClient } from './api.ts'
 import type { MemoryComponentSettingsProps } from './component-ui.tsx'
 import { ActionButton } from './feedback.tsx'
 import type { MnemonTranslate } from './locales.ts'
+import { pickLocalizedText, type LocalizedTextInput } from './localized-text.ts'
 import css from './MnemonSettingsCard.module.css'
 import { message } from './page-kit.tsx'
 import type { MnemonDirectoryPicker } from './picker.ts'
@@ -42,7 +43,7 @@ interface DraftPreferencesPayload {
 
 interface RawMarketRegistry {
   id?: string
-  name?: string | { en?: string; 'zh-CN'?: string }
+  name?: LocalizedTextInput
   label?: string
   location?: string
   url?: string
@@ -83,16 +84,11 @@ function decodeModelChoice(value: string): SkillsModelSelection | null {
 
 function normalizeMarketRegistries(payload: MarketPayload | null | undefined, language: string): MarketRegistryItem[] {
   const rawList = Array.isArray(payload?.registries) ? payload.registries : []
-  const isZh = language.toLowerCase().startsWith('zh')
   return rawList.flatMap(raw => {
     const id = typeof raw?.id === 'string' ? raw.id.trim() : ''
     if (id === '') return []
-    const localizedName = typeof raw.name === 'string'
-      ? raw.name
-      : raw.name !== undefined && raw.name !== null
-        ? (isZh ? (raw.name['zh-CN'] ?? raw.name.en) : (raw.name.en ?? raw.name['zh-CN']))
-        : undefined
-    const label = (localizedName ?? raw.label ?? id).trim() || id
+    const localizedName = pickLocalizedText(raw.name, language)
+    const label = (localizedName || raw.label || id).trim() || id
     const url = (raw.location ?? raw.url ?? '').trim()
     const skillCount = typeof raw.entries === 'number' ? raw.entries : typeof raw.skillCount === 'number' ? raw.skillCount : 0
     return [{

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Composição por escopo",
+    "description": "Compõe as fontes de memória disponíveis em ordem estável."
+  }
+}

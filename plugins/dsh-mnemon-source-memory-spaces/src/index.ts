@@ -14,8 +14,8 @@ export const inject = ['mnemonMemory']
 
 export const memoryPlugin = defineMemoryPlugin({
   packageName: name,
-  label: { en: 'Memory Spaces', 'zh-CN': '记忆空间' },
-  description: { en: 'Provider-backed durable evidence recalled on demand across tasks and sessions.', 'zh-CN': '由 Provider 支撑的持久证据，按需跨任务与会话召回。' },
+  label: { en: 'Memory Spaces', 'zh-CN': '记忆空间', ja: 'メモリスペース', es: 'Espacios de memoria', fr: 'Espaces de mémoire', de: 'Speicherbereiche', ru: 'Пространства памяти', pt: 'Espaços de memória' },
+  description: { en: 'Provider-backed durable evidence recalled on demand across tasks and sessions.', 'zh-CN': '由 Provider 支撑的持久证据，按需跨任务与会话召回。', ja: 'プロバイダーが保持する永続的な記憶を、タスクやセッションを跨いでオンデマンドに検索。', es: 'Evidencia duradera respaldada por Proveedores, recuperada bajo demanda entre tareas y sesiones.', fr: 'Preuves durables adossées à des Fournisseurs, rappelées à la demande entre tâches et sessions.', de: 'Anbieter-gestützte dauerhafte Belege, die bei Bedarf aufgaben- und sitzungsübergreifend abgerufen werden.', ru: 'Долгосрочные данные на базе Провайдеров, извлекаемые по запросу между задачами и сессиями.', pt: 'Evidências duráveis mantidas por Provedores e recuperadas sob demanda entre tarefas e sessões.' },
   roles: ['source'],
   provides: [{ id: 'source' }, { id: 'source.durable-evidence' }],
 })

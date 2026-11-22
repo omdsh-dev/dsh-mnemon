@@ -20,8 +20,11 @@ const parsedPack = JSON.parse(result.stdout)
 const pack = Array.isArray(parsedPack) ? parsedPack[0] : Object.values(parsedPack)[0]
 const paths = pack.files.map(file => file.path)
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
-const locales = readPackageLocales(fileURLToPath(new URL('../', import.meta.url)), manifest).map(asset => asset.path)
-const details = ['locale/detail.en.md', 'locale/detail.zh.md']
+const localeAssets = readPackageLocales(fileURLToPath(new URL('../', import.meta.url)), manifest)
+const locales = localeAssets.map(asset => asset.path)
+const details = [...new Set(localeAssets
+  .map(asset => asset.dictionary.meta?.detail)
+  .filter(detail => typeof detail === 'string' && detail.trim() !== ''))].sort()
 const executables = Object.values(manifest.bin ?? {})
 const required = [...executables, ...locales, ...details, 'package.json', 'cordis.patch.yml', 'lib/client.js', ...Object.entries(manifest.exports)
   .filter(([name]) => name !== './package.json' && name !== localeExport)
@@ -45,7 +48,7 @@ const relativeReadmeImages = readmeFiles.flatMap((path) => {
     .map(source => `${path}: ${source}`)
 })
 
-const maximumUnpackedBytes = 3_000_000
+const maximumUnpackedBytes = 3_800_000
 
 if (missing.length > 0 || unexpected.length > 0 || hostLeaks.length > 0 || relativeReadmeImages.length > 0 || pack.unpackedSize > maximumUnpackedBytes) {
   if (missing.length > 0) console.error(`Missing package files:\n${missing.map(path => `- ${path}`).join('\n')}`)

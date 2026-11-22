@@ -43,13 +43,28 @@ function interpolate(text: string, params?: Record<string, unknown>): string {
   return params === undefined ? text : text.replace(/\{(\w+)\}/g, (match, name: string) => name in params ? String(params[name]) : match)
 }
 
+const SHIPPED_LOCALES = ['en', 'zh', 'ja', 'es', 'fr', 'de', 'ru', 'pt'] as const
+type ShippedLocale = typeof SHIPPED_LOCALES[number]
+const SHIPPED_LOCALE_SET: ReadonlySet<string> = new Set(SHIPPED_LOCALES)
+
+function isShippedLocale(value: string): value is ShippedLocale {
+  return SHIPPED_LOCALE_SET.has(value)
+}
+
+function matchShippedLocale(locale: string): ShippedLocale | undefined {
+  const base = locale.trim().toLowerCase().replaceAll('_', '-').split('-')[0] ?? ''
+  return isShippedLocale(base) ? base : undefined
+}
+
 export function useT(): Translate {
   const override = useContext(TranslationOverride)
   const fallback = useSharedT()
   const locale = useLocale()
   return useMemo(() => override ?? ((key: SourceKey | MnemonKey, params?: Record<string, unknown>) => {
-    const dictionary = locale.toLowerCase().startsWith('zh') ? copy.zh : copy.en
-    if (!/^(en|zh)(-|$)/i.test(locale)) {
+    const matched = matchShippedLocale(locale)
+    const dictionaries = copy as Record<ShippedLocale, Readonly<Record<SourceKey, string>>>
+    const dictionary = dictionaries[matched ?? 'en'] ?? copy.en
+    if (matched === undefined) {
       const translated = fallback(key as MnemonKey, params)
       if (translated !== key) return translated
     }
@@ -67,9 +82,12 @@ export function languageChain(snapshot: DshLocaleSnapshot): string[] {
 
 export function settingsTranslate(locale: DshLocale, chain: readonly string[] | undefined, language: string): Translate {
   const bound = locale.bind('mnemon')
-  const head = chain === undefined ? language.toLowerCase().startsWith('zh') ? 'zh' : 'en' : chain.find(id => id === 'zh' || id === 'en') ?? 'en'
-  const own: Readonly<Record<string, string>> = head === 'en' ? copy.en : copy.zh
-  const packFirst = chain !== undefined && chain.length > 0 && chain[0] !== head
+  const head: ShippedLocale = chain === undefined
+    ? (matchShippedLocale(language) ?? 'en')
+    : (chain.map(id => id.toLowerCase()).find(isShippedLocale) ?? 'en')
+  const dictionaries = copy as Record<ShippedLocale, Readonly<Record<string, string>>>
+  const own: Readonly<Record<string, string>> = dictionaries[head] ?? copy.en
+  const packFirst = chain !== undefined && chain.length > 0 && chain[0]!.toLowerCase() !== head
   return (key, params) => {
     if (packFirst) {
       const text = bound(key as MnemonKey, params)

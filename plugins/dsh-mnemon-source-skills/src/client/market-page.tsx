@@ -14,7 +14,28 @@ import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
 function text(value: LocalizedText | undefined, language: string): string {
   if (value === undefined) return ''
   if (typeof value === 'string') return value
-  return (language.startsWith('zh') ? value['zh-CN'] ?? value.en : value.en ?? value['zh-CN']) ?? ''
+  const entries = Object.entries(value)
+  const findKey = (target: string): string | undefined => {
+    const exact = value[target]
+    if (typeof exact === 'string' && exact !== '') return exact
+    const match = entries.find(([key, item]) => key.toLowerCase() === target && typeof item === 'string' && item !== '')
+    return match?.[1]
+  }
+  const normalized = language.trim().toLowerCase().replaceAll('_', '-')
+  if (normalized !== '') {
+    const exact = findKey(normalized)
+    if (exact !== undefined) return exact
+    const base = normalized.split('-')[0] ?? ''
+    if (base !== '') {
+      const fromBase = findKey(base)
+      if (fromBase !== undefined) return fromBase
+      if (base === 'zh') {
+        const zhCn = findKey('zh-cn')
+        if (zhCn !== undefined) return zhCn
+      }
+    }
+  }
+  return findKey('en') ?? entries.find(([, item]) => typeof item === 'string' && item !== '')?.[1] ?? ''
 }
 
 function size(bytes: number): string {
