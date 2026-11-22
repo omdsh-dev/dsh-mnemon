@@ -1,5 +1,6 @@
-import { accessSync, constants, existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { accessSync, constants, existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmdirSync } from 'node:fs'
+import { cp, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { findMnemonCommand, mnemonNpmLauncher, nodeLauncherEnvironment, resolveMnemonInvocation } from 'dsh-mnemon-source-memory-spaces/native-cli'
@@ -45,6 +46,7 @@ export interface VersionUpdateDependencies {
   bundleInstaller?: () => DshBundleInstaller | undefined
   runningProfile?: () => DshRunningProfile | undefined
   pluginCommand?: () => Promise<DshPluginCommand | undefined>
+  platform?: NodeJS.Platform
 }
 
 export interface DshRunningProfile {
@@ -374,6 +376,97 @@ function samePath(left: string, right: string): boolean {
   try { return realpathSync(left) === realpathSync(right) } catch { return false }
 }
 
+const LOCKED_ERROR_CODES = new Set(['EPERM', 'EBUSY', 'EACCES'])
+
+function isLockedError(error: unknown): boolean {
+  if (typeof error === 'object' && error !== null && 'code' in error && typeof (error as { code?: unknown }).code === 'string') {
+    if (LOCKED_ERROR_CODES.has((error as { code: string }).code)) return true
+  }
+  const text = error instanceof Error ? error.message : String(error)
+  return /\b(?:ERR_PNPM_EPERM|ERR_PNPM_EBUSY|EPERM|EBUSY)\b/u.test(text)
+}
+
+function emptyPackageShell(packageDir: string): boolean {
+  try {
+    return lstatSync(packageDir).isDirectory() && readdirSync(packageDir).length === 0
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT'
+  }
+}
+
+function removeEmptyPackageShell(packageDir: string): boolean {
+  if (!emptyPackageShell(packageDir)) return false
+  try {
+    rmdirSync(packageDir)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT'
+  }
+}
+
+interface PackageUpdateSnapshot {
+  packageDir: string
+  version: string
+  profileManifest: Buffer
+  lockfile?: Buffer
+  backup?: { directory: string; packageDir: string }
+  symlinkTarget?: string
+}
+
+async function readLockfile(path: string): Promise<Buffer | undefined> {
+  try {
+    return await readFile(path)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    return undefined
+  }
+}
+
+async function captureUpdateSnapshot(profileDir: string, packageDir: string): Promise<PackageUpdateSnapshot | undefined> {
+  const version = manifest(join(packageDir, 'package.json'))?.version
+  if (version === undefined) return undefined
+  const profileManifest = await readFile(join(profileDir, 'package.json'))
+  const lockfile = await readLockfile(join(profileDir, 'pnpm-lock.yaml'))
+  const snapshot = { packageDir, version, profileManifest, ...(lockfile === undefined ? {} : { lockfile }) }
+  if (lstatSync(packageDir).isSymbolicLink()) return { ...snapshot, symlinkTarget: realpathSync(packageDir) }
+  const directory = await mkdtemp(join(tmpdir(), 'dsh-mnemon-update-backup-'))
+  const backup = { directory, packageDir: join(directory, 'package') }
+  try {
+    await cp(packageDir, backup.packageDir, { recursive: true, verbatimSymlinks: true })
+    return { ...snapshot, backup }
+  } catch (error) {
+    await rm(directory, { recursive: true, force: true }).catch(() => undefined)
+    throw error
+  }
+}
+
+async function restoreUpdateSnapshot(profileDir: string, snapshot: PackageUpdateSnapshot): Promise<boolean> {
+  const { packageDir, symlinkTarget, backup, version } = snapshot
+  if (symlinkTarget !== undefined && manifest(join(symlinkTarget, 'package.json'))?.version !== version) return false
+  if (!removeEmptyPackageShell(packageDir)) return false
+  try {
+    if (symlinkTarget !== undefined) {
+      await symlink(symlinkTarget, packageDir, process.platform === 'win32' ? 'junction' : 'dir')
+    } else if (backup !== undefined) {
+      await cp(backup.packageDir, packageDir, { recursive: true, verbatimSymlinks: true })
+    }
+    if (manifest(join(packageDir, 'package.json'))?.version !== version) return false
+    await writeFile(join(profileDir, 'package.json'), snapshot.profileManifest)
+    const lockfilePath = join(profileDir, 'pnpm-lock.yaml')
+    if (snapshot.lockfile === undefined) await rm(lockfilePath, { force: true })
+    else await writeFile(lockfilePath, snapshot.lockfile)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function manualUpdateCommand(profileName: string | undefined, profileDir: string, spec: string): string {
+  return profileName !== undefined
+    ? `dsh plugin --profile ${profileName} add ${spec}`
+    : `pnpm add ${spec} --save-exact (in ${profileDir})`
+}
+
 export class VersionUpdateManager {
   readonly runningVersion: string
   private dshMnemonVersion: string
@@ -387,6 +480,7 @@ export class VersionUpdateManager {
   private readonly bundleInstallerOf: () => DshBundleInstaller | undefined
   private readonly runningProfile: () => DshRunningProfile | undefined
   private readonly pluginCommand: () => Promise<DshPluginCommand | undefined>
+  private readonly platform: NodeJS.Platform
   private readonly pendingRestart = new Map<VersionComponentId, string | undefined>()
   private inFlight: Promise<VersionUpdateResult> | undefined
   private lastUpdate: VersionUpdateOutcome | undefined
@@ -404,6 +498,7 @@ export class VersionUpdateManager {
     this.bundleInstallerOf = dependencies.bundleInstaller ?? (() => undefined)
     this.runningProfile = dependencies.runningProfile ?? (() => undefined)
     this.pluginCommand = dependencies.pluginCommand ?? (async () => undefined)
+    this.platform = dependencies.platform ?? process.platform
   }
 
   private bundleInstaller(install: DshInstall): DshBundleInstaller | undefined {
@@ -424,12 +519,12 @@ export class VersionUpdateManager {
   }
 
   private installedVersion(install: DshInstall): string {
-    const recorded = install.mode === 'npm' && install.profileDir !== undefined
+    const diskPath = install.mode === 'npm' && install.profileDir !== undefined
+      ? packageAt(install.profileDir, DSH_MNEMON_PACKAGE) : undefined
+    const recorded = install.mode === 'npm' && install.profileDir !== undefined && diskPath !== undefined
       ? exactVersion(dependencySpec(manifest(join(install.profileDir, 'package.json')))) : undefined
     if (recorded !== undefined) return recorded
-    const path = install.mode === 'npm' && install.profileDir !== undefined
-      ? packageAt(install.profileDir, DSH_MNEMON_PACKAGE) ?? this.packageManifestPath : this.packageManifestPath
-    return manifest(path)?.version ?? this.dshMnemonVersion
+    return manifest(diskPath ?? this.packageManifestPath)?.version ?? this.dshMnemonVersion
   }
 
   private replaced(id: VersionComponentId, current: string | undefined): boolean {
@@ -691,17 +786,58 @@ export class VersionUpdateManager {
       return { component, previousVersion, currentVersion: previousVersion, updated: false, restartRequired }
     }
     const installer = child === undefined || child.updateHint === 'dsh' ? this.bundleInstaller(install) : undefined
-    if (installer !== undefined) {
-      const result = await this.updateThroughDsh(installer, component, previousVersion, latest)
-      if (result !== undefined) return result
-      if (install.mode === 'npm' && install.profileDir !== undefined) return this.updateThroughPluginCommand(install.profileDir, install.profileName, component, previousVersion, latest)
+    const pnpm = installer === undefined ? this.executable('pnpm') : undefined
+    if (install.mode !== 'npm' || install.profileDir === undefined || (installer === undefined && pnpm === undefined)) {
+      throw new Error('This dsh-mnemon installation cannot be updated automatically')
     }
-    const pnpm = this.executable('pnpm')
-    if (install.mode !== 'npm' || install.profileDir === undefined || pnpm === undefined) throw new Error('This dsh-mnemon installation cannot be updated automatically')
-    const output = await resultOrThrow(this.processRunner, pnpm, ['add', `${component}@${latest}`, '--save-exact'], UPDATE_TIMEOUT_MS, { cwd: install.profileDir })
-    const installedVersion = manifest(join(install.profileDir, 'node_modules', component, 'package.json'))?.version
+    const profileDir = install.profileDir
+    const spec = `${component}@${latest}`
+    const packageDir = join(profileDir, 'node_modules', component)
+    const update = async () => {
+      if (installer !== undefined) {
+        const result = await this.updateThroughDsh(installer, profileDir, component, previousVersion, latest)
+        if (result !== undefined) return result
+        return this.updateThroughPluginCommand(profileDir, install.profileName, component, previousVersion, latest)
+      }
+      const output = await resultOrThrow(this.processRunner, pnpm!, ['add', spec, '--save-exact'], UPDATE_TIMEOUT_MS, { cwd: profileDir })
+      return this.completePackageUpdate(component, previousVersion, latest, manifest(join(packageDir, 'package.json'))?.version, updateOutput(output))
+    }
+    if (this.platform !== 'win32') return update()
+
+    const commandHint = manualUpdateCommand(install.profileName, profileDir, spec)
+    const retryHint = `Quit DSH completely, run \`${commandHint}\`, then start DSH again.`
+    const snapshot = await captureUpdateSnapshot(profileDir, packageDir).catch(error => {
+      throw new Error(`Could not back up ${component} before updating. No installation files were changed. ${retryHint}`, { cause: error })
+    })
+    let keepBackup = false
+    try {
+      return await update()
+    } catch (error) {
+      const locked = isLockedError(error)
+      if (locked && emptyPackageShell(packageDir) && exactVersion(dependencySpec(manifest(join(profileDir, 'package.json')), component)) === latest) {
+        const healed = await this.recoverEmptyShell(profileDir, component, previousVersion, latest, installer !== undefined, pnpm)
+        if (healed !== undefined) return healed
+      }
+      const base = error instanceof Error ? error.message : String(error)
+      if (snapshot !== undefined && manifest(join(packageDir, 'package.json')) === undefined) {
+        const restored = await restoreUpdateSnapshot(profileDir, snapshot)
+        keepBackup = !restored && snapshot.backup !== undefined
+        const backupHint = keepBackup ? ` Previous package backup: ${snapshot.backup!.packageDir}.` : ''
+        throw new Error(restored
+          ? `${base}. Restored previous ${component}@${snapshot.version}; your memory data is intact. ${retryHint}`
+          : `${base}. The plugin installation needs repair and your memory data is intact.${backupHint} ${retryHint}`, { cause: error })
+      }
+      if (locked) throw new Error(`${base}. Your memory data is intact. ${retryHint}`, { cause: error })
+      throw error
+    } finally {
+      if (!keepBackup && snapshot?.backup !== undefined) {
+        await rm(snapshot.backup.directory, { recursive: true, force: true, maxRetries: 3 }).catch(() => undefined)
+      }
+    }
+  }
+
+  private completePackageUpdate(component: VersionComponentId, previousVersion: string, latest: string, installedVersion: string | undefined, output?: string): VersionUpdateResult {
     if (installedVersion !== latest) throw new Error(`${component} update did not install the requested version ${latest}; found ${installedVersion ?? 'no package'}`)
-    const outputText = updateOutput(output)
     if (component === DSH_MNEMON_PACKAGE) this.dshMnemonVersion = installedVersion
     this.remember(component, previousVersion)
     return {
@@ -710,7 +846,37 @@ export class VersionUpdateManager {
       currentVersion: installedVersion,
       updated: true,
       restartRequired: true,
-      ...(outputText === undefined ? {} : { output: outputText }),
+      ...(output === undefined || output === '' ? {} : { output: output.slice(-4_000) }),
+    }
+  }
+
+  private async recoverEmptyShell(
+    profileDir: string,
+    component: VersionComponentId,
+    previousVersion: string,
+    latest: string,
+    usePluginCommand: boolean,
+    pnpm: string | undefined,
+  ): Promise<VersionUpdateResult | undefined> {
+    const packageDir = join(profileDir, 'node_modules', component)
+    if (!removeEmptyPackageShell(packageDir)) return undefined
+    try {
+      let output: string | undefined
+      if (usePluginCommand) {
+        const command = await this.pluginCommand().catch(() => undefined)
+        if (command === undefined) return undefined
+        const result = await command(['install'])
+        if ((result.incompatible?.length ?? 0) > 0 || result.exitCode !== 0 || result.timedOut === true) return undefined
+        output = result.output.trim() || undefined
+      } else if (pnpm !== undefined) {
+        output = updateOutput(await resultOrThrow(this.processRunner, pnpm, ['install'], UPDATE_TIMEOUT_MS, { cwd: profileDir }))
+      } else {
+        return undefined
+      }
+      const installedVersion = manifest(join(packageDir, 'package.json'))?.version
+      return this.completePackageUpdate(component, previousVersion, latest, installedVersion, output)
+    } catch {
+      return undefined
     }
   }
 
@@ -735,21 +901,10 @@ export class VersionUpdateManager {
       })}`)
     }
     const installedVersion = manifest(join(profileDir, 'node_modules', component, 'package.json'))?.version
-    if (installedVersion !== latest) throw new Error(`${component} update did not install the requested version ${latest}; found ${installedVersion ?? 'no package'}`)
-    if (component === DSH_MNEMON_PACKAGE) this.dshMnemonVersion = installedVersion
-    this.remember(component, previousVersion)
-    const output = result.output.trim()
-    return {
-      component,
-      previousVersion,
-      currentVersion: installedVersion,
-      updated: true,
-      restartRequired: true,
-      ...(output === '' ? {} : { output: output.slice(-4_000) }),
-    }
+    return this.completePackageUpdate(component, previousVersion, latest, installedVersion, result.output.trim())
   }
 
-  private async updateThroughDsh(installer: DshBundleInstaller, component: VersionComponentId, previousVersion: string, latest: string): Promise<VersionUpdateResult | undefined> {
+  private async updateThroughDsh(installer: DshBundleInstaller, profileDir: string, component: VersionComponentId, previousVersion: string, latest: string): Promise<VersionUpdateResult | undefined> {
     const spec = `${component}@${latest}`
     let change: DshBundleChange
     try {
@@ -760,17 +915,9 @@ export class VersionUpdateManager {
     const output = change.packageResult?.output?.trim()
     if (change.application === 'failed' && change.error?.code === 'already-installed') return undefined
     if (change.application === 'failed' || change.application === 'cancelled') throw new Error(`DSH could not install ${spec}: ${dshFailure(change)}`)
-    const installedVersion = (await installer.listBundles()).find(bundle => bundle.name === component)?.version
-    if (installedVersion !== latest) throw new Error(`${component} update did not install the requested version ${latest}; found ${installedVersion ?? 'no package'}`)
-    if (component === DSH_MNEMON_PACKAGE) this.dshMnemonVersion = installedVersion
-    this.remember(component, previousVersion)
-    return {
-      component,
-      previousVersion,
-      currentVersion: installedVersion,
-      updated: true,
-      restartRequired: true,
-      ...(output === undefined || output === '' ? {} : { output: output.slice(-4_000) }),
-    }
+    const installedVersion = this.platform === 'win32'
+      ? manifest(join(profileDir, 'node_modules', component, 'package.json'))?.version
+      : (await installer.listBundles()).find(bundle => bundle.name === component)?.version
+    return this.completePackageUpdate(component, previousVersion, latest, installedVersion, output)
   }
 }
