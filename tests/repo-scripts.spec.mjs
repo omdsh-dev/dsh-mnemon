@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -28,6 +28,7 @@ import {
   writeReleaseManifest,
 } from '../scripts/release.mjs'
 import { syncReleaseMetadata } from '../scripts/sync-release-metadata.mjs'
+import { formatEvidenceMarkdown, parseUploadArgs, uploadPrEvidence, validateEvidenceFiles } from '../scripts/upload-pr-evidence.mjs'
 import { checkDocuments, documentLinks, headingIds, withoutFences } from '../scripts/verify-docs.mjs'
 
 describe('documentation checks', () => {
@@ -1063,5 +1064,112 @@ describe('advisory issue template checks', () => {
     expect(check.get).not.toHaveBeenCalled()
     expect(check.addLabels).not.toHaveBeenCalled()
     expect(check.createComment).not.toHaveBeenCalled()
+  })
+})
+
+describe('PR visual evidence upload helper', () => {
+  const directories = []
+  afterEach(() => { for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }) })
+
+  function makeTempDir(prefix) {
+    const directory = mkdtempSync(join(tmpdir(), prefix))
+    directories.push(directory)
+    return directory
+  }
+
+  const gitIdentityEnv = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 'Mnemon Test',
+    GIT_AUTHOR_EMAIL: 'test@mnemon.invalid',
+    GIT_COMMITTER_NAME: 'Mnemon Test',
+    GIT_COMMITTER_EMAIL: 'test@mnemon.invalid',
+  }
+
+  function createBareAssetRemote() {
+    const bare = makeTempDir('mnemon-assets-bare-')
+    const seed = makeTempDir('mnemon-assets-seed-')
+    execFileSync('git', ['init', '--bare', '-b', 'main', bare], { env: gitIdentityEnv, stdio: 'ignore' })
+    execFileSync('git', ['clone', bare, seed], { env: gitIdentityEnv, stdio: 'ignore' })
+    writeFileSync(join(seed, 'README.md'), '# assets\n')
+    execFileSync('git', ['add', 'README.md'], { cwd: seed, env: gitIdentityEnv, stdio: 'ignore' })
+    execFileSync('git', ['commit', '-m', 'chore: init'], { cwd: seed, env: gitIdentityEnv, stdio: 'ignore' })
+    execFileSync('git', ['push', 'origin', 'HEAD:main'], { cwd: seed, env: gitIdentityEnv, stdio: 'ignore' })
+    return bare
+  }
+
+  it('validates CLI arguments and media files at the boundary', () => {
+    expect(parseUploadArgs(['--', '--slug', 'pr-722-locale', 'a.png', 'b.webm'])).toMatchObject({
+      slug: 'pr-722-locale',
+      repo: 'mnemon-dev/assets',
+      namespace: 'dsh-mnemon',
+      branch: 'main',
+      files: ['a.png', 'b.webm'],
+    })
+    expect(parseUploadArgs(['--', '--help'])).toEqual({ help: true })
+    expect(() => parseUploadArgs(['--slug', '../escape', 'a.png'])).toThrow(/--slug/)
+    expect(() => parseUploadArgs(['--slug', 'ok'])).toThrow(/At least one media file/)
+    expect(() => parseUploadArgs(['--slug', 'ok', '--repo', 'invalid', 'a.png'])).toThrow(/Invalid --repo/)
+
+    const fixtureDir = makeTempDir('mnemon-evidence-files-')
+    const pngA = join(fixtureDir, 'before-ui.png')
+    const txt = join(fixtureDir, 'notes.txt')
+    const empty = join(fixtureDir, 'empty.png')
+    const dupDir = join(fixtureDir, 'nested')
+    mkdirSync(dupDir)
+    const pngDup = join(dupDir, 'BEFORE-UI.PNG')
+    writeFileSync(pngA, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    writeFileSync(pngDup, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    writeFileSync(txt, 'not media')
+    writeFileSync(empty, '')
+
+    expect(() => validateEvidenceFiles([txt], { namespace: 'dsh-mnemon', slug: 's' })).toThrow(/Unsupported media extension/)
+    expect(() => validateEvidenceFiles([empty], { namespace: 'dsh-mnemon', slug: 's' })).toThrow(/empty/)
+    expect(() => validateEvidenceFiles([pngA, pngDup], { namespace: 'dsh-mnemon', slug: 's' })).toThrow(/Duplicate evidence filename/)
+  })
+
+  it('supports dry-run formatting and atomic bare-repo upload with idempotent re-runs', () => {
+    const fixtureDir = makeTempDir('mnemon-evidence-upload-')
+    const beforePng = join(fixtureDir, 'before-settings.png')
+    const clipWebm = join(fixtureDir, 'locale-switch.webm')
+    writeFileSync(beforePng, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]))
+    writeFileSync(clipWebm, Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))
+
+    const dry = uploadPrEvidence({ slug: 'pr-722-locale', files: [beforePng, clipWebm], dryRun: true })
+    expect(dry.dryRun).toBe(true)
+    expect(dry.committed).toBe(false)
+    expect(dry.markdown).toBe([
+      '![before settings](https://raw.githubusercontent.com/mnemon-dev/assets/<40-char-commit-sha>/dsh-mnemon/pr/pr-722-locale/before-settings.png)',
+      '[locale switch](https://raw.githubusercontent.com/mnemon-dev/assets/<40-char-commit-sha>/dsh-mnemon/pr/pr-722-locale/locale-switch.webm)',
+    ].join('\n'))
+
+    const bare = createBareAssetRemote()
+    const first = uploadPrEvidence({
+      slug: 'pr-722-locale',
+      remote: bare,
+      files: [beforePng, clipWebm],
+      env: gitIdentityEnv,
+    })
+    expect(first.committed).toBe(true)
+    expect(first.sha).toMatch(/^[0-9a-f]{40}$/u)
+    expect(first.markdown).toBe(formatEvidenceMarkdown({
+      repo: 'mnemon-dev/assets',
+      sha: first.sha,
+      entries: first.entries,
+    }))
+
+    const tree = execFileSync('git', ['--git-dir', bare, 'ls-tree', '-r', '--name-only', first.sha], { encoding: 'utf8' }).trim().split('\n')
+    expect(tree).toEqual(expect.arrayContaining([
+      'dsh-mnemon/pr/pr-722-locale/before-settings.png',
+      'dsh-mnemon/pr/pr-722-locale/locale-switch.webm',
+    ]))
+
+    const second = uploadPrEvidence({
+      slug: 'pr-722-locale',
+      remote: bare,
+      files: [beforePng, clipWebm],
+      env: gitIdentityEnv,
+    })
+    expect(second.committed).toBe(false)
+    expect(second.sha).toBe(first.sha)
   })
 })
