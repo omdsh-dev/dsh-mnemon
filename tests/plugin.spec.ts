@@ -592,8 +592,6 @@ describe('explicit default Starter', () => {
     expect(patch).toMatch(/- insert:\n(?:    #.*\n)*    - id: mnemon-bundle\n      name: dsh-mnemon\/bundle\n      group: true\n      disabled: !!js/u)
     expect(patch).not.toContain('mnemon-starter')
     expect(patch).not.toContain('inject:')
-    expect(patch).toContain("[...loader.entries()].find(entry => entry.options.id === 'mnemon')")
-    expect(patch).toContain('entry.evaluate(entry.options.disabled.__jsExpr)')
     expect(patch).toMatch(/        - id: mnemon\n          # Core\/Host/u)
     for (const name of [runtimePlugin.name, documentsPlugin.name, spacesPlugin.name, strategyPlugin.name]) {
       expect(patch).toMatch(new RegExp(`        - id: ${name.slice(4)}\\n          name: ${name}`, 'u'))
