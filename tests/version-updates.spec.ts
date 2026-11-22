@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessRunner } from '../src/host/process.ts'
 import { compareVersions, VersionUpdateManager, type DshBundleChange, type DshBundleInstaller, type DshPluginCommand } from "../src/host/version-updates.ts"
@@ -503,7 +503,7 @@ describe('VersionUpdateManager', () => {
 })
 
 describe('Starter updates through DSH\'s plugin manager', () => {
-  function profileFixture(options: { pnpm?: boolean; installer?: Partial<DshBundleInstaller> | null; runningProfile?: (profile: string) => string | undefined; packageManager?: boolean; gate?: Promise<void>; added?: Record<string, { bundle: boolean }>; pluginCommand?: DshPluginCommand | null; platform?: NodeJS.Platform; probePackageReplaceable?: (packageDir: string) => void } = {}) {
+  function profileFixture(options: { pnpm?: boolean; installer?: Partial<DshBundleInstaller> | null; runningProfile?: (profile: string) => string | undefined; packageManager?: boolean; gate?: Promise<void>; added?: Record<string, { bundle: boolean }>; pluginCommand?: DshPluginCommand | null; platform?: NodeJS.Platform } = {}) {
     const profile = directory('dsh-profile')
     const packageRoot = join(profile, 'node_modules', 'dsh-mnemon')
     mkdirSync(packageRoot, { recursive: true })
@@ -551,7 +551,6 @@ describe('Starter updates through DSH\'s plugin manager', () => {
       // null stands for a DSH whose installation exports no plugin command.
       ...(options.pluginCommand === undefined ? {} : { pluginCommand: async () => options.pluginCommand ?? undefined }),
       ...(options.platform === undefined ? {} : { platform: options.platform }),
-      ...(options.probePackageReplaceable === undefined ? {} : { probePackageReplaceable: options.probePackageReplaceable }),
     })
     const starter = async () => (await manager.check()).components.find(component => component.id === 'dsh-mnemon')
     /** What `dsh plugin add <name>@<version>` leaves: the profile record and the package. */
@@ -799,23 +798,45 @@ describe('Starter updates through DSH\'s plugin manager', () => {
     expect(f.manager.currentDshMnemonVersion).toBe('0.5.21')
   })
 
-  it('aborts before invoking pnpm on Windows when the package directory cannot be renamed (#723)', async () => {
-    const probe = vi.fn(() => {
-      const error = Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' })
-      throw error
-    })
+  it('preserves the working Windows installation when its update backup cannot be captured (#723)', async () => {
     const command = vi.fn<DshPluginCommand>()
+    const f = profileFixture({ platform: 'win32', installer: { installBundle: refusesInstalled() }, pluginCommand: command })
+    mkdirSync(join(f.profile, 'pnpm-lock.yaml'))
+    await expect(f.manager.update('dsh-mnemon')).rejects.toThrow(/Could not back up.+No installation files were changed.+Quit DSH completely/u)
+    expect(command).not.toHaveBeenCalled()
+    expect(f.manager.currentDshMnemonVersion).toBe('0.5.21')
+  })
+
+  it('keeps nonempty Windows directories intact after a missing manifest and a locked update (#723)', async () => {
     const f = profileFixture({
       platform: 'win32',
-      probePackageReplaceable: probe,
-      installer: { installBundle: refusesInstalled() },
-      pluginCommand: command,
+      installer: { installBundle: vi.fn(async () => {
+        const pkgDir = join(f.profile, 'node_modules', 'dsh-mnemon')
+        json(join(f.profile, 'package.json'), { name: 'dsh-profile-desktop', dependencies: { 'dsh-mnemon': '0.5.22' } })
+        rmSync(join(pkgDir, 'package.json'))
+        return { application: 'failed', error: { code: 'operation-error', diagnostic: 'ERR_PNPM_EPERM' } } as const
+      }) },
     })
-    await expect(f.manager.update('dsh-mnemon')).rejects.toThrow(/holds open handles.*memory data is intact.*Quit DSH completely.*dsh plugin --profile desktop add dsh-mnemon@0\.5\.22/u)
-    expect(probe).toHaveBeenCalledOnce()
-    expect(command).not.toHaveBeenCalled()
-    expect(JSON.parse(readFileSync(join(f.profile, 'package.json'), 'utf8')).dependencies['dsh-mnemon']).toBe('0.5.21')
-    expect(JSON.parse(readFileSync(join(f.profile, 'node_modules', 'dsh-mnemon', 'package.json'), 'utf8')).version).toBe('0.5.21')
+    const remainingFile = join(f.profile, 'node_modules', 'dsh-mnemon', 'keep.js')
+    writeFileSync(remainingFile, 'keep these bytes')
+    const failure = await f.manager.update('dsh-mnemon').catch(error => error)
+    expect(failure).toBeInstanceOf(Error)
+    expect(failure.message).toContain('Quit DSH completely')
+    const backupPath = /Previous package backup: (.+)\. Quit DSH completely/u.exec(failure.message)?.[1]
+    expect(backupPath).toBeDefined()
+    try {
+      expect(readFileSync(join(backupPath!, 'keep.js'), 'utf8')).toBe('keep these bytes')
+    } finally {
+      rmSync(dirname(backupPath!), { recursive: true, force: true })
+    }
+    expect(readFileSync(remainingFile, 'utf8')).toBe('keep these bytes')
+    expect(f.manager.currentDshMnemonVersion).toBe('0.5.21')
+  })
+
+  it('leaves the non-Windows update path independent of Windows backup files', async () => {
+    const f = profileFixture({ platform: 'linux' })
+    mkdirSync(join(f.profile, 'pnpm-lock.yaml'))
+    await expect(f.manager.update('dsh-mnemon')).resolves.toMatchObject({ updated: true, currentVersion: '0.5.22' })
   })
 
   it('auto-recovers an empty package shell after ERR_PNPM_EPERM via a clean install retry (#723)', async () => {
@@ -838,7 +859,6 @@ describe('Starter updates through DSH\'s plugin manager', () => {
     })
     f = profileFixture({
       platform: 'win32',
-      probePackageReplaceable: () => {},
       installer: { installBundle: refusesInstalled() },
       pluginCommand: command,
     })
@@ -849,7 +869,7 @@ describe('Starter updates through DSH\'s plugin manager', () => {
     expect(JSON.parse(readFileSync(join(f.profile, 'node_modules', 'dsh-mnemon', 'package.json'), 'utf8')).version).toBe('0.5.22')
   })
 
-  it('rolls back package.json, pnpm-lock.yaml, and previous package files when empty-shell recovery also fails (#723)', async () => {
+  it.each([true, false])('rolls back the Windows package and profile when recovery fails (had lockfile: %s)', async hadLockfile => {
     let f!: ReturnType<typeof profileFixture>
     const command = vi.fn<DshPluginCommand>(async args => {
       const pkgDir = join(f.profile, 'node_modules', 'dsh-mnemon')
@@ -863,18 +883,18 @@ describe('Starter updates through DSH\'s plugin manager', () => {
     })
     f = profileFixture({
       platform: 'win32',
-      probePackageReplaceable: () => {},
       installer: { installBundle: refusesInstalled() },
       pluginCommand: command,
     })
     const pkgDir = join(f.profile, 'node_modules', 'dsh-mnemon')
     mkdirSync(join(pkgDir, 'lib'), { recursive: true })
     writeFileSync(join(pkgDir, 'lib', 'index.js'), 'export const running = "0.5.21"\n')
-    writeFileSync(join(f.profile, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n# original 0.5.21\n')
+    if (hadLockfile) writeFileSync(join(f.profile, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n# original 0.5.21\n')
 
     await expect(f.manager.update('dsh-mnemon')).rejects.toThrow(/Restored previous dsh-mnemon@0\.5\.21; your memory data is intact\. Quit DSH completely/u)
     expect(JSON.parse(readFileSync(join(f.profile, 'package.json'), 'utf8')).dependencies['dsh-mnemon']).toBe('0.5.21')
-    expect(readFileSync(join(f.profile, 'pnpm-lock.yaml'), 'utf8')).toContain('# original 0.5.21')
+    if (hadLockfile) expect(readFileSync(join(f.profile, 'pnpm-lock.yaml'), 'utf8')).toContain('# original 0.5.21')
+    else expect(existsSync(join(f.profile, 'pnpm-lock.yaml'))).toBe(false)
     expect(JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')).version).toBe('0.5.21')
     expect(readFileSync(join(pkgDir, 'lib', 'index.js'), 'utf8')).toContain('0.5.21')
     expect(f.manager.currentDshMnemonVersion).toBe('0.5.21')
@@ -890,7 +910,7 @@ describe('Starter updates through DSH\'s plugin manager', () => {
   })
 
   it('auto-recovers an empty package shell on the direct pnpm path after ERR_PNPM_EPERM (#723)', async () => {
-    const f = profileFixture({ pnpm: true, installer: null, platform: 'win32', probePackageReplaceable: () => {} })
+    const f = profileFixture({ pnpm: true, installer: null, platform: 'win32' })
     let calls = 0
     f.run.mockImplementation(async (_command, args) => {
       calls++
