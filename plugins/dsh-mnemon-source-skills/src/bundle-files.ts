@@ -13,6 +13,14 @@ export const MAX_DRAFT_RESOURCE_FILE_BYTES = 256 * 1024
 const MAX_READ_RESOURCES = 40
 const IGNORED_BUNDLE_DIRECTORIES = new Set(['node_modules', '__pycache__', 'venv'])
 
+function isDependencyDirectory(name: string): boolean {
+  return IGNORED_BUNDLE_DIRECTORIES.has(name.toLowerCase())
+}
+
+function isDependencyPath(path: string): boolean {
+  return path.trim().replaceAll('\\', '/').split('/').slice(0, -1).some(isDependencyDirectory)
+}
+
 function sha256Hex(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex')
 }
@@ -28,7 +36,7 @@ export function normalizeBundleRelativePath(raw: string): string {
     throw new Error(`supporting file path must be relative to the skill directory: ${raw}`)
   }
   const segments = normalized.split('/')
-  if (segments.some(seg => seg === '' || seg === '.' || seg === '..' || seg.startsWith('.') || IGNORED_BUNDLE_DIRECTORIES.has(seg))) {
+  if (segments.some(seg => seg === '' || seg === '.' || seg === '..' || seg.startsWith('.')) || isDependencyPath(normalized)) {
     throw new Error(`invalid segment in supporting file path: ${raw}`)
   }
   if (segments.length > 4) throw new Error(`supporting file path is nested too deeply: ${raw}`)
@@ -61,7 +69,7 @@ function* bundleFiles(root: string, strict: boolean, directory = root, depth = 0
   try { entries = readdirSync(directory, { withFileTypes: true }) } catch (error) { if (strict) throw error; return }
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     if (entry.name.startsWith('.') || entry.isSymbolicLink()) continue
-    if (entry.isDirectory() && IGNORED_BUNDLE_DIRECTORIES.has(entry.name)) continue
+    if (entry.isDirectory() && isDependencyDirectory(entry.name)) continue
     const full = join(directory, entry.name)
     if (entry.isDirectory()) { if (depth < 3) yield* bundleFiles(root, strict, full, depth + 1); continue }
     if (!entry.isFile()) continue
@@ -177,13 +185,16 @@ function boundedSnapshot(files: SkillBundleSnapshot['files']): SkillBundleSnapsh
 }
 
 export function restoreBundleFiles(bundleDir: string, target: SkillBundleSnapshot, current: SkillBundleSnapshot): { rollback(): void; snapshot: SkillBundleSnapshot } {
-  const files: SkillBundleSnapshot['files'] = Object.assign(Object.create(null), target.complete ? {} : current.files)
-  for (const [path, file] of Object.entries(target.files)) files[path] = { ...file, mode: file.mode ?? current.files[path]?.mode ?? 0o600 }
+  const currentFiles = Object.entries(current.files).filter(([path]) => !isDependencyPath(path))
+  const targetFiles = Object.entries(target.files).filter(([path]) => !isDependencyPath(path))
+  const files: SkillBundleSnapshot['files'] = Object.create(null)
+  if (!target.complete) for (const [path, file] of currentFiles) files[path] = file
+  for (const [path, file] of targetFiles) files[path] = { ...file, mode: file.mode ?? current.files[path]?.mode ?? 0o600 }
   const snapshot = boundedSnapshot(files)
-  const changes: BundleFileMutation[] = Object.entries(target.files).map(([path, file]) => ({
+  const changes: BundleFileMutation[] = targetFiles.map(([path, file]) => ({
     path, action: 'upsert', content: Buffer.from(file.base64, 'base64'), ...(file.mode === undefined ? {} : { mode: file.mode }),
   }))
-  if (target.complete) for (const path of Object.keys(current.files)) {
+  if (target.complete) for (const [path] of currentFiles) {
     if (!Object.hasOwn(target.files, path)) changes.push({ path, action: 'delete' })
   }
   return { ...applyBundleFileChanges(bundleDir, changes), snapshot }
@@ -191,7 +202,7 @@ export function restoreBundleFiles(bundleDir: string, target: SkillBundleSnapsho
 
 export function snapshotResourcePreview(snapshot: SkillBundleSnapshot): Array<{ path: string; content: string }> {
   let bytes = 0
-  return Object.keys(snapshot.files).sort((a, b) => a.localeCompare(b)).slice(0, MAX_READ_RESOURCES).flatMap(path => {
+  return Object.keys(snapshot.files).filter(path => !isDependencyPath(path)).sort((a, b) => a.localeCompare(b)).slice(0, MAX_READ_RESOURCES).flatMap(path => {
     const data = Buffer.from(snapshot.files[path]!.base64, 'base64')
     if (data.includes(0) || data.length > MAX_RESOURCE_TEXT_BYTES || bytes + data.length > MAX_TOTAL_RESOURCE_TEXT_BYTES) return []
     bytes += data.length

@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { applyBundleFileChanges, MAX_BUNDLE_SNAPSHOT_BYTES } from '../src/bundle-files.ts'
+import { applyBundleFileChanges, MAX_BUNDLE_SNAPSHOT_BYTES, restoreBundleFiles, snapshotBundleFiles, snapshotResourcePreview } from '../src/bundle-files.ts'
 import { sha256 } from '../src/catalog.ts'
 import { SkillsService } from '../src/service.ts'
 
@@ -164,6 +164,27 @@ it('loads legacy text-only snapshots without deleting files omitted from their p
   expect(readFileSync(join(bundle, 'script.sh'), 'utf8')).toContain('echo legacy')
   expect(readFileSync(join(bundle, 'keep.bin'))).toEqual(Buffer.from([0, 1, 255]))
   if (process.platform !== 'win32') expect(statSync(join(bundle, 'script.sh')).mode & 0o777).toBe(0o755)
+})
+
+it('restores historical snapshots that contain generated dependencies without changing the installed dependencies', () => {
+  mkdirSync(join(bundle, 'Node_Modules'))
+  const dependency = join(bundle, 'Node_Modules', 'copy.js')
+  writeFileSync(dependency, 'current dependency')
+  writeFileSync(join(bundle, 'venv'), 'ordinary supporting file')
+  const captured = snapshotBundleFiles(bundle)
+  expect(Object.keys(captured.files)).toEqual(['venv'])
+  const original = {
+    ...captured,
+    files: {
+      'Node_Modules/copy.js': { base64: Buffer.from('old dependency').toString('base64'), mode: 0o600 },
+      venv: { base64: Buffer.from('original supporting file').toString('base64'), mode: 0o600 },
+    },
+  }
+  expect(snapshotResourcePreview(original)).toEqual([{ path: 'venv', content: 'original supporting file' }])
+  const restored = restoreBundleFiles(bundle, original, captured)
+  expect(readFileSync(dependency, 'utf8')).toBe('current dependency')
+  expect(readFileSync(join(bundle, 'venv'), 'utf8')).toBe('original supporting file')
+  expect(Object.keys(restored.snapshot.files)).toEqual(['venv'])
 })
 
 it('skips dependency and cache directories during backup, preview, and restore without blocking adoption (#717)', async () => {
