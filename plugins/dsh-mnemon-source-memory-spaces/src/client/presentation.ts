@@ -82,7 +82,11 @@ export function useT(): Translate {
 export function languageChain(snapshot: DshLocaleSnapshot): string[] {
   const fallbacks = new Map(snapshot.locales.map(locale => [locale.id, locale.fallback]))
   const chain: string[] = []
-  for (let id: string | undefined = snapshot.active; id !== undefined && !chain.includes(id); id = fallbacks.get(id)) chain.push(id)
+  for (let id: string | undefined = snapshot.active; id !== undefined; id = fallbacks.get(id)) {
+    if (chain.includes(id) || (chain.length > 0 && !fallbacks.has(id))) break
+    chain.push(id)
+  }
+  if (!chain.includes('en')) chain.push('en')
   return chain
 }
 

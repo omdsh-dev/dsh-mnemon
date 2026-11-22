@@ -23,7 +23,7 @@ import {
 } from '../src/client/locales.ts'
 import { useT as useRuntimeT } from '../plugins/dsh-mnemon-source-runtime/src/client/presentation.ts'
 import { useT as useDocumentsT } from '../plugins/dsh-mnemon-source-documents/src/client/presentation.ts'
-import { useT as useSpacesT, settingsTranslate } from '../plugins/dsh-mnemon-source-memory-spaces/src/client/presentation.ts'
+import { languageChain as spacesLanguageChain, useT as useSpacesT, settingsTranslate } from '../plugins/dsh-mnemon-source-memory-spaces/src/client/presentation.ts'
 import { compactCount, useT as useSkillsT, translate as skillsTranslate } from '../plugins/dsh-mnemon-source-skills/src/client/presentation.ts'
 import { localized as marketLocalized, parseRegistry } from '../plugins/dsh-mnemon-source-skills/src/market.ts'
 import { defineMemoryPlugin } from '../src/core/definitions.ts'
@@ -245,7 +245,7 @@ describe('Official DSH LocaleRuntime integration', () => {
 
   it('follows a declared language chain for bundled UI and localized names', () => {
     const locale = createLocaleRuntime()
-    addLanguage(locale, 'fr')
+    const removeFrench = locale.addLanguage({ id: 'fr', label: 'Français', fallback: 'en' })
     addLanguage(locale, 'it', 'fr')
     addLanguage(locale, 'fr-CA', 'en')
     registerMnemonLocales(locale)
@@ -269,6 +269,15 @@ describe('Official DSH LocaleRuntime integration', () => {
     expect(localeFallbackChain(locale.getSnapshot())).toEqual(['fr-CA', 'en'])
     expect(t('config.storageTitle')).toBe(mnemonLocales.en['config.storageTitle'])
     expect(pickLocalizedText(label, localeFallbackChain(locale.getSnapshot()))).toBe('Project Documents')
+
+    locale.setLocale('it')
+    removeFrench()
+    const snapshot = locale.getSnapshot()
+    const remainingChain = localeFallbackChain(snapshot)
+    expect(remainingChain).toEqual(['it', 'en'])
+    expect(spacesLanguageChain(snapshot)).toEqual(remainingChain)
+    expect(t('config.storageTitle')).toBe(mnemonLocales.en['config.storageTitle'])
+    expect(pickLocalizedText(label, remainingChain)).toBe(locale.resolveText(label))
   })
 })
 

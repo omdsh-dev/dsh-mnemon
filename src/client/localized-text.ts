@@ -34,11 +34,12 @@ export function localeFallbackChain(snapshot: LocaleSelection): readonly string[
   const fallbacks = new Map(snapshot.locales.map(({ id, fallback }) => [normalizeLocale(id), fallback]))
   const chain: string[] = []
   const seen = new Set<string>()
-  for (let id: string | undefined = snapshot.active; id !== undefined; id = fallbacks.get(normalizeLocale(id))) {
+  for (let id: string | undefined = snapshot.active; id !== undefined;) {
     const key = normalizeLocale(id)
-    if (seen.has(key)) break
+    if (seen.has(key) || (chain.length > 0 && !fallbacks.has(key))) break
     seen.add(key)
     chain.push(id)
+    id = fallbacks.get(key)
   }
   if (!seen.has('en')) chain.push('en')
   return chain
