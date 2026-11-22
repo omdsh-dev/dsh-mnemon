@@ -96,8 +96,8 @@ describe('external consumer of packed artifacts', () => {
         const specifier = name + (subpath === '.' ? '' : subpath.slice(1))
         if (subpath === './locale/*.json') {
           const directory = join(dirname(require.resolve(name + '/package.json')), 'locale')
-          const files = readdirSync(directory).filter(file => file.endsWith('.json'))
-          expect(files).toContain('en.json')
+          const files = readdirSync(directory).filter(file => file.endsWith('.json')).sort()
+          expect(files).toEqual(['de.json', 'en.json', 'es.json', 'fr.json', 'ja.json', 'pt.json', 'ru.json', 'zh.json'])
           for (const file of files) {
             const resolved = require.resolve(name + '/locale/' + file)
             expect(resolved).toBe(join(directory, file))
@@ -107,7 +107,7 @@ describe('external consumer of packed artifacts', () => {
         }
         if (subpath.startsWith('./presentation/')) {
           const asset = readFileSync(require.resolve(specifier), 'utf8')
-          if (subpath.endsWith('.json')) expect(Object.keys(JSON.parse(asset)).sort()).toEqual(['en', 'zh'])
+          if (subpath.endsWith('.json')) expect(Object.keys(JSON.parse(asset)).sort()).toEqual(['de', 'en', 'es', 'fr', 'ja', 'pt', 'ru', 'zh'])
           else expect(asset.trim()).not.toBe('')
           continue
         }
@@ -128,7 +128,15 @@ describe('external consumer of packed artifacts', () => {
     expect(chinese.meta.description).toMatch(/可组合视图上下文/)
     expect(chinese.meta.detail).toBe('locale/detail.zh.md')
     const directory = dirname(require.resolve('dsh-mnemon/package.json'))
-    for (const locale of [english, chinese]) {
+    for (const id of ['en', 'zh', 'ja', 'es', 'fr', 'de', 'ru', 'pt']) {
+      const locale = JSON.parse(readFileSync(require.resolve(`dsh-mnemon/locale/${id}.json`), 'utf8'))
+      expect(locale.meta.detail).toBe(`locale/detail.${id}.md`)
+      if (id !== 'en') {
+        expect(typeof locale.meta.title).toBe('string')
+        expect(locale.meta.title.trim().length).toBeGreaterThan(0)
+        expect(typeof locale.meta.description).toBe('string')
+        expect(locale.meta.description.trim().length).toBeGreaterThan(0)
+      }
       expect(readFileSync(join(directory, locale.meta.detail), 'utf8')).toMatch(/^# Mnemon\r?\n/)
     }
   })
