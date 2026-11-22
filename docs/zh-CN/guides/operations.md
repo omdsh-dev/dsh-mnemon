@@ -22,7 +22,7 @@ Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
 /mnemon status
 ```
 
-![状态页：每个记忆组件、Provider 与存储区域](../../assets/webui-v0.5.32/zh-CN/memory-status.jpg)
+![状态页：每个记忆组件、Provider 与存储区域](../../assets/webui/zh-CN/memory-status.jpg)
 
 状态页显示 dsh-mnemon 与 Mnemon 的版本、每个记忆组件一张卡片、各个 Provider，以及当前实际目录。`mnemon status` 会打开有效 Store，上游 CLI 可能初始化数据或执行迁移，因此不是完全无副作用的只读探测。
 
@@ -78,7 +78,7 @@ Go 更新还要求当前执行文件确实位于本机 Go 的安装输出位置�
 
 导入受 `writeEnabled` 控制，只读部署会拒绝。ZIP 包含私有记忆，应加密、限制访问并验证恢复。Provider 凭据保存在 `state/memory-providers.json`（`0600`），不会进入 ZIP。已保存的凭据值也不会经管理通道返回；若要备份连接，需要按下述离线快照保护整个 `state/`。
 
-![安全导入前经过校验的备份预览](../../assets/webui-v0.5.32/zh-CN/plugin-backup-preview.jpg)
+![安全导入前经过校验的备份预览](../../assets/webui/zh-CN/plugin-backup-preview.jpg)
 
 ### Git 仓库同步
 

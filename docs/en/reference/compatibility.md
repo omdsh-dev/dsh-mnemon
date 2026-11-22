@@ -204,10 +204,10 @@ See [Development and verification](../development/README.md) for current verific
 
 ### Product media
 
-The [WebUI media gallery](../../assets/webui-v0.5.32/README.md) covers bilingual desktop pages, DSH's Plugins page, dsh-mnemon's page, and narrow 390 × 844 layouts (where long names truncate and, in English, the active Memory System tab can sit off-screen). It does not retest every Host settings surface, DSH 0.2.0, or physical phones, so phone support is not declared complete.
+The [WebUI media gallery](../../assets/webui/README.md) covers bilingual desktop pages, DSH's Plugins page, dsh-mnemon's page, and narrow 390 × 844 layouts (where long names truncate and, in English, the active Memory System tab can sit off-screen). It does not retest every Host settings surface, DSH 0.2.0, or physical phones, so phone support is not declared complete.
 
 <a id="other-records"></a>
 
 ### Older hosts
 
-See the [installation gallery](../../assets/install-v0.5.19/README.md) and [CHANGELOG.md](../../../CHANGELOG.md) for historical release records on earlier DSH hosts.
+See the [installation gallery](../../assets/install/README.md) and [CHANGELOG.md](../../../CHANGELOG.md) for historical release records on earlier DSH hosts.

@@ -22,7 +22,7 @@ Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
 /mnemon status
 ```
 
-![Status with each memory component, the Providers and the storage areas](../../assets/webui-v0.5.32/en/memory-status.jpg)
+![Status with each memory component, the Providers and the storage areas](../../assets/webui/en/memory-status.jpg)
 
 Status shows the dsh-mnemon and Mnemon versions, one card per memory component, the Providers and the effective directories. `mnemon status` opens the effective Store and may initialize data or run upstream migrations, so it is not a completely side-effect-free probe.
 
@@ -78,7 +78,7 @@ Sync and Safe import report the number saved to the local archive separately fro
 
 Import is governed by `writeEnabled` and is rejected in read-only deployments. A ZIP contains private memory—encrypt it, restrict access, and rehearse recovery. Provider credentials live in `state/memory-providers.json` with mode `0600`; they are excluded from ZIP. Saved credential values are not returned through management responses either. Protect the entire `state/` directory in the offline snapshot below if connections must be backed up.
 
-![A verified backup preview before Safe import](../../assets/webui-v0.5.32/en/plugin-backup-preview.jpg)
+![A verified backup preview before Safe import](../../assets/webui/en/plugin-backup-preview.jpg)
 
 ### Git repository sync
 
