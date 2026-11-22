@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon-strategy-default-three-tier",
-  "version": "0.5.16",
+  "version": "0.5.17",
   "description": "Explicit three-tier View Strategy for Composable View Memory.",
   "license": "MIT",
   "type": "module",
@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "dsh-mnemon": "^0.5.52",
+    "dsh-mnemon": "^0.5.53",
     "tsdown": "^0.22.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
