@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -503,7 +503,7 @@ describe('VersionUpdateManager', () => {
 })
 
 describe('Starter updates through DSH\'s plugin manager', () => {
-  function profileFixture(options: { pnpm?: boolean; installer?: Partial<DshBundleInstaller> | null; runningProfile?: (profile: string) => string | undefined; packageManager?: boolean; gate?: Promise<void>; added?: Record<string, { bundle: boolean }>; pluginCommand?: DshPluginCommand | null } = {}) {
+  function profileFixture(options: { pnpm?: boolean; installer?: Partial<DshBundleInstaller> | null; runningProfile?: (profile: string) => string | undefined; packageManager?: boolean; gate?: Promise<void>; added?: Record<string, { bundle: boolean }>; pluginCommand?: DshPluginCommand | null; platform?: NodeJS.Platform; probePackageReplaceable?: (packageDir: string) => void } = {}) {
     const profile = directory('dsh-profile')
     const packageRoot = join(profile, 'node_modules', 'dsh-mnemon')
     mkdirSync(packageRoot, { recursive: true })
@@ -550,6 +550,8 @@ describe('Starter updates through DSH\'s plugin manager', () => {
       },
       // null stands for a DSH whose installation exports no plugin command.
       ...(options.pluginCommand === undefined ? {} : { pluginCommand: async () => options.pluginCommand ?? undefined }),
+      ...(options.platform === undefined ? {} : { platform: options.platform }),
+      ...(options.probePackageReplaceable === undefined ? {} : { probePackageReplaceable: options.probePackageReplaceable }),
     })
     const starter = async () => (await manager.check()).components.find(component => component.id === 'dsh-mnemon')
     /** What `dsh plugin add <name>@<version>` leaves: the profile record and the package. */
@@ -795,5 +797,119 @@ describe('Starter updates through DSH\'s plugin manager', () => {
     } })
     await expect(f.manager.update('dsh-mnemon')).rejects.toThrow('did not install the requested version 0.5.22; found 0.5.21')
     expect(f.manager.currentDshMnemonVersion).toBe('0.5.21')
+  })
+
+  it('aborts before invoking pnpm on Windows when the package directory cannot be renamed (#723)', async () => {
+    const probe = vi.fn(() => {
+      const error = Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' })
+      throw error
+    })
+    const command = vi.fn<DshPluginCommand>()
+    const f = profileFixture({
+      platform: 'win32',
+      probePackageReplaceable: probe,
+      installer: { installBundle: refusesInstalled() },
+      pluginCommand: command,
+    })
+    await expect(f.manager.update('dsh-mnemon')).rejects.toThrow(/holds open handles.*memory data is intact.*Quit DSH completely.*dsh plugin --profile desktop add dsh-mnemon@0\.5\.22/u)
+    expect(probe).toHaveBeenCalledOnce()
+    expect(command).not.toHaveBeenCalled()
+    expect(JSON.parse(readFileSync(join(f.profile, 'package.json'), 'utf8')).dependencies['dsh-mnemon']).toBe('0.5.21')
+    expect(JSON.parse(readFileSync(join(f.profile, 'node_modules', 'dsh-mnemon', 'package.json'), 'utf8')).version).toBe('0.5.21')
+  })
+
+  it('auto-recovers an empty package shell after ERR_PNPM_EPERM via a clean install retry (#723)', async () => {
+    let f!: ReturnType<typeof profileFixture>
+    let calls = 0
+    const command = vi.fn<DshPluginCommand>(async args => {
+      calls++
+      const pkgDir = join(f.profile, 'node_modules', 'dsh-mnemon')
+      if (calls === 1) {
+        expect(args).toEqual(['add', 'dsh-mnemon@0.5.22', '--save-exact'])
+        json(join(f.profile, 'package.json'), { name: 'dsh-profile-desktop', dependencies: { 'dsh-mnemon': '0.5.22' } })
+        rmSync(join(pkgDir, 'package.json'))
+        return { exitCode: 1, output: '[ERR_PNPM_EPERM] EPERM: operation not permitted, rename' }
+      }
+      expect(args).toEqual(['install'])
+      expect(existsSync(pkgDir)).toBe(false)
+      mkdirSync(pkgDir, { recursive: true })
+      json(join(pkgDir, 'package.json'), { name: 'dsh-mnemon', version: '0.5.22' })
+      return { exitCode: 0, output: 'dependencies:\n- dsh-mnemon 0.5.21\n+ dsh-mnemon 0.5.22\n' }
+    })
+    f = profileFixture({
+      platform: 'win32',
+      probePackageReplaceable: () => {},
+      installer: { installBundle: refusesInstalled() },
+      pluginCommand: command,
+    })
+    await expect(f.manager.update('dsh-mnemon')).resolves.toMatchObject({
+      updated: true, previousVersion: '0.5.21', currentVersion: '0.5.22', restartRequired: true,
+    })
+    expect(command).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(readFileSync(join(f.profile, 'node_modules', 'dsh-mnemon', 'package.json'), 'utf8')).version).toBe('0.5.22')
+  })
+
+  it('rolls back package.json, pnpm-lock.yaml, and previous package files when empty-shell recovery also fails (#723)', async () => {
+    let f!: ReturnType<typeof profileFixture>
+    const command = vi.fn<DshPluginCommand>(async args => {
+      const pkgDir = join(f.profile, 'node_modules', 'dsh-mnemon')
+      if (args[0] === 'add') {
+        json(join(f.profile, 'package.json'), { name: 'dsh-profile-desktop', dependencies: { 'dsh-mnemon': '0.5.22' } })
+        writeFileSync(join(f.profile, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n# mutated 0.5.22\n')
+        rmSync(join(pkgDir, 'package.json'))
+        rmSync(join(pkgDir, 'lib'), { recursive: true, force: true })
+      }
+      return { exitCode: 1, output: '[ERR_PNPM_EPERM] EPERM: operation not permitted, rename' }
+    })
+    f = profileFixture({
+      platform: 'win32',
+      probePackageReplaceable: () => {},
+      installer: { installBundle: refusesInstalled() },
+      pluginCommand: command,
+    })
+    const pkgDir = join(f.profile, 'node_modules', 'dsh-mnemon')
+    mkdirSync(join(pkgDir, 'lib'), { recursive: true })
+    writeFileSync(join(pkgDir, 'lib', 'index.js'), 'export const running = "0.5.21"\n')
+    writeFileSync(join(f.profile, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n# original 0.5.21\n')
+
+    await expect(f.manager.update('dsh-mnemon')).rejects.toThrow(/Restored previous dsh-mnemon@0\.5\.21; your memory data is intact\. Quit DSH completely/u)
+    expect(JSON.parse(readFileSync(join(f.profile, 'package.json'), 'utf8')).dependencies['dsh-mnemon']).toBe('0.5.21')
+    expect(readFileSync(join(f.profile, 'pnpm-lock.yaml'), 'utf8')).toContain('# original 0.5.21')
+    expect(JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')).version).toBe('0.5.21')
+    expect(readFileSync(join(pkgDir, 'lib', 'index.js'), 'utf8')).toContain('0.5.21')
+    expect(f.manager.currentDshMnemonVersion).toBe('0.5.21')
+    expect(f.manager.restartStatus()).toBeUndefined()
+  })
+
+  it('does not report a broken empty shell as installed based on package.json alone (#723)', () => {
+    const f = profileFixture()
+    json(join(f.profile, 'package.json'), { name: 'dsh-profile-desktop', dependencies: { 'dsh-mnemon': '0.5.22' } })
+    rmSync(join(f.profile, 'node_modules', 'dsh-mnemon', 'package.json'))
+    expect(f.manager.currentDshMnemonVersion).toBe('0.5.21')
+    expect(f.manager.restartStatus()).toBeUndefined()
+  })
+
+  it('auto-recovers an empty package shell on the direct pnpm path after ERR_PNPM_EPERM (#723)', async () => {
+    const f = profileFixture({ pnpm: true, installer: null, platform: 'win32', probePackageReplaceable: () => {} })
+    let calls = 0
+    f.run.mockImplementation(async (_command, args) => {
+      calls++
+      const pkgDir = join(f.profile, 'node_modules', 'dsh-mnemon')
+      if (calls === 1) {
+        expect(args).toEqual(['add', 'dsh-mnemon@0.5.22', '--save-exact'])
+        json(join(f.profile, 'package.json'), { name: 'dsh-profile-desktop', dependencies: { 'dsh-mnemon': '0.5.22' } })
+        rmSync(join(pkgDir, 'package.json'))
+        return { stdout: '', stderr: '[ERR_PNPM_EPERM] EPERM: operation not permitted, rename', exitCode: 1 }
+      }
+      expect(args).toEqual(['install'])
+      expect(existsSync(pkgDir)).toBe(false)
+      mkdirSync(pkgDir, { recursive: true })
+      json(join(pkgDir, 'package.json'), { name: 'dsh-mnemon', version: '0.5.22' })
+      return { stdout: 'Done', stderr: '', exitCode: 0 }
+    })
+    await expect(f.manager.update('dsh-mnemon')).resolves.toMatchObject({
+      updated: true, previousVersion: '0.5.21', currentVersion: '0.5.22', restartRequired: true,
+    })
+    expect(calls).toBe(2)
   })
 })
