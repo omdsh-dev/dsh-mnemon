@@ -13,10 +13,20 @@
       name: dsh-mnemon/bundle
       group: true
       disabled: !!js >-
-        ((entry) => entry.options.disabled?.__jsExpr
-          ? Boolean(entry.evaluate(entry.options.disabled.__jsExpr))
-          : Boolean(entry.options.disabled))
-        ([...loader.entries()].find(entry => entry.options.id === 'mnemon'))
+        (() => {
+          let bundle = ctx[Symbol.for('cordis.entry')];
+          while (bundle && !/(?:^|-)mnemon-bundle$/.test(bundle.options.id)) {
+            bundle = bundle.parent?.ctx.fiber.entry;
+          }
+          if (!bundle?.subgroup) return false;
+          const coreId = bundle.options.id.replace(/-bundle$/, '');
+          const core = [...loader.entries()].find(entry =>
+            entry.parent === bundle.subgroup && entry.options.id === coreId);
+          const disabled = core?.options.disabled;
+          return disabled?.__jsExpr
+            ? Boolean(core.evaluate(disabled.__jsExpr))
+            : Boolean(disabled);
+        })()
       config:
         - id: mnemon
           # Core/Host and default settings. Sources own their independent Entries.
