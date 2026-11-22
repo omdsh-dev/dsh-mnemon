@@ -6,6 +6,8 @@ import { MNEMON_COMPONENT_SETTINGS_SLOT, type ComponentSettingsDirectory, type M
 import type { ComponentHosts } from './component-host.ts'
 import { MnemonSettingsCard, type ComponentSettingsSource, type MnemonSettingsCardProps } from './MnemonSettingsCard.tsx'
 import type { MnemonClientContext } from './dsh-context.ts'
+import { localeFallbackChain } from './localized-text.ts'
+import { LocaleFallbackContext } from './page-kit.tsx'
 import { useMnemonSessionId, type MnemonSessionBinding } from './session-binding.ts'
 
 interface MnemonSettingsHostProps extends Omit<MnemonSettingsCardProps, 'sessionId' | 'workspaceId' | 'workspaceLabel' | 'language' | 'componentSettings'>, Partial<PropsRenderSlots<typeof MNEMON_COMPONENT_SETTINGS_SLOT>> {
@@ -30,8 +32,9 @@ export function MnemonSettingsHost({ view, currentSession, sessions, workspaces,
   const subscribeWorkspaces = useCallback((listener: () => void) => workspaces.list.subscribe(listener), [workspaces.list])
   const getWorkspaces = useCallback(() => workspaces.list.getSnapshot(), [workspaces.list])
   const subscribeLocale = useCallback((listener: () => void) => localeRuntime.subscribe(listener), [localeRuntime])
-  const getLanguage = useCallback((): string => localeRuntime.getSnapshot().active, [localeRuntime])
-  const language = useSyncExternalStore(subscribeLocale, getLanguage, getLanguage)
+  const getLocale = useCallback(() => localeRuntime.getSnapshot(), [localeRuntime])
+  const locale = useSyncExternalStore(subscribeLocale, getLocale, getLocale)
+  const localeFallbacks = useMemo(() => localeFallbackChain(locale), [locale])
   const cwd = useSyncExternalStore(subscribeSessions, getSessionCwd, getSessionCwd) ?? undefined
   const workspaceList = useSyncExternalStore(subscribeWorkspaces, getWorkspaces, getWorkspaces)
   const subscribeDirectory = useCallback((listener: () => void) => componentSettingsDirectory?.subscribe(listener) ?? (() => {}), [componentSettingsDirectory])
@@ -57,13 +60,15 @@ export function MnemonSettingsHost({ view, currentSession, sessions, workspaces,
   const workspace = sessionId === undefined
     ? workspaceList.items[0]
     : cwd === undefined ? undefined : workspaceList.items.find(candidate => normalizePath(candidate.path) === normalizePath(cwd))
-  return <MnemonSettingsCard
-    {...props}
-    {...(componentSettings === undefined ? {} : { componentSettings })}
-    language={language}
-    {...(sessionId === undefined ? {} : { sessionId })}
-    {...(workspace === undefined ? {} : { workspaceId: String(workspace.workspaceId), workspaceLabel: workspace.title })}
-  />
+  return <LocaleFallbackContext.Provider value={localeFallbacks}>
+    <MnemonSettingsCard
+      {...props}
+      {...(componentSettings === undefined ? {} : { componentSettings })}
+      language={locale.active}
+      {...(sessionId === undefined ? {} : { sessionId })}
+      {...(workspace === undefined ? {} : { workspaceId: String(workspace.workspaceId), workspaceLabel: workspace.title })}
+    />
+  </LocaleFallbackContext.Provider>
 }
 
 export function MnemonComponentRowHost(props: Omit<MnemonSettingsHostProps, 'renderSlot' | '__renders'> & { component: string }): JSX.Element | null {

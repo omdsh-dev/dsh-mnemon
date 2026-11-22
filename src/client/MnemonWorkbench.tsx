@@ -37,7 +37,7 @@ import { SelectField } from './page-controls.tsx'
 import { isRecord, jsonRecord } from './is-record.ts'
 import sidebarCss from './MnemonSidebarView.module.css'
 import css from "./MnemonView.module.css"
-import { I18nContext, LocaleContext, useT, useLocale, PageHeader, EmptyState } from "./page-kit.tsx"
+import { I18nContext, LocaleContext, LocaleFallbackContext, useT, useLocale, useLocalePreference, PageHeader, EmptyState } from "./page-kit.tsx"
 
 interface MnemonWorkbenchProps {
   connection: ClientConnectionHandle
@@ -51,6 +51,7 @@ interface MnemonWorkbenchProps {
   headerActions?: ReactNode
   t?: MnemonTranslate
   locale?: string
+  localeFallbacks?: readonly string[]
   onClose?: () => void
   configuration?: MnemonActionSeat
   componentChanges?: MnemonChangeSignal
@@ -255,8 +256,15 @@ export function MnemonWorkbench(props: MnemonWorkbenchProps): JSX.Element {
   const active = props.active !== false && visible
   const visibleProps = useRef(props)
   if (active) visibleProps.current = props
-  const t = props.t ?? translateFor(props.locale ?? 'zh')
-  return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonWorkspace {...visibleProps.current} active={active} /></LocaleContext.Provider></I18nContext.Provider>
+  const language = props.locale ?? 'zh'
+  const t = props.t ?? translateFor(props.localeFallbacks ?? language)
+  return <I18nContext.Provider value={t}>
+    <LocaleContext.Provider value={language}>
+      <LocaleFallbackContext.Provider value={props.localeFallbacks}>
+        <MnemonWorkspace {...visibleProps.current} active={active} />
+      </LocaleFallbackContext.Provider>
+    </LocaleContext.Provider>
+  </I18nContext.Provider>
 }
 
 function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, surface = 'sidebar', active = true, titleBar = false, headerActions, onClose, configuration, componentChanges, sourcePageDirectory = EMPTY_SOURCE_PAGE_DIRECTORY, renderSlot, focus, hiddenSourceTypes, skillsScope }: MnemonWorkbenchProps): JSX.Element {
@@ -264,6 +272,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   useMemoryComposerInset(shellRef, surface === 'builtin')
   const t = useT()
   const locale = useLocale()
+  const localePreference = useLocalePreference(locale)
   const configurationSeat = configuration ?? NO_ACTION_SEAT
   const openConfiguration = useSyncExternalStore(configurationSeat.subscribe, configurationSeat.getSnapshot, configurationSeat.getSnapshot)
   const componentSignal = componentChanges ?? NO_CHANGE_SIGNAL
@@ -343,11 +352,11 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   }, [active, surfaceScopeKey, dashboardRevision, componentRevision])
   const sourceName = useCallback((sourceTypeId: string, fallback?: string): string => {
     const component = dashboard === null ? undefined : sourceOf(dashboard, sourceTypeId)
-    return component === undefined ? fallback ?? sourceTypeId : componentCopy(component, locale).label
-  }, [dashboard, locale])
+    return component === undefined ? fallback ?? sourceTypeId : componentCopy(component, localePreference).label
+  }, [dashboard, localePreference])
   const strategyName = (typeId: string): string => {
     const component = dashboard?.entries.find(entry => entry.roles.includes('strategy') && entry.typeId === typeId)
-    return component === undefined ? typeId : componentCopy(component, locale).label
+    return component === undefined ? typeId : componentCopy(component, localePreference).label
   }
   const switchedOff = useMemo(() => {
     const entries = dashboard?.entries ?? []
@@ -516,7 +525,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       const layerId = layerOf(entry)
       const targetPage = layerId === undefined ? undefined : navPageBySourceType.get(layerId)
       return {
-        key: entry.entryId, packageName: entry.packageName, label: componentCopy(entry, locale).label, enabled: entry.enabled,
+        key: entry.entryId, packageName: entry.packageName, label: componentCopy(entry, localePreference).label, enabled: entry.enabled,
         state: !entry.enabled ? 'off' : layerId === undefined ? (memoryOff ? 'memory-off' : 'stopped') : layerState(layerId),
         ...(targetPage === undefined ? {} : { onSelect: () => openTab(targetPage) }),
       }

@@ -30,6 +30,7 @@ export {
   translateEn,
   translateFor,
   translateZh,
+  type LocalePreference,
   type LocalizedTextInput,
   type MnemonKey,
   type MnemonLocaleId,

@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { createContext, useContext } from 'react'
 import { IconSearchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import { translateZh, type MnemonTranslate } from './locales.ts'
+import { translateZh, type LocalePreference, type MnemonTranslate } from './locales.ts'
 import { MnemonDialog, type MnemonDialogProps } from './MnemonDialog.tsx'
 import { appearanceClass } from './view-styles.ts'
 import sidebarCss from './MnemonSidebarView.module.css'
@@ -17,12 +17,22 @@ export const I18nContext = createContext<MnemonTranslate>(translateZh)
 
 export const LocaleContext = createContext<string>('zh')
 
+export const LocaleFallbackContext = createContext<readonly string[] | undefined>(undefined)
+
+export function useLocalePreference(language: string): LocalePreference {
+  const fallbacks = useContext(LocaleFallbackContext)
+  if (fallbacks === undefined) return language
+  const active = fallbacks[0]
+  return active !== undefined && (language === active || language === formatLocale(active)) ? fallbacks : language
+}
+
 export function useT(): MnemonTranslate { return useContext(I18nContext) }
 
-export function useLocale(): string {
-  const locale = useContext(LocaleContext)
+function formatLocale(locale: string): string {
   return locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale
 }
+
+export function useLocale(): string { return formatLocale(useContext(LocaleContext)) }
 
 export function humanBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`

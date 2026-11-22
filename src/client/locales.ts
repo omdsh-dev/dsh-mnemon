@@ -4,6 +4,7 @@ import {
   MNEMON_LOCALE_IDS,
   pickLocalizedText,
   resolveMnemonLocale,
+  type LocalePreference,
   type LocalizedTextInput,
   type MnemonLocaleId,
 } from './localized-text.ts'
@@ -23,6 +24,7 @@ export {
   pickLocalizedText,
   resolveMnemonLocale,
   zh,
+  type LocalePreference,
   type LocalizedTextInput,
   type MnemonLocaleId,
 }
@@ -71,8 +73,8 @@ const TRANSLATORS: Readonly<Record<MnemonLocaleId, MnemonTranslate>> = {
 
 const BUILT_IN_TRANSLATORS: ReadonlySet<MnemonTranslate> = new Set(Object.values(TRANSLATORS))
 
-export function translateFor(language: string): MnemonTranslate {
-  return TRANSLATORS[resolveMnemonLocale(language)]
+export function translateFor(preference: LocalePreference): MnemonTranslate {
+  return TRANSLATORS[resolveMnemonLocale(preference)]
 }
 
 export function isBuiltInTranslate(translate: MnemonTranslate): boolean {

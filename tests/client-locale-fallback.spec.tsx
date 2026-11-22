@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
 import { readdirSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { createRequire } from 'node:module'
+import { dirname, resolve } from 'node:path'
+import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { I18nContext, useT as useCoreT } from '../src/client/page-kit.tsx'
+import { createDshHostRequire } from '../scripts/dsh-host-packages.ts'
+import { componentCopy } from '../src/client/component-copy.ts'
+import { registerMnemonLocales } from '../src/client/locale-registration.ts'
+import { localeFallbackChain } from '../src/client/localized-text.ts'
+import { I18nContext, LocaleFallbackContext, useT as useCoreT } from '../src/client/page-kit.tsx'
 import { MemorySourcePageFrame } from '../src/client/page-client.tsx'
 import {
   MNEMON_LOCALE_IDS,
@@ -28,6 +34,28 @@ afterEach(cleanup)
 const ROOT = process.cwd()
 const EMOJI_PATTERN = /\p{Extended_Pictographic}/u
 const HAN_PATTERN = /[\u4e00-\u9fff]/u
+
+function createLocaleRuntime(): LocaleRuntime {
+  const require = createRequire(import.meta.url)
+  const host = process.env.DSH_HOST_ROOT
+  const hostRequire = createDshHostRequire(host === undefined
+    ? require.resolve('@deepseek-ai/dsh/package.json')
+    : resolve(host, 'package.json'))
+  const bundle = resolve(dirname(hostRequire.resolve('@deepseek-ai/dsh-client-locale/package.json')), 'lib/client.js')
+  let Runtime: typeof LocaleRuntime | undefined
+  new Function('window', readFileSync(bundle, 'utf8'))({
+    __ModuleLoader__: {
+      load(entry: { factory(require: (id: string) => unknown): { LocaleRuntime: typeof LocaleRuntime } }) {
+        Runtime = entry.factory(() => ({})).LocaleRuntime
+      },
+    },
+  })
+  return new Runtime!({ emit() {} } as never, undefined, { languages: ['en'], preference: null })
+}
+
+function addLanguage(locale: LocaleRuntime, id: string, fallback = 'en'): void {
+  if (!locale.getSnapshot().locales.some(entry => entry.id === id)) locale.addLanguage({ id, label: id, fallback })
+}
 
 function placeholdersOf(text: string): string[] {
   const names = new Set<string>()
@@ -162,6 +190,85 @@ describe('Source locale fallback, built-in 8 languages, and language packs', () 
     expect(editor.label).toEqual(label)
     expect(editor.fields[0]?.label).toEqual(label)
     expect(editor.fields[0]?.description).toEqual(label)
+  })
+})
+
+describe('Official DSH LocaleRuntime integration', () => {
+  it.each(['language pack', 'Mnemon'] as const)('keeps both registrations when %s loads first', first => {
+    const locale = createLocaleRuntime()
+    addLanguage(locale, 'fr')
+    const installPack = () => locale.register('mnemon', 'fr', { 'config.storageTitle': 'Storage' })
+    const removeEarlyPack = first === 'language pack' ? installPack() : undefined
+    const removeStarter = registerMnemonLocales(locale)
+    const removePack = removeEarlyPack ?? installPack()
+    const t = locale.bind('mnemon')
+
+    locale.setLocale('fr')
+    expect(t('config.storageTitle')).toBe('Storage')
+    expect(t('common.cancel')).toBe(mnemonLocales.fr['common.cancel'])
+    removePack()
+    expect(t('config.storageTitle')).toBe(mnemonLocales.fr['config.storageTitle'])
+    locale.setLocale('zh')
+    expect(t('config.storageTitle')).toBe(mnemonLocales.zh['config.storageTitle'])
+    locale.setLocale('en')
+    expect(t('config.storageTitle')).toBe(mnemonLocales.en['config.storageTitle'])
+    removeStarter()
+    expect(t('config.storageTitle')).toBe('config.storageTitle')
+  })
+
+  it.each(['fr', 'fr-CA'] as const)('uses the registered %s pack in all four Source pages', language => {
+    const locale = createLocaleRuntime()
+    addLanguage(locale, 'fr')
+    addLanguage(locale, 'fr-CA', 'fr')
+    registerMnemonLocales(locale)
+    const removePack = locale.register('mnemon', language, {
+      'runtime.title': 'Mémoire du pack',
+      'documents.title': 'Documents du pack',
+      'search.title': 'Recherche du pack',
+      'page.title': 'Compétences du pack',
+    })
+    locale.setLocale(language)
+    const page = () => <LocaleFallbackContext.Provider value={localeFallbackChain(locale.getSnapshot())}>
+      <I18nContext.Provider value={locale.bind('mnemon')}>
+        <MemorySourcePageFrame locale={language}><Labels /></MemorySourcePageFrame>
+      </I18nContext.Provider>
+    </LocaleFallbackContext.Provider>
+    const view = render(page())
+    for (const value of ['Mémoire du pack', 'Documents du pack', 'Recherche du pack', 'Compétences du pack']) {
+      expect(screen.getByText(value)).toBeTruthy()
+    }
+    removePack()
+    view.rerender(page())
+    expect(screen.queryByText('Mémoire du pack')).toBeNull()
+    expect(screen.getByTestId('runtime').textContent).not.toBe('Runtime Memory')
+  })
+
+  it('follows a declared language chain for bundled UI and localized names', () => {
+    const locale = createLocaleRuntime()
+    addLanguage(locale, 'fr')
+    addLanguage(locale, 'it', 'fr')
+    addLanguage(locale, 'fr-CA', 'en')
+    registerMnemonLocales(locale)
+    const t = locale.bind('mnemon')
+    const label = { en: 'Project Documents', 'zh-CN': '项目档案', fr: 'Documents du projet' }
+    locale.setLocale('it')
+    const chain = localeFallbackChain(locale.getSnapshot())
+    expect(chain).toEqual(['it', 'fr', 'en'])
+    expect(t('config.storageTitle')).toBe(mnemonLocales.fr['config.storageTitle'])
+    expect(componentCopy({ label, description: label }, chain)).toEqual({
+      label: 'Documents du projet',
+      hint: 'Documents du projet',
+    })
+    expect(marketLocalized(label, chain)).toBe('Documents du projet')
+    render(<LocaleFallbackContext.Provider value={chain}><I18nContext.Provider value={t}>
+      <MemorySourcePageFrame locale="it"><Labels /></MemorySourcePageFrame>
+    </I18nContext.Provider></LocaleFallbackContext.Provider>)
+    expect(screen.getByTestId('documents').textContent).toBe('Documents du projet')
+
+    locale.setLocale('fr-CA')
+    expect(localeFallbackChain(locale.getSnapshot())).toEqual(['fr-CA', 'en'])
+    expect(t('config.storageTitle')).toBe(mnemonLocales.en['config.storageTitle'])
+    expect(pickLocalizedText(label, localeFallbackChain(locale.getSnapshot()))).toBe('Project Documents')
   })
 })
 

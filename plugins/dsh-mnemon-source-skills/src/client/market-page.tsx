@@ -4,39 +4,13 @@ import {
   IconRefreshOutlineRegular, IconSearchOutlineRegular, Input, Switch, Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SearchField, SelectField, SidebarModal, useLocale } from 'dsh-mnemon/client'
-import { type LocalizedText, type MarketAudit, type MarketItem, type MarketPreview, type MarketRegistry, type MarketSearchResult, type MarketView, type SkillRootKind } from '../contracts.ts'
+import type { MarketAudit, MarketItem, MarketPreview, MarketRegistry, MarketSearchResult, MarketView, SkillRootKind } from '../contracts.ts'
 import { splitFrontmatter } from '../fence.ts'
+import { localized as text, type MarketLocalePreference } from '../market-localization.ts'
 import { detectSource, type DetectedSource } from '../source-kind.ts'
-import { compactCount, css, errorText, relative, supportsSettingsSection, useT, type SkillsTranslate } from './presentation.ts'
+import { compactCount, css, errorText, relative, supportsSettingsSection, useLocalePreference, useT, type SkillsTranslate } from './presentation.ts'
 import { Busy, Clamp, Empty, MoreMenu, SkillIcon, SkillMarkdown } from './shared.tsx'
 import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
-
-function text(value: LocalizedText | undefined, language: string): string {
-  if (value === undefined) return ''
-  if (typeof value === 'string') return value
-  const entries = Object.entries(value)
-  const findKey = (target: string): string | undefined => {
-    const exact = value[target]
-    if (typeof exact === 'string' && exact !== '') return exact
-    const match = entries.find(([key, item]) => key.toLowerCase() === target && typeof item === 'string' && item !== '')
-    return match?.[1]
-  }
-  const normalized = language.trim().toLowerCase().replaceAll('_', '-')
-  if (normalized !== '') {
-    const exact = findKey(normalized)
-    if (exact !== undefined) return exact
-    const base = normalized.split('-')[0] ?? ''
-    if (base !== '') {
-      const fromBase = findKey(base)
-      if (fromBase !== undefined) return fromBase
-      if (base === 'zh') {
-        const zhCn = findKey('zh-cn')
-        if (zhCn !== undefined) return zhCn
-      }
-    }
-  }
-  return findKey('en') ?? entries.find(([, item]) => typeof item === 'string' && item !== '')?.[1] ?? ''
-}
 
 function size(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -73,6 +47,7 @@ interface RemoteState {
 export function MarketPage(props: { context: SkillsPageContext; location: SkillsLocation }): JSX.Element {
   const t = useT()
   const language = useLocale()
+  const localePreference = useLocalePreference(language)
   const { context } = props
   const [view, setView] = useState<MarketView | null>(null)
   const [query, setQuery] = useState('')
@@ -112,15 +87,15 @@ export function MarketPage(props: { context: SkillsPageContext; location: Skills
   const items = useMemo(() => {
     const lower = needle.toLowerCase()
     return (view?.items ?? []).filter(item => (category === '' || item.category === category)
-      && (lower === '' || [item.name, text(item.title, language), text(item.description, language), item.author ?? ''].some(value => value.toLowerCase().includes(lower))))
-  }, [view, needle, category, language])
+      && (lower === '' || [item.name, text(item.title, localePreference), text(item.description, localePreference), item.author ?? ''].some(value => value.toLowerCase().includes(lower))))
+  }, [view, needle, category, localePreference])
   const detected = useMemo(() => {
     const found = detectSource(query)
     if (found === undefined || (found.kind !== 'github' && !/^(?:https?:\/\/|\/|[A-Za-z]:[\\/])/u.test(needle))) return undefined
     return view?.registries.some(registry => registry.location === found.location) === true ? undefined : found
   }, [query, needle, view])
   if (view === null) return <Busy label={t('common.loading')} />
-  const registryName = (id: string) => sourceName(view.registries.find(registry => registry.id === id), language, t) || id
+  const registryName = (id: string) => sourceName(view.registries.find(registry => registry.id === id), localePreference, t) || id
   const refresh = async () => {
     setRefreshing(true)
     try { await context.client.refreshMarket(); context.refresh() } catch (error) { context.fail(error) } finally { setRefreshing(false) }
@@ -129,7 +104,7 @@ export function MarketPage(props: { context: SkillsPageContext; location: Skills
     setAdding(true)
     try {
       const added = await context.client.addRegistry(source.location)
-      context.notice(t('sources.added', { name: sourceName(added, language, t), count: added.entries }))
+      context.notice(t('sources.added', { name: sourceName(added, localePreference, t), count: added.entries }))
       setQuery('')
       context.refresh()
     } catch (error) { context.fail(error) } finally { setAdding(false) }
@@ -141,7 +116,7 @@ export function MarketPage(props: { context: SkillsPageContext; location: Skills
   return <div className={css.skMarket}>
     <header className={css.skMarketBar}>
       <SearchField label={t('market.search')} placeholder={t('market.searchPlaceholder')} value={query} onChange={event => setQuery(event.target.value)} />
-      {view.categories.length > 0 && <SelectField size="sm" hideLabel label={t('market.category')} value={category} onChange={setCategory} options={[{ value: '', label: t('market.allCategories') }, ...view.categories.map(entry => ({ value: entry.id, label: text(entry.label, language) }))]} />}
+      {view.categories.length > 0 && <SelectField size="sm" hideLabel label={t('market.category')} value={category} onChange={setCategory} options={[{ value: '', label: t('market.allCategories') }, ...view.categories.map(entry => ({ value: entry.id, label: text(entry.label, localePreference) }))]} />}
       <Button variant="outline" size="sm" onClick={() => { if (context.openSettings !== undefined && supportsSettingsSection('market')) context.openSettings('market'); else setSourcesOpen(true) }}>{t('market.sources', { count: view.registries.filter(registry => registry.enabled).length })}</Button>
       <button type="button" className={css.skIconButton} disabled={refreshing || !context.writable} data-busy={refreshing ? '' : undefined} onClick={() => void refresh()} aria-label={t('market.refresh')} title={t('market.refresh')}><IconRefreshOutlineRegular size={16} /></button>
     </header>
@@ -179,14 +154,15 @@ function MarketCard(props: { item: MarketItem; position: number; language: strin
   const t = useT()
   const { item } = props
   const indexed = item.source.type === 'indexed'
-  const title = text(item.title, props.language) || item.name
+  const localePreference = useLocalePreference(props.language)
+  const title = text(item.title, localePreference) || item.name
   return <article className={css.skMarketCard} data-state={item.state} data-indexed={indexed ? '' : undefined} style={{ animationDelay: `${Math.min(props.position, 12) * 18}ms` }}>
     <button type="button" className={css.skMarketOpen} onClick={props.onOpen} aria-label={t('market.preview', { name: item.name })}>
       <header>
         <SkillIcon name={item.name} category={item.category} />
         <div><strong>{title}</strong><code>{indexed ? item.origin : item.name}</code></div>
       </header>
-      {!indexed && <p>{text(item.description, props.language)}</p>}
+      {!indexed && <p>{text(item.description, localePreference)}</p>}
     </button>
     <footer>
       {indexed
@@ -217,6 +193,7 @@ function Audits(props: { audits: readonly MarketAudit[] }): JSX.Element | null {
 function MarketDetail(props: { context: SkillsPageContext; item: MarketItem; registryName: string; onClose: () => void }): JSX.Element {
   const t = useT()
   const language = useLocale()
+  const localePreference = useLocalePreference(language)
   const { context, item } = props
   const indexed = item.source.type === 'indexed'
   const [preview, setPreview] = useState<MarketPreview | null>(null)
@@ -248,7 +225,7 @@ function MarketDetail(props: { context: SkillsPageContext; item: MarketItem; reg
   }
   const canInstall = item.state === 'available' || item.state === 'update' || item.state === 'modified'
   const body = preview === null ? undefined : splitFrontmatter(preview.content)?.body ?? preview.content
-  const description = text(item.description, language) || (preview === null ? '' : frontmatterField(preview.content, 'description') ?? '')
+  const description = text(item.description, localePreference) || (preview === null ? '' : frontmatterField(preview.content, 'description') ?? '')
   const license = item.license ?? (preview === null ? undefined : frontmatterField(preview.content, 'license'))
   const meta: ReactNode[] = [
     <span key="from">{indexed ? item.origin : props.registryName}</span>,
@@ -258,7 +235,7 @@ function MarketDetail(props: { context: SkillsPageContext; item: MarketItem; reg
     ...(item.installs === undefined ? [] : [<span key="installs">{t('market.installs', { count: compactCount(item.installs, language) })}</span>]),
   ]
   const homepage = preview?.homepage ?? item.homepage
-  return <SidebarModal wide title={text(item.title, language) || item.name} description={description} busy={busy} onClose={props.onClose} footer={<>
+  return <SidebarModal wide title={text(item.title, localePreference) || item.name} description={description} busy={busy} onClose={props.onClose} footer={<>
     {error !== null && <span className={css.skFormError}>{error}</span>}
     {item.state === 'available' && <SelectField size="sm" inline label={t('market.installTo')} value={root} onChange={setRoot} disabled={busy || roots.length === 0} options={roots.map(kind => ({ value: kind, label: t(`root.${kind}`) }))} />}
     {item.skillKey !== undefined && <Button variant="ghost" onClick={() => { props.onClose(); context.navigate({ tab: 'skills', skillKey: item.skillKey! }) }}>{t('market.open')}</Button>}
@@ -300,11 +277,11 @@ function SourceIcon(props: { kind: DetectedSource['kind'] | MarketRegistry['kind
   return <span className={css.skSourceIcon} aria-hidden="true">{KIND_ICON[props.kind](16)}</span>
 }
 
-function sourceName(registry: MarketRegistry | undefined, language: string, t: SkillsTranslate): string {
+function sourceName(registry: MarketRegistry | undefined, preference: MarketLocalePreference, t: SkillsTranslate): string {
   if (registry === undefined) return ''
   if (registry.kind === 'search') return 'skills.sh'
   if (registry.builtin) return t('sources.featured')
-  return text(registry.name, language) || registry.location.replace(/^https?:\/\/(?:github\.com\/)?/u, '')
+  return text(registry.name, preference) || registry.location.replace(/^https?:\/\/(?:github\.com\/)?/u, '')
 }
 
 function sourceMeta(t: SkillsTranslate, registry: MarketRegistry): string {
@@ -318,7 +295,7 @@ function sourceMeta(t: SkillsTranslate, registry: MarketRegistry): string {
 
 function SourcesDialog(props: { context: SkillsPageContext; view: MarketView; onClose: () => void }): JSX.Element {
   const t = useT()
-  const language = useLocale()
+  const localePreference = useLocalePreference(useLocale())
   const { context } = props
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -335,7 +312,7 @@ function SourcesDialog(props: { context: SkillsPageContext; view: MarketView; on
     if (detected === undefined || duplicate) return
     void act('add', async () => {
       const added = await context.client.addRegistry(detected.location)
-      context.notice(t('sources.added', { name: sourceName(added, language, t), count: added.entries }))
+      context.notice(t('sources.added', { name: sourceName(added, localePreference, t), count: added.entries }))
     }, () => setInput(''))
   }
   const hint = input.trim() === '' ? t('sources.hint')
@@ -351,14 +328,14 @@ function SourcesDialog(props: { context: SkillsPageContext; view: MarketView; on
         {props.view.registries.map(registry => <li key={registry.id} data-off={registry.enabled ? undefined : ''}>
           <SourceIcon kind={registry.kind} />
           <div className={css.skSourceText}>
-            <strong title={registry.location}><span>{sourceName(registry, language, t)}</span>{registry.builtin && <Tag tone="quiet">{t('sources.builtin')}</Tag>}</strong>
+            <strong title={registry.location}><span>{sourceName(registry, localePreference, t)}</span>{registry.builtin && <Tag tone="quiet">{t('sources.builtin')}</Tag>}</strong>
             {registry.error !== undefined ? <em title={registry.error}>{registry.error}</em> : <small>{sourceMeta(t, registry)}</small>}
           </div>
           <div className={css.skSourceActions}>
             {registry.kind !== 'search' && <MoreMenu label={t('common.more')} disabled={busy !== null || !context.writable}
               items={[{ id: 'refresh', label: t('sources.refresh') }, ...(registry.builtin ? [] : [{ id: 'remove', label: t('sources.remove'), danger: true }])]}
               onSelect={id => void act(registry.id, () => id === 'refresh' ? context.client.refreshMarket([registry.id]) : context.client.removeRegistry(registry.id))} />}
-            <Switch checked={registry.enabled} label={t('sources.enabled', { name: sourceName(registry, language, t) })} disabled={busy !== null || !context.writable}
+            <Switch checked={registry.enabled} label={t('sources.enabled', { name: sourceName(registry, localePreference, t) })} disabled={busy !== null || !context.writable}
               onChange={next => void act(registry.id, () => context.client.toggleRegistry(registry.id, next))} />
           </div>
         </li>)}

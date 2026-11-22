@@ -2,21 +2,46 @@ export const MNEMON_LOCALE_IDS = ['en', 'zh', 'ja', 'es', 'fr', 'de', 'ru', 'pt'
 
 export type MnemonLocaleId = typeof MNEMON_LOCALE_IDS[number]
 
+export type LocalePreference = string | readonly string[]
+
+export interface LocaleSelection {
+  active: string
+  locales: readonly { id: string; fallback?: string }[]
+}
+
 const MNEMON_LOCALE_SET: ReadonlySet<string> = new Set(MNEMON_LOCALE_IDS)
+
+function normalizeLocale(language: string): string {
+  return language.trim().toLowerCase().replaceAll('_', '-')
+}
 
 export function isMnemonLocaleId(value: string): value is MnemonLocaleId {
   return MNEMON_LOCALE_SET.has(value)
 }
 
 export function matchMnemonLocale(language: string): MnemonLocaleId | undefined {
-  const normalized = language.trim().toLowerCase().replaceAll('_', '-')
-  if (normalized === '') return undefined
-  const base = normalized.split('-')[0] ?? ''
+  const base = normalizeLocale(language).split('-')[0] ?? ''
   return isMnemonLocaleId(base) ? base : undefined
 }
 
-export function resolveMnemonLocale(language: string): MnemonLocaleId {
-  return matchMnemonLocale(language) ?? 'en'
+export function resolveMnemonLocale(preference: LocalePreference): MnemonLocaleId {
+  return (typeof preference === 'string'
+    ? matchMnemonLocale(preference)
+    : preference.map(normalizeLocale).find(isMnemonLocaleId)) ?? 'en'
+}
+
+export function localeFallbackChain(snapshot: LocaleSelection): readonly string[] {
+  const fallbacks = new Map(snapshot.locales.map(({ id, fallback }) => [normalizeLocale(id), fallback]))
+  const chain: string[] = []
+  const seen = new Set<string>()
+  for (let id: string | undefined = snapshot.active; id !== undefined; id = fallbacks.get(normalizeLocale(id))) {
+    const key = normalizeLocale(id)
+    if (seen.has(key)) break
+    seen.add(key)
+    chain.push(id)
+  }
+  if (!seen.has('en')) chain.push('en')
+  return chain
 }
 
 export type LocalizedTextInput =
@@ -34,30 +59,24 @@ export type LocalizedTextInput =
   }
   | Readonly<Record<string, string | undefined>>
 
-export function pickLocalizedText(value: LocalizedTextInput | undefined, language: string): string {
-  if (value === undefined) return ''
+export function pickLocalizedText(value: LocalizedTextInput | null | undefined, preference: LocalePreference): string {
+  if (value == null) return ''
   if (typeof value === 'string') return value
   const record = value as Readonly<Record<string, string | undefined>>
-  const normalized = language.trim().toLowerCase().replaceAll('_', '-')
   const entries = Object.entries(record)
   const findKey = (target: string): string | undefined => {
     const exact = record[target]
     if (typeof exact === 'string' && exact !== '') return exact
-    const match = entries.find(([key, item]) => key.toLowerCase() === target && typeof item === 'string' && item !== '')
+    const match = entries.find(([key, item]) => normalizeLocale(key) === target && typeof item === 'string' && item !== '')
     return match?.[1]
   }
-  if (normalized !== '') {
-    const exact = findKey(normalized)
-    if (exact !== undefined) return exact
-    const base = normalized.split('-')[0] ?? ''
-    if (base !== '') {
-      const fromBase = findKey(base)
-      if (fromBase !== undefined) return fromBase
-      if (base === 'zh') {
-        const zhCn = findKey('zh-cn')
-        if (zhCn !== undefined) return zhCn
-      }
-    }
+  const candidates = typeof preference === 'string'
+    ? [normalizeLocale(preference), normalizeLocale(preference).split('-')[0]!]
+    : preference.map(normalizeLocale)
+  for (const id of candidates) {
+    if (id === '') continue
+    const translated = findKey(id) ?? (id === 'zh' ? findKey('zh-cn') : undefined)
+    if (translated !== undefined) return translated
   }
   const en = findKey('en')
   if (en !== undefined) return en

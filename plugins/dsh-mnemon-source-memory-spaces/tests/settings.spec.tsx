@@ -174,9 +174,9 @@ describe('Memory Spaces\' own settings', () => {
 describe('translating as dsh-mnemon drew these settings, through DSH\'s language chain', () => {
   const locales = [{ id: 'en' }, { id: 'zh', fallback: 'en' }, { id: 'ja', fallback: 'en' }, { id: 'ko', fallback: 'en' }]
   function dsh(active: string, pack: Record<string, string> = {}): DshLocale {
-    const own = active === 'zh' ? translateZh : t
+    const core = active === 'zh' ? coreZh : coreEn
     return {
-      bind: () => (key, params) => (active === 'ko' ? pack[key] : undefined) ?? (own(key, params) as string | undefined) ?? key,
+      bind: () => (key, params) => pack[key] ?? core(key, params),
       getSnapshot: () => ({ active, locales }),
       subscribe: () => () => {},
     }
@@ -193,6 +193,11 @@ describe('translating as dsh-mnemon drew these settings, through DSH\'s language
   it('takes what a language pack translates in dsh-mnemon\'s namespace', () => {
     settings(dsh('ko', { 'config.providersTitle': '메모리 프로바이더' }), 'ko')
     expect(screen.getByRole('heading', { name: '메모리 프로바이더' })).toBeTruthy()
+  })
+
+  it('uses a language pack for Japanese settings even though the Source ships Japanese', () => {
+    settings(dsh('ja', { 'config.providersTitle': '追加パックのプロバイダー' }), 'ja')
+    expect(screen.getByRole('heading', { name: '追加パックのプロバイダー' })).toBeTruthy()
   })
 
   it('answers from its own copy in Chinese, English, and Japanese', () => {

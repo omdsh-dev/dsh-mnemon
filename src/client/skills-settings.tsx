@@ -20,7 +20,7 @@ import { ActionButton } from './feedback.tsx'
 import type { MnemonTranslate } from './locales.ts'
 import { pickLocalizedText, type LocalizedTextInput } from './localized-text.ts'
 import css from './MnemonSettingsCard.module.css'
-import { message } from './page-kit.tsx'
+import { message, useLocalePreference } from './page-kit.tsx'
 import type { MnemonDirectoryPicker } from './picker.ts'
 import { AdvancedSection, SelectRow, SettingRow, ToggleRow, type SettingOption } from './settings-controls.tsx'
 import { PanelActions, useLive, useScope, useStaged, WriteFailure } from './settings-panel.tsx'
@@ -43,7 +43,7 @@ interface DraftPreferencesPayload {
 
 interface RawMarketRegistry {
   id?: string
-  name?: LocalizedTextInput
+  name?: LocalizedTextInput | null
   label?: string
   location?: string
   url?: string
@@ -60,6 +60,7 @@ interface MarketPayload {
 
 interface MarketRegistryItem {
   id: string
+  name: RawMarketRegistry['name']
   label: string
   url: string
   builtin: boolean
@@ -82,18 +83,17 @@ function decodeModelChoice(value: string): SkillsModelSelection | null {
   return { provider: value.slice(0, splitAt), model: value.slice(splitAt + 1) }
 }
 
-function normalizeMarketRegistries(payload: MarketPayload | null | undefined, language: string): MarketRegistryItem[] {
+function normalizeMarketRegistries(payload: MarketPayload | null | undefined): MarketRegistryItem[] {
   const rawList = Array.isArray(payload?.registries) ? payload.registries : []
   return rawList.flatMap(raw => {
     const id = typeof raw?.id === 'string' ? raw.id.trim() : ''
     if (id === '') return []
-    const localizedName = pickLocalizedText(raw.name, language)
-    const label = (localizedName || raw.label || id).trim() || id
     const url = (raw.location ?? raw.url ?? '').trim()
     const skillCount = typeof raw.entries === 'number' ? raw.entries : typeof raw.skillCount === 'number' ? raw.skillCount : 0
     return [{
       id,
-      label,
+      name: raw.name,
+      label: raw.label || id,
       url,
       builtin: raw.builtin === true,
       enabled: raw.enabled !== false,
@@ -279,6 +279,7 @@ export function SkillsSettings(props: {
   t: MnemonTranslate
 }): JSX.Element {
   const { scope, page, connection, directoryPicker, t } = props
+  const localePreference = useLocalePreference(page.language)
   const baseId = useId()
   const snapshot = useScope(scope)
   const saved = resolvedSkills(snapshot.value)
@@ -405,7 +406,7 @@ export function SkillsSettings(props: {
       if (!active) return
       setMarketState({
         ready: true,
-        registries: normalizeMarketRegistries(market, page.language),
+        registries: normalizeMarketRegistries(market),
         busyAction: null,
         addInput: '',
         error: null,
@@ -414,7 +415,7 @@ export function SkillsSettings(props: {
       if (active) setMarketState(current => ({ ...current, ready: false }))
     })
     return () => { active = false }
-  }, [client, management, page.language])
+  }, [client, management])
 
   const modelOptions = (selectedValue: string): SettingOption<string>[] => {
     const groups = modelsState.catalog?.groups ?? []
@@ -465,7 +466,7 @@ export function SkillsSettings(props: {
       if (Array.isArray(updated?.registries)) {
         setMarketState(current => ({
           ...current,
-          registries: normalizeMarketRegistries(updated, page.language),
+          registries: normalizeMarketRegistries(updated),
           busyAction: null,
           ...(clearInput ? { addInput: '' } : {}),
         }))
@@ -474,7 +475,7 @@ export function SkillsSettings(props: {
       return management.read<MarketPayload>(SKILLS_MANAGEMENT_INSTANCE, 'market', {}).then(reloaded => {
         setMarketState(current => ({
           ...current,
-          registries: normalizeMarketRegistries(reloaded, page.language),
+          registries: normalizeMarketRegistries(reloaded),
           busyAction: null,
           ...(clearInput ? { addInput: '' } : {}),
         }))
@@ -484,6 +485,10 @@ export function SkillsSettings(props: {
     })
   }
 
+  const marketRegistries = marketState.registries.map(registry => ({
+    ...registry,
+    label: (pickLocalizedText(registry.name, localePreference) || registry.label).trim() || registry.id,
+  }))
   const configuredDirectoriesCount = [savedDirectories.dshHome, savedDirectories.agentsHome].filter(value => value.trim() !== '').length
   const rootsBadge = saved.skillRoots !== undefined
     ? t('skills.badgeCustom', { count: saved.skillRoots.create.length })
@@ -614,7 +619,7 @@ export function SkillsSettings(props: {
         {marketState.registries.length === 0
           ? <p className={css.panelNote}>{t('skills.marketEmpty')}</p>
           : <div className={css.marketList}>
-            {marketState.registries.map(registry => <div key={registry.id} className={css.marketRow}>
+            {marketRegistries.map(registry => <div key={registry.id} className={css.marketRow}>
               <div className={css.marketCopy}>
                 <span className={css.marketTitle}>
                   <strong>{registry.label}</strong>

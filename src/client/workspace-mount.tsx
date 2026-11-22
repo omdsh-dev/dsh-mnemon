@@ -4,6 +4,7 @@ import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ClientSettingsScope, Config, SkillsConfig } from "../host/protocol.ts"
 import type { MnemonClientContext } from "./dsh-context.ts"
 import type { MnemonTranslate } from './locales.ts'
+import { localeFallbackChain } from './localized-text.ts'
 import { MnemonWorkbench, type MnemonWorkspaceSelection } from './MnemonWorkbench.tsx'
 import type { MNEMON_SOURCE_PAGE_SLOT, MemorySourcePageDirectory } from './source-pages.tsx'
 import type { MNEMON_COMPONENT_STATUS_SLOT } from './component-ui.tsx'
@@ -83,6 +84,7 @@ export function MnemonBuiltinWorkspaceHost(props: MnemonBuiltinWorkspaceHostProp
   const subscribeLocale = useCallback((listener: () => void) => props.localeRuntime.subscribe(listener), [props.localeRuntime])
   const getLocale = useCallback(() => props.localeRuntime.getSnapshot(), [props.localeRuntime])
   const locale = useSyncExternalStore(subscribeLocale, getLocale, getLocale)
+  const localeFallbacks = useMemo(() => localeFallbackChain(locale), [locale])
   const hiddenSourceTypes = useHiddenSourceTypes(props.skillsPanel)
   return <MnemonWorkbench
     connection={props.connection}
@@ -94,6 +96,7 @@ export function MnemonBuiltinWorkspaceHost(props: MnemonBuiltinWorkspaceHostProp
     headerActions={props.composer === undefined ? undefined : <MemoryComposerToggle composer={props.composer} t={props.t} />}
     t={props.t}
     locale={locale.active}
+    localeFallbacks={localeFallbacks}
     sourcePageDirectory={props.sourcePageDirectory}
     {...(props.configuration === undefined ? {} : { configuration: props.configuration })}
     {...(props.componentChanges === undefined ? {} : { componentChanges: props.componentChanges })}
@@ -117,6 +120,7 @@ export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Elemen
   const subscribeWorkspaces = useCallback((listener: () => void) => props.workspaces.list.subscribe(listener), [props.workspaces.list])
   const getWorkspaces = useCallback(() => props.workspaces.list.getSnapshot(), [props.workspaces.list])
   const locale = useSyncExternalStore(subscribeLocale, getLocale, getLocale)
+  const localeFallbacks = useMemo(() => localeFallbackChain(locale), [locale])
   const currentCwd = useSyncExternalStore(subscribeSessions, getSessionCwd, getSessionCwd) ?? undefined
   const workspaces = useSyncExternalStore(subscribeWorkspaces, getWorkspaces, getWorkspaces)
   const hidden = useHiddenSourceTypes(props.skillsPanel)
@@ -153,6 +157,7 @@ export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Elemen
     titleBar={props.titleBar === true}
     t={props.t}
     locale={locale.active}
+    localeFallbacks={localeFallbacks}
     sourcePageDirectory={props.sourcePageDirectory}
     {...(props.configuration === undefined ? {} : { configuration: props.configuration })}
     {...(props.componentChanges === undefined ? {} : { componentChanges: props.componentChanges })}

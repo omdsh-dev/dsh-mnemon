@@ -9,6 +9,8 @@ import { isSkillName, splitFrontmatter } from './frontmatter.ts'
 import { githubUrl, parseGithub } from './source-kind.ts'
 import official from '../market/official.json' with { type: 'json' }
 
+export { localized } from './market-localization.ts'
+
 export const OFFICIAL_REGISTRY_ID = 'official'
 export const OFFICIAL_REGISTRY_URL = 'https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/plugins/dsh-mnemon-source-skills/market/official.json'
 export const SKILLS_SH_ID = 'skills-sh'
@@ -64,33 +66,6 @@ function localizedText(value: unknown, maximum: number): LocalizedText | undefin
     out[key] = trimmed
   }
   return Object.keys(out).length === 0 ? undefined : out
-}
-
-export function localized(value: LocalizedText | undefined, language: string): string {
-  if (value === undefined) return ''
-  if (typeof value === 'string') return value
-  const entries = Object.entries(value)
-  const findKey = (target: string): string | undefined => {
-    const exact = value[target]
-    if (typeof exact === 'string' && exact !== '') return exact
-    const match = entries.find(([key, item]) => key.toLowerCase() === target && typeof item === 'string' && item !== '')
-    return match?.[1]
-  }
-  const normalized = language.trim().toLowerCase().replaceAll('_', '-')
-  if (normalized !== '') {
-    const exact = findKey(normalized)
-    if (exact !== undefined) return exact
-    const base = normalized.split('-')[0] ?? ''
-    if (base !== '') {
-      const fromBase = findKey(base)
-      if (fromBase !== undefined) return fromBase
-      if (base === 'zh') {
-        const zhCn = findKey('zh-cn')
-        if (zhCn !== undefined) return zhCn
-      }
-    }
-  }
-  return findKey('en') ?? entries.find(([, item]) => typeof item === 'string' && item !== '')?.[1] ?? ''
 }
 
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u

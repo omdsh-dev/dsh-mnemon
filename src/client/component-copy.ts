@@ -1,7 +1,7 @@
 import { STARTER_COMPONENT_ROWS } from '../host/protocol.ts'
 import type { MemoryPluginEntryView } from '../host/view-protocol.ts'
 import type { MnemonTranslate } from './locales.ts'
-import { pickLocalizedText } from './localized-text.ts'
+import { pickLocalizedText, type LocalePreference } from './localized-text.ts'
 
 const SHIPPED_PACKAGES: ReadonlySet<string> = new Set(STARTER_COMPONENT_ROWS.map(row => row.packageName))
 
@@ -15,10 +15,10 @@ export function isShipped(entry: MemoryPluginEntryView): boolean {
   return SHIPPED_PACKAGES.has(entry.packageName)
 }
 
-export function componentCopy(entry: MemoryPluginEntryView, language: string): { label: string; hint: string } {
+export function componentCopy(entry: Pick<MemoryPluginEntryView, 'label' | 'description'>, preference: LocalePreference): { label: string; hint: string } {
   return {
-    label: pickLocalizedText(entry.label, language),
-    hint: pickLocalizedText(entry.description, language),
+    label: pickLocalizedText(entry.label, preference),
+    hint: pickLocalizedText(entry.description, preference),
   }
 }
 
