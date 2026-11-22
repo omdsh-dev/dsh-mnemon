@@ -94,7 +94,7 @@ pnpm run verify
 ## 用户可见变更证据 / Local Feature Evidence
 
 <!--
-涉及 WebUI 可感知变更的 PR 必填对应前后截图对比（或新增/切换状态关键截图）。 / Required for every PR with visible WebUI changes: include before/after screenshot comparisons (or key state screenshots).
+截图或短视频有助于判断重要 WebUI 变更时，请附上关键界面的前后对比或新状态。 / Add a before/after comparison or key-state screenshot when it helps reviewers assess a material WebUI change.
 外部贡献者直接将截图或短视频拖拽附在 GitHub PR 描述中即可，无需上传到 `mnemon-dev/assets`；维护者与自动化 CLI 流程可使用 `node scripts/upload-pr-evidence.mjs` 上传至 `mnemon-dev/assets` 并以完整 40 位 commit SHA 引用。禁止向 `main` 提交 PR 验收图片目录。 / External contributors should drag and drop screenshots or short videos directly in the GitHub PR description and do not need to upload to `mnemon-dev/assets`; maintainers and automated CLI workflows may use `node scripts/upload-pr-evidence.mjs` to upload to `mnemon-dev/assets` pinned by full 40-character commit SHA. Never commit PR binary asset directories to `main`.
 附截图或短视频，展示 / Attach screenshots or a short video showing:
 - 改动前/后界面对比，或新增视图与关键交互状态 / before/after comparison, or the new view and key interactive states

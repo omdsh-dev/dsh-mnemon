@@ -110,7 +110,7 @@ MNEMON_RUN_FLASH_QUALITY=1 MNEMON_FLASH_QUALITY_WAVES=24 MNEMON_FLASH_QUALITY_RE
 
 默认每会话 12 轮，扩展工作负载为 24 轮。两者均使用关闭思考的 Flash、guided 召回与写回，以及默认 10,240 字节记忆上限。只将空闲防抖从 30 秒缩短为 5 秒，空闲审查的资格规则不变。测试记录保留事实、临时标记、纠正后的回答、模块归属、禁止写入回合、工具错误和归档。Vitest 成功仅表示实验执行完成：应检查 `finalEvaluation.automatedVerdict`，并逐条审阅过期文档、重复与归属错误，才能判断质量是否验收通过。普通 CI 跳过两个真实 API 用例。该模拟不能替代完整应用构建、真人半天工作流或 Windows 验证。
 
-生成的真实运行数据放在仓库外，上述命令已采用这种方式。涉及 WebUI 可感知变更时，请在 Pull Request 描述中提供对应的前后截图对比：外部贡献者直接拖拽上传 GitHub PR 附件即可（无需访问 `mnemon-dev/assets`）；维护者与自动化 CLI 流程可使用 `node scripts/upload-pr-evidence.mjs --slug <slug> <files...>` 将脱敏截图上传至 `mnemon-dev/assets` 并以完整 40 位 commit SHA 引用，不要向主仓库 Git 提交二进制证据目录。
+生成的真实运行数据放在仓库外，上述命令已采用这种方式。截图有助于评审重要 WebUI 变更时，可直接附在 GitHub PR 中。维护者可以用 `node scripts/upload-pr-evidence.mjs --slug <slug> <files...>` 将脱敏证据上传至 `mnemon-dev/assets`，并以完整提交 SHA 引用。
 
 `tests/legacy-session-repair.spec.ts` 对普通和压缩格式的合成历史日志执行已发布 v0 → v3 迁移，检查显式副本修复、冷启动重读和带时间戳的 stream 回放。审计用例覆盖三个旧 Mnemon summary、兼容 v2 descriptor、packed 占位值展开、null→空字符串 delta name，以及具有已记录 provider ID 的闭合工具链；另验证多调用 provenance、owner 引用拒绝、原件及其他插件保留。WebUI 中的续写检查见[夹具选项](#夹具选项)里的 `--legacy-session-replay`。
 

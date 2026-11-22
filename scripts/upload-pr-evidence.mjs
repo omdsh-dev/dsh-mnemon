@@ -207,7 +207,7 @@ export function uploadPrEvidence({
         env,
         stdio: ['ignore', 'pipe', 'pipe'],
       })
-      execFileSync('git', ['push', 'origin', `HEAD:${branch}`], { cwd: workDir, env, stdio: ['ignore', 'pipe', 'pipe'] })
+      execFileSync('git', ['push', 'origin', `HEAD:refs/heads/${branch}`], { cwd: workDir, env, stdio: ['ignore', 'pipe', 'pipe'] })
       committed = true
     }
 
