@@ -314,7 +314,7 @@ export class MemoryPluginManagement {
         ?? defineMemoryPlugin({
           packageName: contribution.provenance.packageName,
           label: { en: contribution.definition.manifest.typeId, 'zh-CN': contribution.definition.manifest.typeId },
-          description: { en: 'Mounted outside the managed DSH Loader.', 'zh-CN': '由受管 DSH Loader 之外的入口挂载。' },
+          description: { en: 'Mounted outside the managed DSH Loader.', 'zh-CN': '由受管 DSH Loader 之外的入口挂载。', ja: '管理下の DSH Loader 外部からマウントされました。', es: 'Montado fuera del Loader gestionado de DSH.', fr: 'Monté en dehors du Loader DSH géré.', de: 'Außerhalb des verwalteten DSH Loader eingebunden.', ru: 'Смонтировано вне управляемого DSH Loader.', pt: 'Montado fora do DSH Loader gerenciado.' },
           roles: contributionRoles(snapshot, entryId),
           provides: [{ id: source ? 'source' : strategy ? 'strategy' : `strategy.${extension!.definition.manifest.typeId}` }],
         })

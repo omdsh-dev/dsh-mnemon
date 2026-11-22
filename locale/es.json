@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Memoria componible (dsh-mnemon)",
+    "description": "Contexto de vista componible para DeepSeek Harness con fuentes y estrategias conectables, memoria por capas y habilidades autoevolutivas.",
+    "detail": "locale/detail.es.md"
+  }
+}

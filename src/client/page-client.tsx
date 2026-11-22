@@ -1,13 +1,13 @@
 import { useContext, useMemo, type JSX, type ReactNode } from 'react'
 import type { MemoryJsonValue } from 'dsh-mnemon/contracts'
 import type { MnemonSourceManagementClient } from './source-contracts.ts'
-import { I18nContext, LocaleContext } from './page-kit.tsx'
-import { translateEn, translateZh, type MnemonTranslate } from './locales.ts'
+import { I18nContext, LocaleContext, useLocalePreference } from './page-kit.tsx'
+import { isBuiltInTranslate, translateFor, type MnemonTranslate } from './locales.ts'
 
 export function MemorySourcePageFrame(props: { locale: string; children: ReactNode }): JSX.Element {
   const enclosing = useContext(I18nContext)
-  const dictionary = props.locale.toLowerCase().startsWith('zh') ? translateZh : translateEn
-  const translate = useMemo<MnemonTranslate>(() => enclosing === translateZh || enclosing === translateEn ? dictionary : (key, params) => {
+  const dictionary = translateFor(useLocalePreference(props.locale))
+  const translate = useMemo<MnemonTranslate>(() => isBuiltInTranslate(enclosing) ? dictionary : (key, params) => {
     const text = enclosing(key, params)
     return text === key ? dictionary(key, params) : text
   }, [enclosing, dictionary])

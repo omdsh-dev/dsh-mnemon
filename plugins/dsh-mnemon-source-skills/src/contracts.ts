@@ -487,7 +487,7 @@ export interface DraftView {
 
 export type { DetectedSource, MarketSourceKind } from './source-kind.ts'
 
-export type LocalizedText = string | { en?: string; 'zh-CN'?: string }
+export type LocalizedText = string | Partial<Record<string, string>>
 
 export type MarketSource =
   | { type: 'github'; repo: string; path: string; ref?: string }

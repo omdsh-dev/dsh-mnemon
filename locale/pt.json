@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Memória composável (dsh-mnemon)",
+    "description": "Contexto de visão composável para DeepSeek Harness com fontes e estratégias plugáveis, memória em camadas e habilidades com autoevolução.",
+    "detail": "locale/detail.pt.md"
+  }
+}

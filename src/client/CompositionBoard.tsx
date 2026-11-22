@@ -8,6 +8,7 @@ import { componentModel, enhancementApplies, layerOf, mainPlan, relationsOf, sou
 import { ActionButton, Callout, Reveal, TARGET } from './feedback.tsx'
 import type { MnemonKey, MnemonTranslate } from './locales.ts'
 import css from './MnemonSettingsCard.module.css'
+import { useLocalePreference } from './page-kit.tsx'
 import { SettingSelect } from './settings-controls.tsx'
 import { switchedEntries, type MnemonViewState, type MnemonViewStore } from './view-store.ts'
 
@@ -177,6 +178,7 @@ export interface CompositionBoardProps {
 
 export function CompositionBoard(props: CompositionBoardProps): JSX.Element | null {
   const { view, system, t, language } = props
+  const localePreference = useLocalePreference(language)
   const instance = useId()
   const [layerPending, setLayerPending] = useState<{ layerId: string; on: boolean } | null>(null)
   const ownPages = usePageTrail()
@@ -187,7 +189,7 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
   const componentsUnavailable = dashboard === null && view.state.status === 'unavailable'
   const pageMode = props.page !== undefined
   if (componentsUnavailable && (pageMode || system === null)) return pageMode ? <p className={css.boardEmpty} role="status">{t('board.componentsUnavailable')}</p> : null
-  const name: Name = entry => componentCopy(entry, language).label
+  const name: Name = entry => componentCopy(entry, localePreference).label
   const model = dashboard === null ? undefined : componentModel(dashboard)
   const working = view.state.working
   const changing = new Map(working === null ? [] : switchedEntries(working.before, working.after).map(entry => [entry.entryId, entry.enabled]))
@@ -239,7 +241,7 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
     const plan = switchPlan(dashboard!, entry, !entry.enabled)
     const missing = !entry.enabled && unmetRequirements(dashboard!, entry).some(unmet => unmet.providers.length === 0)
     return {
-      key: entry.entryId, entry, label: name(entry), hint: componentCopy(entry, language).hint, relations: relationsFor(entry),
+      key: entry.entryId, entry, label: name(entry), hint: componentCopy(entry, localePreference).hint, relations: relationsFor(entry),
       state: stateOf(entry), checked: changing.get(entry.entryId) ?? entry.enabled, target,
       disabled: locked || !entry.writable || !selectedRunning || missing || plan.blocked !== undefined,
       onSwitch: next => { void switchComponent(view.store, dashboard!, entry, next) },
@@ -327,7 +329,7 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
       ? <MainChoice selected={entry.typeId === board.strategyTypeId} disabled={locked || !entry.writable} t={t} onChoose={() => { void chooseMain(view.store, board, entry) }} />
       : item === undefined ? null : <Switch className={css.switch} checked={item.checked} label={item.label} disabled={item.disabled} onChange={item.onSwitch} />
     return {
-      entry, dashboard: board, name, hint: componentCopy(entry, language).hint,
+      entry, dashboard: board, name, hint: componentCopy(entry, localePreference).hint,
       state: isMain ? mainState(entry) : item?.state, control, writable: !locked, applying: working?.key === 'options:' + entry.entryId, language, t,
       ...(section === undefined ? {} : { section }),
       settings: props.componentSettings?.has(entry.packageName) === true ? props.componentSettings.render(entry, !props.readOnly, section) : undefined,
@@ -380,6 +382,7 @@ function rank(role: string): number {
 
 function MainStrategyRow(props: CompositionBoardProps & { model: MemoryComponentModel; dashboard: MemoryViewDashboard; locked: boolean; pending: boolean; name: Name; onOpen: (() => void) | undefined }): JSX.Element | null {
   const { model, dashboard, t } = props
+  const localePreference = useLocalePreference(props.language)
   const id = useId()
   const { mains, selected } = model
   if (mains.length === 0) return null
@@ -387,7 +390,7 @@ function MainStrategyRow(props: CompositionBoardProps & { model: MemoryComponent
     const entry = mains.find(candidate => candidate.typeId === typeId)
     if (entry !== undefined) void chooseMain(props.view.store, dashboard, entry)
   }
-  const hint = selected === undefined ? t('board.strategyMissing') : componentCopy(selected, props.language).hint
+  const hint = selected === undefined ? t('board.strategyMissing') : componentCopy(selected, localePreference).hint
   return <div className={`${css.boardRow} ${css.boardMain}`} {...{ [TARGET]: 'strategy' }}>
     <div className={css.boardRowLine}>
       <div className={css.settingCopy}>
@@ -400,7 +403,7 @@ function MainStrategyRow(props: CompositionBoardProps & { model: MemoryComponent
         {mains.length === 1
           ? <span className={css.boardValue}>{props.name(mains[0]!)}</span>
           : <SettingSelect labelledBy={`${id}-title`} value={dashboard.strategyTypeId} disabled={props.locked} onChange={choose}
-            options={mains.map(entry => ({ value: entry.typeId!, label: props.name(entry), detail: componentCopy(entry, props.language).hint, ...(entry.writable ? {} : { disabled: true }) }))} />}
+            options={mains.map(entry => ({ value: entry.typeId!, label: props.name(entry), detail: componentCopy(entry, localePreference).hint, ...(entry.writable ? {} : { disabled: true }) }))} />}
       </div>
     </div>
   </div>

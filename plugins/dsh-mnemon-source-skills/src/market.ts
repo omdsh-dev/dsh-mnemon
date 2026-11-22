@@ -9,6 +9,8 @@ import { isSkillName, splitFrontmatter } from './frontmatter.ts'
 import { githubUrl, parseGithub } from './source-kind.ts'
 import official from '../market/official.json' with { type: 'json' }
 
+export { localized } from './market-localization.ts'
+
 export const OFFICIAL_REGISTRY_ID = 'official'
 export const OFFICIAL_REGISTRY_URL = 'https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/plugins/dsh-mnemon-source-skills/market/official.json'
 export const SKILLS_SH_ID = 'skills-sh'
@@ -47,20 +49,23 @@ function object(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 }
 
+const LOCALE_KEY = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u
+
 function localizedText(value: unknown, maximum: number): LocalizedText | undefined {
   if (typeof value === 'string') return value.trim() === '' ? undefined : value.trim().slice(0, maximum)
   const fields = object(value)
   if (fields === undefined) return undefined
-  const en = typeof fields.en === 'string' ? fields.en.trim().slice(0, maximum) : undefined
-  const zh = typeof fields['zh-CN'] === 'string' ? fields['zh-CN'].trim().slice(0, maximum) : typeof fields.zh === 'string' ? fields.zh.trim().slice(0, maximum) : undefined
-  if (!en && !zh) return undefined
-  return { ...(en ? { en } : {}), ...(zh ? { 'zh-CN': zh } : {}) }
-}
-
-export function localized(value: LocalizedText | undefined, language: string): string {
-  if (value === undefined) return ''
-  if (typeof value === 'string') return value
-  return (language.startsWith('zh') ? value['zh-CN'] ?? value.en : value.en ?? value['zh-CN']) ?? ''
+  const out: Record<string, string> = {}
+  for (const [rawKey, rawValue] of Object.entries(fields)) {
+    if (typeof rawValue !== 'string') continue
+    const trimmed = rawValue.trim().slice(0, maximum)
+    if (trimmed === '') continue
+    const key = rawKey.toLowerCase() === 'zh' ? 'zh-CN' : rawKey
+    if (!LOCALE_KEY.test(key)) continue
+    if (key === 'zh-CN' && out['zh-CN'] !== undefined && rawKey.toLowerCase() === 'zh') continue
+    out[key] = trimmed
+  }
+  return Object.keys(out).length === 0 ? undefined : out
 }
 
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u

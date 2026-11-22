@@ -3,11 +3,23 @@
   "id": "official",
   "name": {
     "en": "Featured",
-    "zh-CN": "精选"
+    "zh-CN": "精选",
+    "ja": "おすすめ",
+    "es": "Destacadas",
+    "fr": "Sélection",
+    "de": "Empfohlen",
+    "ru": "Избранное",
+    "pt": "Destaque"
   },
   "description": {
     "en": "Open-source skills from their original repositories. Each installs from its upstream source; check its license there.",
-    "zh-CN": "来自原始仓库的开源技能。每个技能都从上游源安装，许可证以上游为准。"
+    "zh-CN": "来自原始仓库的开源技能。每个技能都从上游源安装，许可证以上游为准。",
+    "ja": "オリジナルリポジトリから提供されるオープンソーススキルです。各スキルは上流からインストールされるため、ライセンスは上流で確認してください。",
+    "es": "Habilidades de código abierto desde sus repositorios originales. Cada una se instala desde su fuente original; consulta allí su licencia.",
+    "fr": "Compétences open source issues de leurs dépôts d'origine. Chacune s'installe depuis sa source amont ; vérifiez-y sa licence.",
+    "de": "Open-Source-Skills direkt aus ihren Original-Repositories. Jeder Skill wird von seiner Upstream-Quelle installiert; prüfen Sie dort die jeweilige Lizenz.",
+    "ru": "Навыки с открытым исходным кодом из оригинальных репозиториев. Каждый устанавливается из своего источника; проверяйте лицензию там.",
+    "pt": "Habilidades de código aberto diretamente dos repositórios originais. Cada uma é instalada da fonte upstream; consulte a licença lá."
   },
   "homepage": "https://github.com/omdsh-dev/dsh-mnemon/tree/main/plugins/dsh-mnemon-source-skills/market",
   "categories": [
@@ -15,56 +27,104 @@
       "id": "docs-writing",
       "label": {
         "en": "Writing",
-        "zh-CN": "文档写作"
+        "zh-CN": "文档写作",
+        "ja": "ライティング",
+        "es": "Redacción",
+        "fr": "Rédaction",
+        "de": "Text & Doku",
+        "ru": "Тексты",
+        "pt": "Escrita"
       }
     },
     {
       "id": "content-creation",
       "label": {
         "en": "Content",
-        "zh-CN": "内容创作"
+        "zh-CN": "内容创作",
+        "ja": "コンテンツ制作",
+        "es": "Contenido",
+        "fr": "Contenu",
+        "de": "Inhalte",
+        "ru": "Контент",
+        "pt": "Conteúdo"
       }
     },
     {
       "id": "design-ui",
       "label": {
         "en": "Design",
-        "zh-CN": "设计与界面"
+        "zh-CN": "设计与界面",
+        "ja": "デザイン・UI",
+        "es": "Diseño",
+        "fr": "Design",
+        "de": "Design & UI",
+        "ru": "Дизайн",
+        "pt": "Design"
       }
     },
     {
       "id": "development",
       "label": {
         "en": "Development",
-        "zh-CN": "开发"
+        "zh-CN": "开发",
+        "ja": "開発",
+        "es": "Desarrollo",
+        "fr": "Développement",
+        "de": "Entwicklung",
+        "ru": "Разработка",
+        "pt": "Desenvolvimento"
       }
     },
     {
       "id": "devops",
       "label": {
         "en": "Deploy",
-        "zh-CN": "部署运维"
+        "zh-CN": "部署运维",
+        "ja": "デプロイ・運用",
+        "es": "Despliegue",
+        "fr": "Déploiement",
+        "de": "Deployment",
+        "ru": "Деплой",
+        "pt": "Implantação"
       }
     },
     {
       "id": "research-analysis",
       "label": {
         "en": "Research",
-        "zh-CN": "研究分析"
+        "zh-CN": "研究分析",
+        "ja": "リサーチ・分析",
+        "es": "Investigación",
+        "fr": "Recherche",
+        "de": "Recherche",
+        "ru": "Исследования",
+        "pt": "Pesquisa"
       }
     },
     {
       "id": "productivity",
       "label": {
         "en": "Productivity",
-        "zh-CN": "效率工具"
+        "zh-CN": "效率工具",
+        "ja": "生産性向上",
+        "es": "Productividad",
+        "fr": "Productivité",
+        "de": "Produktivität",
+        "ru": "Продуктивность",
+        "pt": "Produtividade"
       }
     },
     {
       "id": "marketing",
       "label": {
         "en": "Marketing",
-        "zh-CN": "市场营销"
+        "zh-CN": "市场营销",
+        "ja": "マーケティング",
+        "es": "Marketing",
+        "fr": "Marketing",
+        "de": "Marketing",
+        "ru": "Маркетинг",
+        "pt": "Marketing"
       }
     }
   ],
@@ -73,11 +133,23 @@
       "name": "frontend-design",
       "title": {
         "en": "Frontend design",
-        "zh-CN": "前端设计"
+        "zh-CN": "前端设计",
+        "ja": "フロントエンドデザイン",
+        "es": "Diseño frontend",
+        "fr": "Design frontend",
+        "de": "Frontend-Design",
+        "ru": "Дизайн фронтенда",
+        "pt": "Design de frontend"
       },
       "description": {
         "en": "Gives new or reworked UI a deliberate visual direction: typography, color and layout choices instead of generic templates.",
-        "zh-CN": "为新界面或改版确定有辨识度的视觉方向：排版、配色与布局取舍，避免千篇一律的模板感。"
+        "zh-CN": "为新界面或改版确定有辨识度的视觉方向：排版、配色与布局取舍，避免千篇一律的模板感。",
+        "ja": "ありきたりなテンプレートを避け、タイポグラフィ・配色・レイアウトを意図的に設計して新規 UI やリデザインに明確な視覚的方向性を与えます。",
+        "es": "Da a interfaces nuevas o rediseñadas una dirección visual intencionada: tipografía, color y composición en lugar de plantillas genéricas.",
+        "fr": "Donne aux interfaces neuves ou refondues une direction visuelle affirmée : typographie, couleurs et mise en page au lieu de modèles génériques.",
+        "de": "Verleiht neuen oder überarbeiteten Oberflächen eine bewusste visuelle Handschrift: Typografie, Farben und Layout statt generischer Vorlagen.",
+        "ru": "Задаёт новому или обновляемому интерфейсу продуманное визуальное направление: типографику, цвет и компоновку вместо шаблонных решений.",
+        "pt": "Dá a interfaces novas ou reformuladas uma direção visual intencional: escolhas de tipografia, cor e layout em vez de modelos genéricos."
       },
       "category": "design-ui",
       "author": "Anthropic",
@@ -97,11 +169,23 @@
       "name": "theme-factory",
       "title": {
         "en": "Theme factory",
-        "zh-CN": "主题工厂"
+        "zh-CN": "主题工厂",
+        "ja": "テーマファクトリー",
+        "es": "Fábrica de temas",
+        "fr": "Fabrique de thèmes",
+        "de": "Theme-Factory",
+        "ru": "Фабрика тем",
+        "pt": "Fábrica de temas"
       },
       "description": {
         "en": "Styles slides, docs, reports and landing pages with one of ten preset themes or a theme generated on the spot.",
-        "zh-CN": "用 10 套预设或现场生成的配色与字体主题，统一幻灯片、文档、报告和落地页的风格。"
+        "zh-CN": "用 10 套预设或现场生成的配色与字体主题，统一幻灯片、文档、报告和落地页的风格。",
+        "ja": "10 種のプリセットテーマまたはその場で生成するテーマを使い、スライド・ドキュメント・レポート・LP の見た目を統一します。",
+        "es": "Aplica estilo a presentaciones, documentos, informes y páginas de destino con uno de diez temas predefinidos o uno generado al instante.",
+        "fr": "Habille diapositives, documents, rapports et pages d'atterrissage avec l'un des dix thèmes prédéfinis ou un thème généré sur mesure.",
+        "de": "Gestaltet Folien, Dokumente, Berichte und Landingpages mit einem von zehn vordefinierten oder spontan erzeugten Themes.",
+        "ru": "Оформляет слайды, документы, отчёты и лендинги в одной из десяти готовых тем или в теме, созданной на лету.",
+        "pt": "Estiliza apresentações, documentos, relatórios e páginas de destino com um de dez temas predefinidos ou um tema gerado na hora."
       },
       "category": "design-ui",
       "author": "Anthropic",
@@ -118,11 +202,23 @@
       "name": "brand-guidelines",
       "title": {
         "en": "Brand guidelines",
-        "zh-CN": "品牌规范"
+        "zh-CN": "品牌规范",
+        "ja": "ブランドガイドライン",
+        "es": "Guía de marca",
+        "fr": "Charte de marque",
+        "de": "Markenrichtlinien",
+        "ru": "Брендбук",
+        "pt": "Diretrizes de marca"
       },
       "description": {
         "en": "Applies a brand's colors and typography to an artifact; a template for writing your own brand skill.",
-        "zh-CN": "把一套品牌的颜色与字体规范应用到产物上；可作为编写自家品牌技能的范例。"
+        "zh-CN": "把一套品牌的颜色与字体规范应用到产物上；可作为编写自家品牌技能的范例。",
+        "ja": "ブランドの配色やフォント規定を成果物に適用します。自社ブランド用スキルを作るテンプレートとしても活用できます。",
+        "es": "Aplica los colores y la tipografía de una marca a un entregable; sirve de plantilla para crear tu propia habilidad de marca.",
+        "fr": "Applique les couleurs et la typographie d'une marque à un livrable ; un modèle pour créer votre propre compétence de marque.",
+        "de": "Wendet Markenfarben und Typografie auf ein Artefakt an; dient auch als Vorlage für eigene Marken-Skills.",
+        "ru": "Применяет цвета и типографику бренда к артефакту; шаблон для создания собственного брендового навыка.",
+        "pt": "Aplica as cores e a tipografia de uma marca a um artefato; serve de modelo para criar sua própria habilidade de marca."
       },
       "category": "design-ui",
       "author": "Anthropic",
@@ -139,11 +235,23 @@
       "name": "canvas-design",
       "title": {
         "en": "Canvas design",
-        "zh-CN": "海报与视觉设计"
+        "zh-CN": "海报与视觉设计",
+        "ja": "キャンバスデザイン",
+        "es": "Diseño en lienzo",
+        "fr": "Design visuel",
+        "de": "Canvas-Design",
+        "ru": "Визуальный дизайн",
+        "pt": "Design em tela"
       },
       "description": {
         "en": "Creates posters and other visual pieces as PNG or PDF from a stated design philosophy.",
-        "zh-CN": "先确立设计理念，再输出海报、插画等 PNG/PDF 视觉作品。"
+        "zh-CN": "先确立设计理念，再输出海报、插画等 PNG/PDF 视觉作品。",
+        "ja": "定めたデザイン方針に基づき、ポスターやビジュアル作品を PNG または PDF として制作します。",
+        "es": "Crea pósteres y otras piezas visuales en PNG o PDF a partir de una filosofía de diseño definida.",
+        "fr": "Crée des affiches et d'autres créations visuelles en PNG ou PDF à partir d'une philosophie de design définie.",
+        "de": "Erstellt Poster und visuelle Werke als PNG oder PDF auf Basis einer definierten Designphilosophie.",
+        "ru": "Создаёт постеры и другие визуальные работы в PNG или PDF на основе заданной дизайн-концепции.",
+        "pt": "Cria cartazes e outras peças visuais em PNG ou PDF a partir de uma filosofia de design definida."
       },
       "category": "design-ui",
       "author": "Anthropic",
@@ -160,11 +268,23 @@
       "name": "algorithmic-art",
       "title": {
         "en": "Algorithmic art",
-        "zh-CN": "算法艺术"
+        "zh-CN": "算法艺术",
+        "ja": "アルゴリズミックアート",
+        "es": "Arte algorítmico",
+        "fr": "Art algorithmique",
+        "de": "Algorithmische Kunst",
+        "ru": "Алгоритмическое искусство",
+        "pt": "Arte algorítmica"
       },
       "description": {
         "en": "Creates generative art with p5.js, seeded randomness and interactive parameters.",
-        "zh-CN": "用 p5.js 和可复现的随机种子创作生成艺术，并提供可交互调整的参数。"
+        "zh-CN": "用 p5.js 和可复现的随机种子创作生成艺术，并提供可交互调整的参数。",
+        "ja": "p5.js とシード付き乱数、対話的なパラメータを使ってジェネレーティブアートを制作します。",
+        "es": "Crea arte generativo con p5.js, aleatoriedad con semilla y parámetros interactivos.",
+        "fr": "Crée de l'art génératif avec p5.js, un aléatoire déterministe par graine et des paramètres interactifs.",
+        "de": "Erzeugt generative Kunst mit p5.js, reproduzierbarem Zufalls-Seed und interaktiven Parametern.",
+        "ru": "Создаёт генеративное искусство с p5.js, воспроизводимой случайностью и интерактивными параметрами.",
+        "pt": "Cria arte generativa com p5.js, aleatoriedade com semente reproduzível e parâmetros interativos."
       },
       "category": "content-creation",
       "author": "Anthropic",
@@ -181,11 +301,23 @@
       "name": "slack-gif-creator",
       "title": {
         "en": "Slack GIF creator",
-        "zh-CN": "Slack 动图"
+        "zh-CN": "Slack 动图",
+        "ja": "Slack GIF 作成",
+        "es": "Creador de GIF para Slack",
+        "fr": "Créateur de GIF Slack",
+        "de": "Slack-GIF-Generator",
+        "ru": "GIF для Slack",
+        "pt": "Criador de GIF para Slack"
       },
       "description": {
         "en": "Makes animated GIFs that fit Slack's size limits, with validation tools.",
-        "zh-CN": "按 Slack 的尺寸与体积限制制作动图，并自带校验工具。"
+        "zh-CN": "按 Slack 的尺寸与体积限制制作动图，并自带校验工具。",
+        "ja": "Slack のサイズ・容量制限に収まるアニメーション GIF を検証ツール付きで作成します。",
+        "es": "Genera GIF animados ajustados a los límites de tamaño de Slack, con herramientas de validación.",
+        "fr": "Produit des GIF animés adaptés aux limites de taille de Slack, avec outils de validation.",
+        "de": "Erstellt animierte GIFs passend zu den Größenlimits von Slack, inklusive Validierungstools.",
+        "ru": "Создаёт анимированные GIF под ограничения размера Slack с инструментами проверки.",
+        "pt": "Cria GIFs animados adequados aos limites de tamanho do Slack, com ferramentas de validação."
       },
       "category": "content-creation",
       "author": "Anthropic",
@@ -202,11 +334,23 @@
       "name": "internal-comms",
       "title": {
         "en": "Internal comms",
-        "zh-CN": "内部沟通"
+        "zh-CN": "内部沟通",
+        "ja": "社内コミュニケーション",
+        "es": "Comunicación interna",
+        "fr": "Communication interne",
+        "de": "Interne Kommunikation",
+        "ru": "Внутренние коммуникации",
+        "pt": "Comunicação interna"
       },
       "description": {
         "en": "Writes status reports, announcements, FAQs, incident write-ups and other internal communications in familiar formats.",
-        "zh-CN": "按团队常用格式撰写周报、通告、FAQ、事故复盘等内部沟通文稿。"
+        "zh-CN": "按团队常用格式撰写周报、通告、FAQ、事故复盘等内部沟通文稿。",
+        "ja": "進捗報告、お知らせ、FAQ、障害報告書など社内向けの文書を定番フォーマットで作成します。",
+        "es": "Redacta informes de estado, anuncios, FAQ, resúmenes de incidentes y otras comunicaciones internas en formatos habituales.",
+        "fr": "Rédige rapports d'avancement, annonces, FAQ, bilans d'incident et autres communications internes dans des formats habituels.",
+        "de": "Verfasst Statusberichte, Ankündigungen, FAQs, Vorfallberichte und andere interne Texte in bewährten Formaten.",
+        "ru": "Пишет отчёты о статусе, объявления, FAQ, разборы инцидентов и другие внутренние материалы в привычных форматах.",
+        "pt": "Redige relatórios de status, comunicados, FAQs, análises de incidentes e outros textos internos em formatos familiares."
       },
       "category": "docs-writing",
       "author": "Anthropic",
@@ -223,11 +367,23 @@
       "name": "skill-creator",
       "title": {
         "en": "Skill creator",
-        "zh-CN": "技能创作"
+        "zh-CN": "技能创作",
+        "ja": "スキル作成",
+        "es": "Creador de habilidades",
+        "fr": "Créateur de compétences",
+        "de": "Skill-Erstellung",
+        "ru": "Создание навыков",
+        "pt": "Criador de habilidades"
       },
       "description": {
         "en": "Creates, edits and evaluates skills, and tunes their descriptions so they trigger when they should.",
-        "zh-CN": "从零编写、修改和评测技能，并优化技能描述以便被正确触发。"
+        "zh-CN": "从零编写、修改和评测技能，并优化技能描述以便被正确触发。",
+        "ja": "スキルの作成・編集・評価を行い、適切なタイミングで発火するよう説明文を調整します。",
+        "es": "Crea, edita y evalúa habilidades, y ajusta sus descripciones para que se activen cuando corresponda.",
+        "fr": "Crée, modifie et évalue des compétences, et ajuste leurs descriptions pour qu'elles se déclenchent au bon moment.",
+        "de": "Erstellt, bearbeitet und bewertet Skills und optimiert deren Beschreibungen für zuverlässiges Auslösen.",
+        "ru": "Создаёт, редактирует и оценивает навыки, а также настраивает их описания для точного срабатывания.",
+        "pt": "Cria, edita e avalia habilidades, ajustando suas descrições para que sejam acionadas no momento certo."
       },
       "category": "development",
       "author": "Anthropic",
@@ -247,11 +403,23 @@
       "name": "mcp-builder",
       "title": {
         "en": "MCP builder",
-        "zh-CN": "MCP 服务开发"
+        "zh-CN": "MCP 服务开发",
+        "ja": "MCP ビルダー",
+        "es": "Constructor de MCP",
+        "fr": "Constructeur MCP",
+        "de": "MCP-Server-Entwicklung",
+        "ru": "Разработка MCP",
+        "pt": "Construtor de MCP"
       },
       "description": {
         "en": "Designs and builds high-quality MCP servers that give models well-shaped tools for external services.",
-        "zh-CN": "设计并实现高质量的 MCP 服务器，让模型通过精心设计的工具访问外部服务。"
+        "zh-CN": "设计并实现高质量的 MCP 服务器，让模型通过精心设计的工具访问外部服务。",
+        "ja": "モデルが外部サービスを扱いやすいツール設計を備えた高品質な MCP サーバーを設計・実装します。",
+        "es": "Diseña y construye servidores MCP de alta calidad que ofrecen a los modelos herramientas bien estructuradas para servicios externos.",
+        "fr": "Conçoit et réalise des serveurs MCP de haute qualité offrant aux modèles des outils bien structurés pour des services externes.",
+        "de": "Entwirft und erstellt hochwertige MCP-Server mit sauber strukturierten Tools für externe Dienste.",
+        "ru": "Проектирует и создаёт качественные MCP-серверы, дающие моделям продуманные инструменты для внешних сервисов.",
+        "pt": "Projeta e constrói servidores MCP de alta qualidade que oferecem aos modelos ferramentas bem estruturadas para serviços externos."
       },
       "category": "development",
       "author": "Anthropic",
@@ -268,11 +436,23 @@
       "name": "webapp-testing",
       "title": {
         "en": "Web app testing",
-        "zh-CN": "Web 应用测试"
+        "zh-CN": "Web 应用测试",
+        "ja": "Web アプリテスト",
+        "es": "Pruebas de aplicaciones web",
+        "fr": "Test d'applications Web",
+        "de": "Web-App-Tests",
+        "ru": "Тестирование веб-приложений",
+        "pt": "Testes de aplicativos Web"
       },
       "description": {
         "en": "Drives local web apps with Playwright to verify behavior, debug the UI, capture screenshots and read browser logs.",
-        "zh-CN": "用 Playwright 驱动本地 Web 应用：验证功能、排查界面问题、截图与读取浏览器日志。"
+        "zh-CN": "用 Playwright 驱动本地 Web 应用：验证功能、排查界面问题、截图与读取浏览器日志。",
+        "ja": "Playwright でローカル Web アプリを操作し、動作確認、UI デバッグ、スクリーンショット取得、ブラウザログ確認を行います。",
+        "es": "Controla aplicaciones web locales con Playwright para verificar comportamiento, depurar la interfaz, tomar capturas y leer registros del navegador.",
+        "fr": "Pilote des applications Web locales avec Playwright pour vérifier le comportement, déboguer l'interface, capturer l'écran et lire les journaux du navigateur.",
+        "de": "Steuert lokale Web-Apps mit Playwright, um Verhalten zu prüfen, UI-Fehler zu finden, Screenshots aufzunehmen und Browser-Logs zu lesen.",
+        "ru": "Управляет локальными веб-приложениями через Playwright для проверки поведения, отладки интерфейса, снятия скриншотов и чтения логов браузера.",
+        "pt": "Controla aplicativos Web locais com Playwright para verificar comportamento, depurar a interface, capturar telas e ler logs do navegador."
       },
       "category": "development",
       "author": "Anthropic",
@@ -289,11 +469,23 @@
       "name": "web-artifacts-builder",
       "title": {
         "en": "Web artifacts builder",
-        "zh-CN": "复杂网页产物"
+        "zh-CN": "复杂网页产物",
+        "ja": "Web アーティファクト構築",
+        "es": "Constructor de artefactos web",
+        "fr": "Constructeur d'artefacts Web",
+        "de": "Web-Artefakt-Builder",
+        "ru": "Сборка веб-артефактов",
+        "pt": "Construtor de artefatos Web"
       },
       "description": {
         "en": "Builds multi-component, stateful HTML artifacts with React, Tailwind CSS and shadcn/ui.",
-        "zh-CN": "用 React、Tailwind 与 shadcn/ui 构建多组件、带状态的复杂 HTML 产物。"
+        "zh-CN": "用 React、Tailwind 与 shadcn/ui 构建多组件、带状态的复杂 HTML 产物。",
+        "ja": "React、Tailwind CSS、shadcn/ui を使って多コンポーネント・状態管理付きの HTML アーティファクトを構築します。",
+        "es": "Construye artefactos HTML multicomponente con estado usando React, Tailwind CSS y shadcn/ui.",
+        "fr": "Construit des artefacts HTML multi-composants avec état à l'aide de React, Tailwind CSS et shadcn/ui.",
+        "de": "Erstellt zustandsbehaftete HTML-Artefakte mit mehreren Komponenten auf Basis von React, Tailwind CSS und shadcn/ui.",
+        "ru": "Собирает многокомпонентные HTML-артефакты с состоянием на React, Tailwind CSS и shadcn/ui.",
+        "pt": "Constrói artefatos HTML multicomponente e com estado usando React, Tailwind CSS e shadcn/ui."
       },
       "category": "development",
       "author": "Anthropic",
@@ -310,11 +502,23 @@
       "name": "changelog-generator",
       "title": {
         "en": "Changelog generator",
-        "zh-CN": "更新日志生成"
+        "zh-CN": "更新日志生成",
+        "ja": "変更履歴生成",
+        "es": "Generador de changelog",
+        "fr": "Générateur de changelog",
+        "de": "Changelog-Generator",
+        "ru": "Генератор списка изменений",
+        "pt": "Gerador de changelog"
       },
       "description": {
         "en": "Turns git history into a categorized, user-facing changelog.",
-        "zh-CN": "分析 git 提交并归类，把技术提交改写成面向用户的更新日志。"
+        "zh-CN": "分析 git 提交并归类，把技术提交改写成面向用户的更新日志。",
+        "ja": "Git のコミット履歴を分類し、ユーザー向けの分かりやすい変更履歴（Changelog）に変換します。",
+        "es": "Convierte el historial de git en un registro de cambios categorizado y orientado al usuario.",
+        "fr": "Transforme l'historique Git en journal des modifications catégorisé et lisible par les utilisateurs.",
+        "de": "Verwandelt die Git-Historie in ein kategorisiertes, nutzerfreundliches Changelog.",
+        "ru": "Превращает историю git в структурированный, понятный пользователям список изменений.",
+        "pt": "Transforma o histórico git em um changelog categorizado e voltado ao usuário."
       },
       "category": "docs-writing",
       "author": "Composio community",
@@ -330,11 +534,23 @@
       "name": "content-research-writer",
       "title": {
         "en": "Content research writer",
-        "zh-CN": "研究型写作"
+        "zh-CN": "研究型写作",
+        "ja": "リサーチ執筆アシスタント",
+        "es": "Redactor con investigación",
+        "fr": "Rédacteur de recherche",
+        "de": "Recherche-Redakteur",
+        "ru": "Исследовательское письмо",
+        "pt": "Redator de pesquisa de conteúdo"
       },
       "description": {
         "en": "Researches while you write: adds citations, sharpens hooks and outlines, and reviews each section.",
-        "zh-CN": "边研究边写作：补充引用、打磨开头与大纲，并逐节给出反馈。"
+        "zh-CN": "边研究边写作：补充引用、打磨开头与大纲，并逐节给出反馈。",
+        "ja": "調べながら執筆を進め、出典の追加、導入と構成の磨き上げ、各セクションのレビューを行います。",
+        "es": "Investiga mientras redactas: añade citas, afina introducciones y esquemas, y revisa cada sección.",
+        "fr": "Effectue des recherches pendant que vous écrivez : ajoute des citations, affine accroches et plans, et relit chaque section.",
+        "de": "Recherchiert beim Schreiben: ergänzt Quellenangaben, schärft Einstiege sowie Gliederungen und prüft jeden Abschnitt.",
+        "ru": "Исследует тему в процессе письма: добавляет ссылки, усиливает вступление и план, проверяет каждый раздел.",
+        "pt": "Pesquisa enquanto você escreve: adiciona citações, aprimora ganchos e estruturas e revisa cada seção."
       },
       "category": "docs-writing",
       "author": "Composio community",
@@ -350,11 +566,23 @@
       "name": "competitive-ads-extractor",
       "title": {
         "en": "Competitive ads extractor",
-        "zh-CN": "竞品广告分析"
+        "zh-CN": "竞品广告分析",
+        "ja": "競合広告分析",
+        "es": "Extractor de anuncios de la competencia",
+        "fr": "Analyseur de publicités concurrentes",
+        "de": "Wettbewerbsanzeigen-Analyse",
+        "ru": "Анализ рекламы конкурентов",
+        "pt": "Extrator de anúncios concorrentes"
       },
       "description": {
         "en": "Collects competitors' ads from ad libraries and analyzes which messages and creative approaches work.",
-        "zh-CN": "从各广告库提取竞品广告，分析其中有效的信息点与创意手法。"
+        "zh-CN": "从各广告库提取竞品广告，分析其中有效的信息点与创意手法。",
+        "ja": "広告ライブラリから競合他社の広告を収集し、効果的な訴求メッセージとクリエイティブ手法を分析します。",
+        "es": "Recopila anuncios de competidores en bibliotecas publicitarias y analiza qué mensajes y enfoques creativos funcionan.",
+        "fr": "Collecte les publicités des concurrents dans les bibliothèques publicitaires et analyse les messages et approches créatives efficaces.",
+        "de": "Sammelt Anzeigen von Mitbewerbern aus Werbebibliotheken und analysiert wirksame Botschaften und Kreativansätze.",
+        "ru": "Собирает объявления конкурентов из рекламных библиотек и анализирует работающие посылы и креативные приёмы.",
+        "pt": "Coleta anúncios de concorrentes em bibliotecas de anúncios e analisa quais mensagens e abordagens criativas funcionam."
       },
       "category": "research-analysis",
       "author": "Composio community",
@@ -370,11 +598,23 @@
       "name": "lead-research-assistant",
       "title": {
         "en": "Lead research assistant",
-        "zh-CN": "潜在客户研究"
+        "zh-CN": "潜在客户研究",
+        "ja": "見込み顧客リサーチ",
+        "es": "Asistente de prospección",
+        "fr": "Assistant de prospection",
+        "de": "Lead-Recherche-Assistent",
+        "ru": "Поиск потенциальных клиентов",
+        "pt": "Assistente de prospecção"
       },
       "description": {
         "en": "Finds companies that fit your business and suggests concrete ways to reach them.",
-        "zh-CN": "分析你的业务，寻找匹配的目标公司并给出可执行的联系策略。"
+        "zh-CN": "分析你的业务，寻找匹配的目标公司并给出可执行的联系策略。",
+        "ja": "事業に適合する企業を調査し、具体的なアプローチ方法を提案します。",
+        "es": "Encuentra empresas afines a tu negocio y sugiere formas concretas de contactarlas.",
+        "fr": "Identifie les entreprises adaptées à votre activité et propose des pistes concrètes pour les contacter.",
+        "de": "Findet passende Zielunternehmen für Ihr Geschäft und schlägt konkrete Kontaktstrategien vor.",
+        "ru": "Находит подходящие для вашего бизнеса компании и предлагает конкретные способы выйти с ними на связь.",
+        "pt": "Encontra empresas compatíveis com o seu negócio e sugere formas concretas de abordagem."
       },
       "category": "research-analysis",
       "author": "Composio community",
@@ -390,11 +630,23 @@
       "name": "meeting-insights-analyzer",
       "title": {
         "en": "Meeting insights analyzer",
-        "zh-CN": "会议洞察"
+        "zh-CN": "会议洞察",
+        "ja": "会議インサイト分析",
+        "es": "Analizador de reuniones",
+        "fr": "Analyseur de réunions",
+        "de": "Meeting-Analyse",
+        "ru": "Анализ встреч",
+        "pt": "Analisador de insights de reuniões"
       },
       "description": {
         "en": "Analyzes meeting transcripts for communication patterns and gives concrete feedback.",
-        "zh-CN": "分析会议记录，找出沟通模式与可改进之处，给出具体反馈。"
+        "zh-CN": "分析会议记录，找出沟通模式与可改进之处，给出具体反馈。",
+        "ja": "会議の文字起こしからコミュニケーション傾向を分析し、具体的なフィードバックを提示します。",
+        "es": "Analiza transcripciones de reuniones para detectar patrones de comunicación y ofrecer retroalimentación concreta.",
+        "fr": "Analyse les transcriptions de réunions pour repérer les schémas de communication et fournir des retours concrets.",
+        "de": "Analysiert Meeting-Transkripte auf Kommunikationsmuster und liefert konkretes Feedback.",
+        "ru": "Анализирует расшифровки встреч на паттерны общения и даёт конкретную обратную связь.",
+        "pt": "Analisa transcrições de reuniões para identificar padrões de comunicação e oferecer feedback concreto."
       },
       "category": "research-analysis",
       "author": "Composio community",
@@ -410,11 +662,23 @@
       "name": "domain-name-brainstormer",
       "title": {
         "en": "Domain name brainstormer",
-        "zh-CN": "域名构思"
+        "zh-CN": "域名构思",
+        "ja": "ドメイン名アイデア出し",
+        "es": "Generador de dominios",
+        "fr": "Idéation de noms de domaine",
+        "de": "Domain-Ideenfindung",
+        "ru": "Подбор доменных имён",
+        "pt": "Gerador de ideias de domínio"
       },
       "description": {
         "en": "Brainstorms domain names for a project and checks availability across TLDs.",
-        "zh-CN": "为项目构思域名，并检查多个后缀的可用性。"
+        "zh-CN": "为项目构思域名，并检查多个后缀的可用性。",
+        "ja": "プロジェクト向けのドメイン名案を考案し、各種 TLD の空き状況を確認します。",
+        "es": "Propone nombres de dominio para un proyecto y comprueba disponibilidad en varios TLD.",
+        "fr": "Propose des noms de domaine pour un projet et vérifie leur disponibilité sur plusieurs extensions.",
+        "de": "Entwickelt Domainnamen für ein Projekt und prüft die Verfügbarkeit über mehrere Top-Level-Domains.",
+        "ru": "Генерирует идеи доменных имён для проекта и проверяет доступность в разных доменных зонах.",
+        "pt": "Gera ideias de nomes de domínio para um projeto e verifica a disponibilidade em diversos TLDs."
       },
       "category": "productivity",
       "author": "Composio community",
@@ -430,11 +694,23 @@
       "name": "file-organizer",
       "title": {
         "en": "File organizer",
-        "zh-CN": "文件整理"
+        "zh-CN": "文件整理",
+        "ja": "ファイル整理",
+        "es": "Organizador de archivos",
+        "fr": "Organisateur de fichiers",
+        "de": "Datei-Organizer",
+        "ru": "Организация файлов",
+        "pt": "Organizador de arquivos"
       },
       "description": {
         "en": "Organizes files and folders by content: finds duplicates, proposes a better structure and cleans up.",
-        "zh-CN": "理解文件内容后整理目录：找出重复文件、提出更好的结构并自动清理。"
+        "zh-CN": "理解文件内容后整理目录：找出重复文件、提出更好的结构并自动清理。",
+        "ja": "中身を理解してファイルとフォルダを整理し、重複検出、構成改善の提案、クリーンアップを行います。",
+        "es": "Organiza archivos y carpetas según su contenido: detecta duplicados, propone una mejor estructura y limpia el desorden.",
+        "fr": "Organise fichiers et dossiers selon leur contenu : repère les doublons, propose une meilleure arborescence et fait le ménage.",
+        "de": "Ordnet Dateien und Ordner nach Inhalt: findet Duplikate, schlägt eine bessere Struktur vor und räumt auf.",
+        "ru": "Упорядочивает файлы и папки по содержанию: находит дубликаты, предлагает лучшую структуру и наводит порядок.",
+        "pt": "Organiza arquivos e pastas pelo conteúdo: localiza duplicatas, propõe uma estrutura melhor e faz limpeza."
       },
       "category": "productivity",
       "author": "Composio community",
@@ -450,11 +726,23 @@
       "name": "invoice-organizer",
       "title": {
         "en": "Invoice organizer",
-        "zh-CN": "发票整理"
+        "zh-CN": "发票整理",
+        "ja": "請求書整理",
+        "es": "Organizador de facturas",
+        "fr": "Organisateur de factures",
+        "de": "Rechnungs-Organizer",
+        "ru": "Организация счетов",
+        "pt": "Organizador de faturas"
       },
       "description": {
         "en": "Reads messy invoices and receipts, extracts key fields, renames and files them for tax time.",
-        "zh-CN": "读取杂乱的发票与收据，提取关键信息、统一命名并分类归档，方便报税。"
+        "zh-CN": "读取杂乱的发票与收据，提取关键信息、统一命名并分类归档，方便报税。",
+        "ja": "煩雑な請求書や領収書を読み取り、主要項目を抽出して確定申告向けに命名・分類します。",
+        "es": "Lee facturas y recibos desordenados, extrae campos clave, renombra y clasifica los archivos para impuestos.",
+        "fr": "Lit factures et reçus en désordre, extrait les champs clés, les renomme et les classe pour la déclaration fiscale.",
+        "de": "Liest unübersichtliche Rechnungen und Belege, extrahiert wichtige Felder, benennt sie um und sortiert sie steuerfertig ein.",
+        "ru": "Читает разрозненные счета и чеки, извлекает ключевые поля, переименовывает и раскладывает их для отчётности.",
+        "pt": "Lê faturas e recibos desorganizados, extrai campos-chave, renomeia e arquiva tudo para declarações fiscais."
       },
       "category": "productivity",
       "author": "Composio community",
@@ -470,11 +758,23 @@
       "name": "image-enhancer",
       "title": {
         "en": "Image enhancer",
-        "zh-CN": "图片增强"
+        "zh-CN": "图片增强",
+        "ja": "画像補正",
+        "es": "Mejorador de imágenes",
+        "fr": "Améliorateur d'images",
+        "de": "Bildoptimierung",
+        "ru": "Улучшение изображений",
+        "pt": "Aprimorador de imagens"
       },
       "description": {
         "en": "Sharpens screenshots and other images for presentations and documentation.",
-        "zh-CN": "提升截图等图片的清晰度与锐度，用于演示和文档。"
+        "zh-CN": "提升截图等图片的清晰度与锐度，用于演示和文档。",
+        "ja": "プレゼンやドキュメント向けに、スクリーンショットなどの画像を鮮明かつシャープに補正します。",
+        "es": "Mejora la nitidez de capturas de pantalla y otras imágenes para presentaciones y documentación.",
+        "fr": "Améliore la netteté des captures d'écran et autres images pour les présentations et la documentation.",
+        "de": "Schärft Screenshots und andere Bilder für Präsentationen und Dokumentationen.",
+        "ru": "Повышает чёткость скриншотов и других изображений для презентаций и документации.",
+        "pt": "Aumenta a nitidez de capturas de tela e outras imagens para apresentações e documentação."
       },
       "category": "productivity",
       "author": "Composio community",
@@ -490,11 +790,23 @@
       "name": "tailored-resume-generator",
       "title": {
         "en": "Tailored resume generator",
-        "zh-CN": "定制简历"
+        "zh-CN": "定制简历",
+        "ja": "職務経歴書カスタマイズ",
+        "es": "Generador de currículum a medida",
+        "fr": "Générateur de CV sur mesure",
+        "de": "Lebenslauf-Anpassung",
+        "ru": "Адаптация резюме",
+        "pt": "Gerador de currículo personalizado"
       },
       "description": {
         "en": "Tailors a resume to a job description, highlighting the experience and skills that match.",
-        "zh-CN": "根据职位描述突出相关经历与技能，生成有针对性的简历。"
+        "zh-CN": "根据职位描述突出相关经历与技能，生成有针对性的简历。",
+        "ja": "求人内容に合わせて該当する経験やスキルを強調した履歴書・職務経歴書を作成します。",
+        "es": "Adapta un currículum a una oferta de empleo destacando la experiencia y las habilidades más afines.",
+        "fr": "Adapte un CV à une offre d'emploi en mettant en valeur les expériences et compétences correspondantes.",
+        "de": "Passt einen Lebenslauf gezielt an eine Stellenbeschreibung an und hebt relevante Erfahrungen und Fähigkeiten hervor.",
+        "ru": "Адаптирует резюме под описание вакансии, выделяя наиболее релевантный опыт и навыки.",
+        "pt": "Adapta um currículo a uma descrição de vaga, destacando experiências e competências mais compatíveis."
       },
       "category": "productivity",
       "author": "Composio community",
@@ -510,11 +822,23 @@
       "name": "baoyu-slide-deck",
       "title": {
         "en": "Slide deck",
-        "zh-CN": "幻灯片生成"
+        "zh-CN": "幻灯片生成",
+        "ja": "スライドデッキ作成",
+        "es": "Presentación de diapositivas",
+        "fr": "Présentation de diapositives",
+        "de": "Präsentationsfolien",
+        "ru": "Презентации",
+        "pt": "Apresentação de slides"
       },
       "description": {
         "en": "Turns content into a styled outline, then generates each slide as an image.",
-        "zh-CN": "从内容生成带风格说明的大纲，再逐页生成幻灯片图片。"
+        "zh-CN": "从内容生成带风格说明的大纲，再逐页生成幻灯片图片。",
+        "ja": "コンテンツからスタイル指定付きの構成案を作成し、各スライドを画像として生成します。",
+        "es": "Transforma contenido en un esquema con estilo y genera cada diapositiva como imagen.",
+        "fr": "Transforme un contenu en plan stylisé, puis génère chaque diapositive sous forme d'image.",
+        "de": "Verwandelt Inhalte in eine gestaltete Gliederung und erzeugt jede Folie als Bild.",
+        "ru": "Превращает материал в оформленный план, а затем генерирует каждый слайд как изображение.",
+        "pt": "Transforma conteúdo em um esboço estilizado e gera cada slide como imagem."
       },
       "category": "content-creation",
       "author": "Jim Liu (宝玉)",
@@ -534,11 +858,23 @@
       "name": "baoyu-xhs-images",
       "title": {
         "en": "Social image cards",
-        "zh-CN": "小红书图文"
+        "zh-CN": "小红书图文",
+        "ja": "SNS 向け画像カード",
+        "es": "Tarjetas visuales para redes",
+        "fr": "Cartes visuelles sociales",
+        "de": "Social-Media-Bildkarten",
+        "ru": "Карточки для соцсетей",
+        "pt": "Cartões visuais para redes sociais"
       },
       "description": {
         "en": "Breaks content into 1–10 illustrated info cards with many styles, layouts and palettes, sized for social platforms.",
-        "zh-CN": "把内容拆成 1–10 张卡通风格的信息卡片，多种风格、版式与配色可选，适合小红书等平台。"
+        "zh-CN": "把内容拆成 1–10 张卡通风格的信息卡片，多种风格、版式与配色可选，适合小红书等平台。",
+        "ja": "内容を 1〜10 枚のイラスト付き情報カードに分割し、SNS 向けの多彩なスタイル・レイアウト・配色で作成します。",
+        "es": "Divide el contenido en 1–10 tarjetas informativas ilustradas con múltiples estilos, diseños y paletas, adaptadas a redes sociales.",
+        "fr": "Découpe un contenu en 1 à 10 cartes d'information illustrées aux styles, mises en page et palettes variés, adaptées aux réseaux sociaux.",
+        "de": "Zerlegt Inhalte in 1–10 illustrierte Infokarten mit verschiedenen Stilen, Layouts und Farbpaletten im Social-Media-Format.",
+        "ru": "Разбивает контент на 1–10 иллюстрированных инфокарточек с разными стилями, макетами и палитрами для соцсетей.",
+        "pt": "Divide o conteúdo em 1 a 10 cartões informativos ilustrados com vários estilos, layouts e paletas, no formato ideal para redes sociais."
       },
       "category": "content-creation",
       "author": "Jim Liu (宝玉)",
@@ -555,11 +891,23 @@
       "name": "baoyu-article-illustrator",
       "title": {
         "en": "Article illustrator",
-        "zh-CN": "文章配图"
+        "zh-CN": "文章配图",
+        "ja": "記事イラスト作成",
+        "es": "Ilustrador de artículos",
+        "fr": "Illustrateur d'articles",
+        "de": "Artikel-Illustration",
+        "ru": "Иллюстрации к статьям",
+        "pt": "Ilustrador de artigos"
       },
       "description": {
         "en": "Finds where an article needs visuals and generates illustrations by type, style and palette.",
-        "zh-CN": "分析文章结构，找出需要配图的位置，按类型、风格、配色三个维度生成插图。"
+        "zh-CN": "分析文章结构，找出需要配图的位置，按类型、风格、配色三个维度生成插图。",
+        "ja": "記事内で図解が必要な箇所を見つけ、種類・スタイル・配色を指定して挿絵を生成します。",
+        "es": "Identifica dónde necesita recursos visuales un artículo y genera ilustraciones según tipo, estilo y paleta.",
+        "fr": "Repère où un article a besoin de visuels et génère des illustrations selon le type, le style et la palette.",
+        "de": "Erkennt Stellen im Artikel, die Visualisierungen benötigen, und erzeugt Illustrationen nach Typ, Stil und Farbpalette.",
+        "ru": "Определяет места в статье, где нужны визуальные акценты, и генерирует иллюстрации по типу, стилю и палитре.",
+        "pt": "Identifica onde um artigo precisa de recursos visuais e gera ilustrações por tipo, estilo e paleta."
       },
       "category": "content-creation",
       "author": "Jim Liu (宝玉)",
@@ -576,11 +924,23 @@
       "name": "baoyu-cover-image",
       "title": {
         "en": "Cover image",
-        "zh-CN": "文章封面"
+        "zh-CN": "文章封面",
+        "ja": "カバー画像生成",
+        "es": "Imagen de portada",
+        "fr": "Image de couverture",
+        "de": "Titelbild",
+        "ru": "Обложки статей",
+        "pt": "Imagem de capa"
       },
       "description": {
         "en": "Generates article covers with a choice of palette, rendering style, text and mood, in several aspect ratios.",
-        "zh-CN": "为文章生成封面图，可选配色、渲染风格、文字与氛围，支持多种画幅。"
+        "zh-CN": "为文章生成封面图，可选配色、渲染风格、文字与氛围，支持多种画幅。",
+        "ja": "配色・描画スタイル・テキスト・雰囲気を選び、複数のアスペクト比で記事のカバー画像を生成します。",
+        "es": "Genera portadas de artículos eligiendo paleta, estilo gráfico, texto y ambiente en varias proporciones.",
+        "fr": "Génère des couvertures d'articles avec choix de palette, style de rendu, texte et ambiance, en plusieurs formats.",
+        "de": "Erzeugt Artikeltitelbilder mit wählbarer Farbpalette, Darstellungsart, Text und Stimmung in mehreren Seitenverhältnissen.",
+        "ru": "Генерирует обложки статей с выбором палитры, стиля рендеринга, текста и настроения в разных соотношениях сторон.",
+        "pt": "Gera capas para artigos com escolha de paleta, estilo de renderização, texto e atmosfera, em diversas proporções."
       },
       "category": "content-creation",
       "author": "Jim Liu (宝玉)",
@@ -597,11 +957,23 @@
       "name": "baoyu-infographic",
       "title": {
         "en": "Infographic",
-        "zh-CN": "信息图"
+        "zh-CN": "信息图",
+        "ja": "インフォグラフィック",
+        "es": "Infografía",
+        "fr": "Infographie",
+        "de": "Infografik",
+        "ru": "Инфографика",
+        "pt": "Infográfico"
       },
       "description": {
         "en": "Recommends a layout and style for your content and generates a publication-ready infographic.",
-        "zh-CN": "分析内容并推荐版式与风格组合，生成可发布的信息图。"
+        "zh-CN": "分析内容并推荐版式与风格组合，生成可发布的信息图。",
+        "ja": "コンテンツに最適なレイアウトとスタイルを提案し、そのまま公開できるインフォグラフィックを生成します。",
+        "es": "Recomienda un diseño y estilo para tu contenido y genera una infografía lista para publicar.",
+        "fr": "Recommande une mise en page et un style pour votre contenu et génère une infographie prête à publier.",
+        "de": "Empfiehlt Layout und Stil für Ihren Inhalt und erstellt eine veröffentlichungsreife Infografik.",
+        "ru": "Подбирает макет и стиль под ваш материал и создаёт готовую к публикации инфографику.",
+        "pt": "Recomenda um layout e estilo para seu conteúdo e gera um infográfico pronto para publicação."
       },
       "category": "content-creation",
       "author": "Jim Liu (宝玉)",
@@ -618,11 +990,23 @@
       "name": "baoyu-translate",
       "title": {
         "en": "Article translation",
-        "zh-CN": "文章翻译"
+        "zh-CN": "文章翻译",
+        "ja": "記事翻訳",
+        "es": "Traducción de artículos",
+        "fr": "Traduction d'articles",
+        "de": "Artikelübersetzung",
+        "ru": "Перевод статей",
+        "pt": "Tradução de artigos"
       },
       "description": {
         "en": "Translates and polishes articles between Chinese and English, keeping formatting and terminology consistent.",
-        "zh-CN": "中英文章翻译与精翻，保留格式与术语一致性。"
+        "zh-CN": "中英文章翻译与精翻，保留格式与术语一致性。",
+        "ja": "中国語と英語の間で記事を翻訳・推敲し、書式と用語の一貫性を保ちます。",
+        "es": "Traduce y pule artículos entre chino e inglés, manteniendo el formato y la coherencia terminológica.",
+        "fr": "Traduit et peaufine des articles entre le chinois et l'anglais en préservant mise en forme et cohérence terminologique.",
+        "de": "Übersetzt und verfeinert Artikel zwischen Chinesisch und Englisch unter Wahrung von Formatierung und konsistenter Terminologie.",
+        "ru": "Переводит и вычитывает статьи между китайским и английским языками, сохраняя форматирование и единство терминологии.",
+        "pt": "Traduz e refina artigos entre chinês e inglês, mantendo a formatação e a consistência terminológica."
       },
       "category": "docs-writing",
       "author": "Jim Liu (宝玉)",
@@ -639,11 +1023,23 @@
       "name": "vercel-deploy",
       "title": {
         "en": "Vercel deploy",
-        "zh-CN": "Vercel 部署"
+        "zh-CN": "Vercel 部署",
+        "ja": "Vercel デプロイ",
+        "es": "Despliegue en Vercel",
+        "fr": "Déploiement Vercel",
+        "de": "Vercel-Deployment",
+        "ru": "Деплой на Vercel",
+        "pt": "Implantação na Vercel"
       },
       "description": {
         "en": "Deploys apps and sites to Vercel and returns the link.",
-        "zh-CN": "把应用和网站部署到 Vercel，并返回访问链接。"
+        "zh-CN": "把应用和网站部署到 Vercel，并返回访问链接。",
+        "ja": "アプリやウェブサイトを Vercel にデプロイし、公開リンクを返します。",
+        "es": "Despliega aplicaciones y sitios en Vercel y devuelve el enlace.",
+        "fr": "Déploie des applications et sites sur Vercel et retourne le lien.",
+        "de": "Stellt Apps und Websites auf Vercel bereit und gibt den zugehörigen Link zurück.",
+        "ru": "Разворачивает приложения и сайты на Vercel и возвращает ссылку.",
+        "pt": "Implanta aplicativos e sites na Vercel e retorna o link de acesso."
       },
       "category": "devops",
       "author": "OpenAI",
@@ -660,11 +1056,23 @@
       "name": "netlify-deploy",
       "title": {
         "en": "Netlify deploy",
-        "zh-CN": "Netlify 部署"
+        "zh-CN": "Netlify 部署",
+        "ja": "Netlify デプロイ",
+        "es": "Despliegue en Netlify",
+        "fr": "Déploiement Netlify",
+        "de": "Netlify-Deployment",
+        "ru": "Деплой на Netlify",
+        "pt": "Implantação no Netlify"
       },
       "description": {
         "en": "Deploys, hosts or links sites with the Netlify CLI, preview deploys included.",
-        "zh-CN": "用 Netlify CLI 部署、托管或关联站点，包括预览部署。"
+        "zh-CN": "用 Netlify CLI 部署、托管或关联站点，包括预览部署。",
+        "ja": "Netlify CLI を使ってサイトのデプロイ・ホスティング・リンク設定を行います（プレビューデプロイ対応）。",
+        "es": "Despliega, aloja o vincula sitios con Netlify CLI, incluidos despliegues de vista previa.",
+        "fr": "Déploie, héberge ou relie des sites avec le CLI Netlify, déploiements d'aperçu inclus.",
+        "de": "Stellt Websites über die Netlify CLI bereit, hostet oder verknüpft sie – inklusive Vorschau-Deployments.",
+        "ru": "Разворачивает, размещает или связывает сайты с помощью Netlify CLI, включая превью-развёртывания.",
+        "pt": "Implanta, hospeda ou vincula sites com o Netlify CLI, incluindo implantações de pré-visualização."
       },
       "category": "devops",
       "author": "OpenAI",
@@ -681,11 +1089,23 @@
       "name": "cloudflare-deploy",
       "title": {
         "en": "Cloudflare deploy",
-        "zh-CN": "Cloudflare 部署"
+        "zh-CN": "Cloudflare 部署",
+        "ja": "Cloudflare デプロイ",
+        "es": "Despliegue en Cloudflare",
+        "fr": "Déploiement Cloudflare",
+        "de": "Cloudflare-Deployment",
+        "ru": "Деплой на Cloudflare",
+        "pt": "Implantação na Cloudflare"
       },
       "description": {
         "en": "Deploys apps and infrastructure on Cloudflare Workers, Pages and related services.",
-        "zh-CN": "用 Workers、Pages 等 Cloudflare 服务部署应用与基础设施。"
+        "zh-CN": "用 Workers、Pages 等 Cloudflare 服务部署应用与基础设施。",
+        "ja": "Cloudflare Workers、Pages および関連サービスへアプリやインフラをデプロイします。",
+        "es": "Despliega aplicaciones e infraestructura en Cloudflare Workers, Pages y servicios relacionados.",
+        "fr": "Déploie applications et infrastructure sur Cloudflare Workers, Pages et services associés.",
+        "de": "Stellt Apps und Infrastruktur auf Cloudflare Workers, Pages und zugehörigen Diensten bereit.",
+        "ru": "Разворачивает приложения и инфраструктуру на Cloudflare Workers, Pages и связанных сервисах.",
+        "pt": "Implanta aplicativos e infraestrutura em Cloudflare Workers, Pages e serviços relacionados."
       },
       "category": "devops",
       "author": "OpenAI",
@@ -702,11 +1122,23 @@
       "name": "render-deploy",
       "title": {
         "en": "Render deploy",
-        "zh-CN": "Render 部署"
+        "zh-CN": "Render 部署",
+        "ja": "Render デプロイ",
+        "es": "Despliegue en Render",
+        "fr": "Déploiement Render",
+        "de": "Render-Deployment",
+        "ru": "Деплой на Render",
+        "pt": "Implantação no Render"
       },
       "description": {
         "en": "Analyzes a codebase, writes a render.yaml Blueprint and deploys it to Render.",
-        "zh-CN": "分析代码库生成 render.yaml 蓝图，把应用部署到 Render。"
+        "zh-CN": "分析代码库生成 render.yaml 蓝图，把应用部署到 Render。",
+        "ja": "コードベースを解析して render.yaml の Blueprint を作成し、Render にデプロイします。",
+        "es": "Analiza una base de código, genera un Blueprint render.yaml y lo despliega en Render.",
+        "fr": "Analyse une base de code, rédige un Blueprint render.yaml et le déploie sur Render.",
+        "de": "Analysiert eine Codebasis, erstellt einen render.yaml-Blueprint und stellt ihn auf Render bereit.",
+        "ru": "Анализирует кодовую базу, создаёт схему render.yaml и разворачивает её на Render.",
+        "pt": "Analisa uma base de código, cria um Blueprint render.yaml e implanta no Render."
       },
       "category": "devops",
       "author": "OpenAI",
@@ -723,11 +1155,23 @@
       "name": "gh-fix-ci",
       "title": {
         "en": "Fix CI",
-        "zh-CN": "修复 CI"
+        "zh-CN": "修复 CI",
+        "ja": "CI 修正",
+        "es": "Corregir CI",
+        "fr": "Corriger la CI",
+        "de": "CI reparieren",
+        "ru": "Исправление CI",
+        "pt": "Corrigir CI"
       },
       "description": {
         "en": "Inspects failing GitHub Actions checks and logs with gh, explains the failure and drafts a fix.",
-        "zh-CN": "用 gh 查看失败的 GitHub Actions 检查与日志，总结原因并起草修复。"
+        "zh-CN": "用 gh 查看失败的 GitHub Actions 检查与日志，总结原因并起草修复。",
+        "ja": "gh で失敗した GitHub Actions のチェックとログを調査し、原因を説明して修正案を作成します。",
+        "es": "Inspecciona comprobaciones y registros fallidos de GitHub Actions con gh, explica el fallo y redacta una corrección.",
+        "fr": "Inspecte les vérifications et journaux GitHub Actions en échec avec gh, explique la panne et rédige un correctif.",
+        "de": "Prüft fehlgeschlagene GitHub-Actions-Checks und Logs mit gh, erklärt die Ursache und entwirft eine Lösung.",
+        "ru": "Изучает упавшие проверки и логи GitHub Actions через gh, объясняет причину сбоя и готовит исправление.",
+        "pt": "Inspeciona verificações e logs com falha do GitHub Actions usando gh, explica a falha e elabora uma correção."
       },
       "category": "development",
       "author": "OpenAI",
@@ -744,11 +1188,23 @@
       "name": "gh-address-comments",
       "title": {
         "en": "Address PR comments",
-        "zh-CN": "处理 PR 评论"
+        "zh-CN": "处理 PR 评论",
+        "ja": "PR コメント対応",
+        "es": "Atender comentarios de PR",
+        "fr": "Traiter les commentaires de PR",
+        "de": "PR-Kommentare bearbeiten",
+        "ru": "Работа с комментариями PR",
+        "pt": "Tratar comentários de PR"
       },
       "description": {
         "en": "Works through the review comments on the current branch's pull request.",
-        "zh-CN": "逐条处理当前分支 PR 上的评审意见。"
+        "zh-CN": "逐条处理当前分支 PR 上的评审意见。",
+        "ja": "現在のブランチの PR に寄せられたレビューコメントを順に対応します。",
+        "es": "Resuelve paso a paso los comentarios de revisión del pull request de la rama actual.",
+        "fr": "Passe en revue et traite les commentaires de révision sur la pull request de la branche courante.",
+        "de": "Arbeitet die Review-Kommentare im Pull Request des aktuellen Branches ab.",
+        "ru": "Последовательно разбирает замечания ревью в pull request текущей ветки.",
+        "pt": "Percorre e resolve os comentários de revisão no pull request da branch atual."
       },
       "category": "development",
       "author": "OpenAI",
@@ -765,11 +1221,23 @@
       "name": "playwright",
       "title": {
         "en": "Playwright",
-        "zh-CN": "浏览器自动化"
+        "zh-CN": "浏览器自动化",
+        "ja": "Playwright",
+        "es": "Playwright",
+        "fr": "Playwright",
+        "de": "Playwright",
+        "ru": "Playwright",
+        "pt": "Playwright"
       },
       "description": {
         "en": "Automates a real browser from the terminal: navigation, forms, screenshots, extraction and flow debugging.",
-        "zh-CN": "在终端里自动操作真实浏览器：导航、填表、截图、抓取数据与调试流程。"
+        "zh-CN": "在终端里自动操作真实浏览器：导航、填表、截图、抓取数据与调试流程。",
+        "ja": "端末から実ブラウザを自動操作し、画面遷移、フォーム入力、スクリーンショット、データ抽出、フローのデバッグを行います。",
+        "es": "Automatiza un navegador real desde la terminal: navegación, formularios, capturas, extracción y depuración de flujos.",
+        "fr": "Automatise un véritable navigateur depuis le terminal : navigation, formulaires, captures d'écran, extraction et débogage de parcours.",
+        "de": "Automatisiert einen echten Browser aus dem Terminal: Navigation, Formulare, Screenshots, Datenextraktion und Flow-Debugging.",
+        "ru": "Автоматизирует реальный браузер из терминала: навигация, формы, скриншоты, извлечение данных и отладка сценариев.",
+        "pt": "Automatiza um navegador real pelo terminal: navegação, formulários, capturas de tela, extração e depuração de fluxos."
       },
       "category": "development",
       "author": "OpenAI",
@@ -786,11 +1254,23 @@
       "name": "security-best-practices",
       "title": {
         "en": "Security best practices",
-        "zh-CN": "安全最佳实践"
+        "zh-CN": "安全最佳实践",
+        "ja": "セキュリティベストプラクティス",
+        "es": "Buenas prácticas de seguridad",
+        "fr": "Bonnes pratiques de sécurité",
+        "de": "Sicherheits-Best-Practices",
+        "ru": "Практики безопасности",
+        "pt": "Boas práticas de segurança"
       },
       "description": {
         "en": "Reviews code against language- and framework-specific security practices and suggests fixes.",
-        "zh-CN": "按语言和框架审查代码的安全实践并给出改进建议。"
+        "zh-CN": "按语言和框架审查代码的安全实践并给出改进建议。",
+        "ja": "言語・フレームワークごとのセキュリティ指針に照らしてコードをレビューし、修正案を提示します。",
+        "es": "Revisa el código según las prácticas de seguridad de cada lenguaje y framework, y propone correcciones.",
+        "fr": "Audite le code selon les bonnes pratiques de sécurité propres au langage et au framework, et propose des correctifs.",
+        "de": "Prüft Code anhand sprach- und frameworkspezifischer Sicherheitspraktiken und schlägt Verbesserungen vor.",
+        "ru": "Проверяет код на соответствие практикам безопасности для конкретного языка и фреймворка и предлагает исправления.",
+        "pt": "Revisa o código conforme práticas de segurança específicas da linguagem e do framework e sugere correções."
       },
       "category": "development",
       "author": "OpenAI",
@@ -807,11 +1287,23 @@
       "name": "jupyter-notebook",
       "title": {
         "en": "Jupyter notebook",
-        "zh-CN": "Jupyter 笔记本"
+        "zh-CN": "Jupyter 笔记本",
+        "ja": "Jupyter ノートブック",
+        "es": "Cuaderno Jupyter",
+        "fr": "Notebook Jupyter",
+        "de": "Jupyter-Notebook",
+        "ru": "Ноутбук Jupyter",
+        "pt": "Notebook Jupyter"
       },
       "description": {
         "en": "Creates and edits Jupyter notebooks for experiments, explorations and tutorials.",
-        "zh-CN": "为实验、探索或教程创建和编辑 Jupyter 笔记本。"
+        "zh-CN": "为实验、探索或教程创建和编辑 Jupyter 笔记本。",
+        "ja": "実験、データ探索、チュートリアル向けの Jupyter ノートブックを作成・編集します。",
+        "es": "Crea y edita cuadernos Jupyter para experimentos, exploraciones y tutoriales.",
+        "fr": "Crée et modifie des notebooks Jupyter pour des expériences, explorations et tutoriels.",
+        "de": "Erstellt und bearbeitet Jupyter-Notebooks für Experimente, Analysen und Tutorials.",
+        "ru": "Создаёт и редактирует ноутбуки Jupyter для экспериментов, исследований и руководств.",
+        "pt": "Cria e edita notebooks Jupyter para experimentos, explorações e tutoriais."
       },
       "category": "research-analysis",
       "author": "OpenAI",
@@ -828,11 +1320,23 @@
       "name": "copywriting",
       "title": {
         "en": "Copywriting",
-        "zh-CN": "营销文案"
+        "zh-CN": "营销文案",
+        "ja": "コピーライティング",
+        "es": "Redacción publicitaria",
+        "fr": "Rédaction marketing",
+        "de": "Werbetexte",
+        "ru": "Копирайтинг",
+        "pt": "Copywriting"
       },
       "description": {
         "en": "Writes or rewrites marketing copy for home, landing, pricing and feature pages.",
-        "zh-CN": "撰写或改写首页、落地页、定价页等营销文案。"
+        "zh-CN": "撰写或改写首页、落地页、定价页等营销文案。",
+        "ja": "トップページ、LP、料金ページ、機能紹介ページ向けのマーケティングコピーを執筆・改善します。",
+        "es": "Redacta o reescribe textos de marketing para páginas de inicio, destino, precios y funciones.",
+        "fr": "Rédige ou réécrit les textes marketing des pages d'accueil, d'atterrissage, de tarification et de fonctionnalités.",
+        "de": "Verfasst oder überarbeitet Marketingtexte für Start-, Landing-, Preis- und Funktionsseiten.",
+        "ru": "Пишет и переписывает маркетинговые тексты для главной страницы, лендингов, страниц тарифов и возможностей.",
+        "pt": "Escreve ou reescreve textos de marketing para páginas iniciais, landing pages, páginas de preços e recursos."
       },
       "category": "marketing",
       "author": "Corey Haines",
@@ -849,11 +1353,23 @@
       "name": "seo-audit",
       "title": {
         "en": "SEO audit",
-        "zh-CN": "SEO 审查"
+        "zh-CN": "SEO 审查",
+        "ja": "SEO 監査",
+        "es": "Auditoría SEO",
+        "fr": "Audit SEO",
+        "de": "SEO-Audit",
+        "ru": "SEO-аудит",
+        "pt": "Auditoria de SEO"
       },
       "description": {
         "en": "Audits a site for technical SEO and ranking issues and lists fixes.",
-        "zh-CN": "审查网站的技术 SEO 与排名问题，给出改进清单。"
+        "zh-CN": "审查网站的技术 SEO 与排名问题，给出改进清单。",
+        "ja": "サイトの技術的 SEO や検索順位の課題を監査し、改善リストを作成します。",
+        "es": "Audita un sitio en busca de problemas técnicos de SEO y posicionamiento, y enumera soluciones.",
+        "fr": "Audite un site pour déceler les problèmes techniques de SEO et de référencement, et dresse la liste des correctifs.",
+        "de": "Prüft eine Website auf technische SEO- und Ranking-Probleme und listet konkrete Maßnahmen auf.",
+        "ru": "Проводит аудит сайта на технические проблемы SEO и ранжирования и составляет список исправлений.",
+        "pt": "Audita um site em busca de problemas técnicos de SEO e ranqueamento e lista correções."
       },
       "category": "marketing",
       "author": "Corey Haines",
@@ -870,11 +1386,23 @@
       "name": "launch",
       "title": {
         "en": "Launch",
-        "zh-CN": "产品发布"
+        "zh-CN": "产品发布",
+        "ja": "プロダクトローンチ",
+        "es": "Lanzamiento",
+        "fr": "Lancement",
+        "de": "Produktlaunch",
+        "ru": "Запуск продукта",
+        "pt": "Lançamento"
       },
       "description": {
         "en": "Plans product launches, feature announcements and release timing.",
-        "zh-CN": "规划产品发布、功能公告与上线节奏。"
+        "zh-CN": "规划产品发布、功能公告与上线节奏。",
+        "ja": "製品リリース、新機能アナウンス、公開スケジュールの計画を立案します。",
+        "es": "Planifica lanzamientos de producto, anuncios de funciones y calendarios de publicación.",
+        "fr": "Planifie les lancements de produits, annonces de fonctionnalités et calendriers de sortie.",
+        "de": "Plant Produkteinführungen, Funktionsankündigungen und den Veröffentlichungszeitplan.",
+        "ru": "Планирует запуски продуктов, анонсы функций и график релизов.",
+        "pt": "Planeja lançamentos de produto, anúncios de recursos e cronogramas de publicação."
       },
       "category": "marketing",
       "author": "Corey Haines",

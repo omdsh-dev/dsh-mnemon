@@ -4,12 +4,14 @@ import { announces, describeChange, primaryOf } from './component-feedback.ts'
 import { componentCopy } from './component-copy.ts'
 import { locate, useToast } from './feedback.tsx'
 import type { MnemonTranslate } from './locales.ts'
+import { useLocalePreference } from './page-kit.tsx'
 import type { MnemonViewState, MnemonViewStore } from './view-store.ts'
 
 export function useViewFeedback(view: { store: MnemonViewStore; state: MnemonViewState }, root: RefObject<HTMLElement | null>, t: MnemonTranslate, language: string): ReactNode {
+  const localePreference = useLocalePreference(language)
   const toast = useToast()
   const show = toast.show
-  const name = useCallback((entry: MemoryPluginEntryView) => componentCopy(entry, language).label, [language])
+  const name = useCallback((entry: MemoryPluginEntryView) => componentCopy(entry, localePreference).label, [localePreference])
   const { store, state } = view
   const seenChange = useRef(state.change?.seq ?? 0)
   useEffect(() => {

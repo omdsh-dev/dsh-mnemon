@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "コンポーザブルメモリ (dsh-mnemon)",
+    "description": "プラガブルなソースと戦略、階層型メモリ、自己進化スキルを備えた DeepSeek Harness 向けコンポーザブルビューコンテキスト。",
+    "detail": "locale/detail.ja.md"
+  }
+}

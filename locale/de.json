@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Zusammensetzbarer Speicher (dsh-mnemon)",
+    "description": "Zusammensetzbarer Ansichtskontext für DeepSeek Harness mit steckbaren Quellen, Strategien, mehrstufigem Speicher und selbstevolvierenden Skills.",
+    "detail": "locale/detail.de.md"
+  }
+}

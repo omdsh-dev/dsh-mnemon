@@ -3,7 +3,7 @@ import {
   Button, Checkbox, IconChevronDownOutlineRegular, IconEllipsisOutlineRegular, MarkdownText, Menu, PathLabel, StateDot, Tag, TextShimmer,
   type MarkdownLabels, type StateDotState, type TagTone,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { EmptyState, Reveal, SidebarModal, useLocale } from 'dsh-mnemon/client'
+import { EmptyState, Reveal, SidebarModal } from 'dsh-mnemon/client'
 import type { EvolutionSignal, RunStatus, SuggestionStatus, TrajectoryAnnotation, TrajectoryStep } from '../contracts.ts'
 import { css, useT, type SkillsKey, type SkillsTranslate } from './presentation.ts'
 
@@ -202,14 +202,11 @@ export function diffLabels(t: SkillsTranslate) {
 }
 
 export function SkillMarkdown(props: { body: string }): JSX.Element {
-  const locale = useLocale()
-  const labels = useMemo<MarkdownLabels>(() => {
-    const zh = locale.startsWith('zh')
-    return {
-      code: { copyLabel: zh ? '复制' : 'Copy', copiedLabel: zh ? '已复制' : 'Copied' },
-      footnotes: zh ? '脚注' : 'Footnotes',
-    }
-  }, [locale])
+  const t = useT()
+  const labels = useMemo<MarkdownLabels>(() => ({
+    code: { copyLabel: t('diff.copy'), copiedLabel: t('diff.copied') },
+    footnotes: t('markdown.footnotes'),
+  }), [t])
   return <div className={css.skDoc}>{canRenderMarkdown ? <MarkdownText text={props.body} labels={labels} /> : props.body}</div>
 }
 

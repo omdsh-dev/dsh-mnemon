@@ -139,11 +139,19 @@ export function validateCapabilities(values: readonly string[], label: string): 
   return normalized as MemorySourceManifest['capabilities']
 }
 
+const LOCALE_TAG = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u
+
 function localizedText(value: MemoryPluginLocalizedText, label: string): MemoryPluginLocalizedText {
-  return deepFreeze({
+  const result: Record<string, string> = {
     en: requiredText(value.en, `${label} (English)`, 4_000),
     'zh-CN': requiredText(value['zh-CN'], `${label} (Simplified Chinese)`, 4_000),
-  })
+  }
+  for (const [key, entry] of Object.entries(value)) {
+    if (key === 'en' || key === 'zh-CN' || !LOCALE_TAG.test(key) || typeof entry !== 'string') continue
+    const translation = entry.trim()
+    if (translation.length > 0 && translation.length <= 4_000) result[key] = translation
+  }
+  return deepFreeze(result as unknown as MemoryPluginLocalizedText)
 }
 
 function pluginCapabilities(values: readonly string[], label: string): string[] {

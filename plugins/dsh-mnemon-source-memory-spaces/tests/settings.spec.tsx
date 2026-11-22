@@ -172,13 +172,11 @@ describe('Memory Spaces\' own settings', () => {
 })
 
 describe('translating as dsh-mnemon drew these settings, through DSH\'s language chain', () => {
-  const locales = [{ id: 'en' }, { id: 'zh', fallback: 'en' }, { id: 'ja', fallback: 'en' }]
-  /** DSH's language service over dsh-mnemon's own zh and en copy, with a `ja` pack that may translate some keys. */
+  const locales = [{ id: 'en' }, { id: 'zh', fallback: 'en' }, { id: 'ja', fallback: 'en' }, { id: 'ko', fallback: 'en' }]
   function dsh(active: string, pack: Record<string, string> = {}): DshLocale {
-    const own = active === 'zh' ? translateZh : t
+    const core = active === 'zh' ? coreZh : coreEn
     return {
-      // DSH walks the chain in the namespace, then shows the key itself.
-      bind: () => (key, params) => (active === 'ja' ? pack[key] : undefined) ?? (own(key, params) as string | undefined) ?? key,
+      bind: () => (key, params) => pack[key] ?? core(key, params),
       getSnapshot: () => ({ active, locales }),
       subscribe: () => () => {},
     }
@@ -188,18 +186,26 @@ describe('translating as dsh-mnemon drew these settings, through DSH\'s language
     render(<MemorySpacesSettings component={{ packageName: 'dsh-mnemon-source-memory-spaces', label: 'Memory Spaces', enabled }} writable language={language} host={host({}, { read }).lent} locale={locale} />)
 
   it('reads English for a language pack that falls back to English, as dsh-mnemon drew them', () => {
-    settings(dsh('ja'), 'ja')
+    settings(dsh('ko'), 'ko')
     expect(screen.getByRole('heading', { name: t('config.providersTitle') })).toBeTruthy()
   })
 
   it('takes what a language pack translates in dsh-mnemon\'s namespace', () => {
-    settings(dsh('ja', { 'config.providersTitle': 'メモリプロバイダー' }), 'ja')
-    expect(screen.getByRole('heading', { name: 'メモリプロバイダー' })).toBeTruthy()
+    settings(dsh('ko', { 'config.providersTitle': '메모리 프로바이더' }), 'ko')
+    expect(screen.getByRole('heading', { name: '메모리 프로바이더' })).toBeTruthy()
   })
 
-  it('answers from its own copy in Chinese and English', () => {
+  it('uses a language pack for Japanese settings even though the Source ships Japanese', () => {
+    settings(dsh('ja', { 'config.providersTitle': '追加パックのプロバイダー' }), 'ja')
+    expect(screen.getByRole('heading', { name: '追加パックのプロバイダー' })).toBeTruthy()
+  })
+
+  it('answers from its own copy in Chinese, English, and Japanese', () => {
     settings(dsh('zh'), 'zh')
     expect(screen.getByRole('heading', { name: translateZh('config.providersTitle') })).toBeTruthy()
+    cleanup()
+    settings(dsh('ja'), 'ja')
+    expect(screen.getByRole('heading', { name: (copy as Record<string, Record<string, string>>).ja!['config.providersTitle']! })).toBeTruthy()
     cleanup()
     settings(dsh('en'), 'en', false)
     expect(screen.getByText(t('spaces.offNote'))).toBeTruthy()
@@ -507,20 +513,19 @@ describe('Space policy, Recall & timeouts, and locale parity', { timeout: 20_000
     expect(changed).toHaveBeenCalledOnce()
   })
 
-  it('maintains 100% key parity and zero emoji characters across en and zh locales', () => {
+  it('maintains 100% key parity and zero emoji characters across all 8 locales', () => {
     const enKeys = Object.keys(copy.en).sort()
-    const zhKeys = Object.keys(copy.zh).sort()
-    expect(enKeys).toEqual(zhKeys)
     const emojiPattern = /\p{Extended_Pictographic}/u
-    for (const [key, value] of Object.entries(copy.en)) {
-      expect(typeof value, `en.${key}`).toBe('string')
-      expect(value.length, `en.${key}`).toBeGreaterThan(0)
-      expect(emojiPattern.test(value), `emoji in en.${key}`).toBe(false)
-    }
-    for (const [key, value] of Object.entries(copy.zh)) {
-      expect(typeof value, `zh.${key}`).toBe('string')
-      expect(value.length, `zh.${key}`).toBeGreaterThan(0)
-      expect(emojiPattern.test(value), `emoji in zh.${key}`).toBe(false)
+    const dictionaries = copy as Record<string, Record<string, string>>
+    for (const locale of ['en', 'zh', 'ja', 'es', 'fr', 'de', 'ru', 'pt']) {
+      const dict = dictionaries[locale]
+      expect(dict, `missing locale ${locale}`).toBeDefined()
+      expect(Object.keys(dict!).sort(), `key parity for ${locale}`).toEqual(enKeys)
+      for (const [key, value] of Object.entries(dict!)) {
+        expect(typeof value, `${locale}.${key}`).toBe('string')
+        expect(value.length, `${locale}.${key}`).toBeGreaterThan(0)
+        expect(emojiPattern.test(value), `emoji in ${locale}.${key}`).toBe(false)
+      }
     }
   })
 })

@@ -4,7 +4,9 @@ import type { MemoryJsonValue } from '../core/contracts/index.ts'
 import type { MemoryPluginEntryView, MemoryViewDashboard } from '../host/view-protocol.ts'
 import { componentCopy } from './component-copy.ts'
 import type { MnemonTranslate } from './locales.ts'
+import { pickLocalizedText, type LocalizedTextInput } from './localized-text.ts'
 import css from './MnemonSettingsCard.module.css'
+import { useLocalePreference } from './page-kit.tsx'
 import { PanelActions } from './settings-panel.tsx'
 
 type Field = MemoryPluginEntryView['fields'][number]
@@ -66,11 +68,11 @@ export interface ComponentOptionsProps {
 
 export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
   const { entry, t } = props
+  const localePreference = useLocalePreference(props.language)
   const id = useId()
   const [draft, setDraft] = useState(() => initial(entry))
   const [confirmEmptySources, setConfirmEmptySources] = useState(false)
-  const zh = props.language.toLowerCase().startsWith('zh')
-  const text = (value: { en: string; 'zh-CN': string } | undefined): string => value === undefined ? '' : zh ? value['zh-CN'] : value.en
+  const text = (value: LocalizedTextInput | undefined): string => pickLocalizedText(value, localePreference)
   const results = entry.fields.map(field => ({ field, result: parse(field, draft[field.key]!, t) }))
   const invalid = results.some(({ field, result }) => draft[field.key]!.own && 'error' in result)
   const config: Config = Object.fromEntries(results.flatMap(({ field, result }) => draft[field.key]!.own && 'value' in result ? [[field.key, result.value]] : []))
@@ -86,7 +88,7 @@ export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
   const locked = props.disabled || props.pending
   const sourceName = (sourceTypeId: string, fallback: string): string => {
     const component = props.dashboard.entries.find(candidate => candidate.roles.includes('source') && candidate.typeId === sourceTypeId)
-    return component === undefined ? fallback : componentCopy(component, props.language).label
+    return component === undefined ? fallback : componentCopy(component, localePreference).label
   }
 
   return <div className={css.optionsPanel} role="group" aria-label={t('options.aria', { component: props.name })}>

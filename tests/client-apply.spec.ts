@@ -10,7 +10,7 @@ const { mountBetterSidebar } = vi.hoisted(() => ({
 vi.mock('../src/client/better-sidebar.tsx', () => ({ mountBetterSidebarTab: mountBetterSidebar }))
 
 import { apply, inject } from '../src/client/index.ts'
-import { en, zh } from '../src/client/locales.ts'
+import { mnemonLocales, type MnemonKey, type MnemonLocaleId, zh } from '../src/client/locales.ts'
 import type { MnemonActionSeat } from '../src/client/action-seat.ts'
 import { MnemonPluginActions } from '../src/client/MnemonPluginActions.tsx'
 import { MnemonComponentListSeat } from '../src/client/component-list-seat.ts'
@@ -29,7 +29,8 @@ afterEach(() => {
 function workspaceContext(initialValue: Record<string, unknown>, load: () => Promise<Record<string, unknown>> = async () => initialValue) {
   let value = initialValue
   let revision = 0
-  let active: 'zh' | 'en' = 'zh'
+  let localeSnapshot: { active: MnemonLocaleId; locales: readonly never[]; revision: number } = { active: 'zh', locales: [], revision: 0 }
+  let localeDictionaries: Record<string, Record<MnemonKey, string>> = {}
   const slots: Record<string, unknown>[] = []
   const workspaceStops: ReturnType<typeof vi.fn>[] = []
   /** Scoped `ctx.inject` calls; a test provides a service by applying the matching callbacks. */
@@ -50,9 +51,12 @@ function workspaceContext(initialValue: Record<string, unknown>, load: () => Pro
     inject: vi.fn((deps: string[], applyScoped: (inner: Record<string, unknown>) => void) => { injected.push({ deps, apply: applyScoped }) }),
     layout: { selectPanel: vi.fn() },
     locale: {
-      register: vi.fn(() => () => {}),
-      bind: vi.fn(() => (key: keyof typeof zh) => (active === 'zh' ? zh : en)[key]),
-      getSnapshot: vi.fn(() => ({ active, locales: [], revision: 0 })),
+      register: vi.fn((_namespace: string, dictionaries: Record<string, Record<MnemonKey, string>>) => {
+        localeDictionaries = dictionaries
+        return () => { localeDictionaries = {} }
+      }),
+      bind: vi.fn(() => (key: MnemonKey) => localeDictionaries[localeSnapshot.active === 'zh' ? 'zh' : 'en']?.[key] ?? key),
+      getSnapshot: vi.fn(() => localeSnapshot),
       subscribe: vi.fn(() => () => {}),
     },
     slots: {
@@ -73,7 +77,10 @@ function workspaceContext(initialValue: Record<string, unknown>, load: () => Pro
   const provide = (name: string, service: unknown): void => {
     for (const entry of injected) if (entry.deps.includes(name)) entry.apply({ [name]: service, effect: context.effect })
   }
-  return { context, slots, scope, settingsEntry, workspaceStops, provide, setLocale: (locale: 'zh' | 'en') => { active = locale } }
+  const setLocale = (active: MnemonLocaleId): void => {
+    localeSnapshot = { ...localeSnapshot, active, revision: localeSnapshot.revision + 1 }
+  }
+  return { context, slots, scope, settingsEntry, workspaceStops, provide, setLocale }
 }
 
 describe('Mnemon Web client composition', () => {
@@ -103,7 +110,7 @@ describe('Mnemon Web client composition', () => {
   it('keeps a locale-bound Sidebar with Source child-render authority and conversation actions', async () => {
     const { context, slots, scope, settingsEntry, setLocale } = workspaceContext({})
     expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'uiSession', 'connection', 'locale', 'layout'])
-    expect(context.locale.register).toHaveBeenCalledWith('mnemon', { zh, en })
+    expect(context.locale.register).toHaveBeenCalledWith('mnemon', { en: mnemonLocales.en, zh })
     await vi.waitFor(() => expect(slots).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'shell.overlay', id: 'mnemon', children: { 'mnemon.source.page': { kind: 'list', scope: 'root' }, 'mnemon.component.status': { kind: 'keyed', scope: 'root' } } }),
       expect.objectContaining({ name: 'conversation.chat.assistant-actions', id: 'mnemon-save' }),
@@ -114,6 +121,8 @@ describe('Mnemon Web client composition', () => {
     expect((save.inject as (id: string) => { settingsScope: unknown })('session-1').settingsScope).toBe(scope)
     setLocale('en')
     expect(props.t('config.storageTitle')).toBe('Storage')
+    setLocale('ja')
+    expect(props.t('config.storageTitle')).toBe(mnemonLocales.ja['config.storageTitle'])
     expect(slots.some(options => options.name === 'conversation.view')).toBe(false)
   })
 

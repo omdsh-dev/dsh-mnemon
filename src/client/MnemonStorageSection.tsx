@@ -11,6 +11,7 @@ import css from './MnemonSettingsCard.module.css'
 import { MnemonPackSection, type PackTarget } from './MnemonPackSection.tsx'
 import { MnemonReviewSection } from './MnemonReviewSection.tsx'
 import { MnemonSyncSection } from './MnemonSyncSection.tsx'
+import { useLocalePreference } from './page-kit.tsx'
 import { AdvancedSection, SelectRow, SettingRow } from './settings-controls.tsx'
 import { PanelActions, useLive, WriteFailure, useStaged } from './settings-panel.tsx'
 import type { MnemonClient } from './api.ts'
@@ -98,6 +99,7 @@ export interface MnemonStorageSectionProps {
 
 export function MnemonStorageSection(props: MnemonStorageSectionProps): JSX.Element {
   const { t } = props
+  const localePreference = useLocalePreference(props.language)
   const value = props.value ?? {}
   const excludedCount = (value.excludedWorkspaces ?? []).length
   const exclusion = useStaged({ paths: (value.excludedWorkspaces ?? []).join('\n') }, async draft => {
@@ -180,7 +182,7 @@ export function MnemonStorageSection(props: MnemonStorageSectionProps): JSX.Elem
     <div className={css.sectionHeading}>
       <h2 id="mnemon-storage-heading">{t('config.storageTitle')}</h2>
       <ComponentChips label={t('storage.usedBy')} chips={users.map(entry => {
-        const name = componentCopy(entry, props.language).label
+        const name = componentCopy(entry, localePreference).label
         return { key: entry.entryId, name, on: entry.enabled, title: t('storage.usedByTitle', { component: name }), open: () => props.onOpen(entry) }
       })} />
     </div>

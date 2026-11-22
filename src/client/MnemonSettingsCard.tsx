@@ -21,7 +21,8 @@ import { TaskAgentModelRows, useTaskAgentModel } from './task-agent-model.tsx'
 import { useViewStore } from './view-store.ts'
 import css from './MnemonSettingsCard.module.css'
 import { isRecord } from './is-record.ts'
-import { translateZh, type MnemonTranslate } from './locales.ts'
+import { translateFor, type MnemonTranslate } from './locales.ts'
+import { useLocalePreference } from './page-kit.tsx'
 import { usePackTarget } from './MnemonPackSection.tsx'
 import { MnemonStorageSection } from './MnemonStorageSection.tsx'
 import type { MnemonDirectoryPicker } from './picker.ts'
@@ -68,7 +69,9 @@ function dataRelevantConfigKey(status: 'loading' | 'ready' | 'unavailable', valu
   ])
 }
 
-export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, connection, directoryPicker, sessionId, workspaceId, workspaceLabel, t = translateZh, language = 'zh', componentChanges = NO_CHANGE_SIGNAL, componentSettings, component, componentList = NO_COMPONENT_LIST }: MnemonSettingsCardProps): JSX.Element | null {
+export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, connection, directoryPicker, sessionId, workspaceId, workspaceLabel, language = 'zh', t: translate, componentChanges = NO_CHANGE_SIGNAL, componentSettings, component, componentList = NO_COMPONENT_LIST }: MnemonSettingsCardProps): JSX.Element | null {
+  const localePreference = useLocalePreference(language)
+  const t = translate ?? translateFor(localePreference)
   const interactionScope = suppliedInteractionScope ?? scope as unknown as ClientSettingsScope<InteractionConfig>
   const coreSnapshot = useScope(scope)
   const interactionSnapshot = useScope(interactionScope)
@@ -143,12 +146,12 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const settingsRenderer = useMemo<ComponentSettingsRenderer | undefined>(() => componentSettings === undefined ? undefined : {
     has: packageName => componentSettings.has(packageName),
     render: (entry, writableNow, section) => componentSettings.render(entry, {
-      enabled: entry.enabled, label: componentCopy(entry, language).label, writable: writableNow, language,
+      enabled: entry.enabled, label: componentCopy(entry, localePreference).label, writable: writableNow, language,
       ...(sessionId === undefined ? {} : { sessionId }),
       ...(workspaceId === undefined ? {} : { workspace: { id: workspaceId, ...(workspaceLabel === undefined ? {} : { label: workspaceLabel }) } }),
       ...(section === undefined ? {} : { section }),
     }),
-  }, [componentSettings, language, sessionId, workspaceId, workspaceLabel])
+  }, [componentSettings, language, localePreference, sessionId, workspaceId, workspaceLabel])
 
   if (coreSnapshot.status === 'unavailable' && interactionSnapshot.status === 'unavailable') {
     return <section className={css.page} aria-label={t('config.aria')}><p className={css.error} role="alert">{t('config.unavailable')}</p></section>

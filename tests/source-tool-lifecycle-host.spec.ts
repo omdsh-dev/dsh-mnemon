@@ -392,6 +392,9 @@ it.each([
         asks++
         expect(request.displayReason?.zh).toContain('请确认本次记忆修改')
         expect(request.displayReason?.en).toContain('Review this memory change')
+        for (const lang of ['ja', 'es', 'fr', 'de', 'ru', 'pt']) {
+          expect(request.displayReason?.[lang]?.trim().length ?? 0, `displayReason.${lang}`).toBeGreaterThan(0)
+        }
         expect((await f.graph.source('documents').read('document', { id }) as { content: string }).content).toBe('Synthetic original content.')
         return outcome
       }) as never)

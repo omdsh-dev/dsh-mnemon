@@ -43,38 +43,53 @@ function interpolate(text: string, params?: Record<string, unknown>): string {
   return params === undefined ? text : text.replace(/\{(\w+)\}/g, (match, name: string) => name in params ? String(params[name]) : match)
 }
 
+const SHIPPED_LOCALES = ['en', 'zh', 'ja', 'es', 'fr', 'de', 'ru', 'pt'] as const
+type ShippedLocale = typeof SHIPPED_LOCALES[number]
+type LocalePreference = string | readonly string[]
+const SHIPPED_LOCALE_SET: ReadonlySet<string> = new Set(SHIPPED_LOCALES)
+
+const useLocalePreference: (language: string) => LocalePreference = 'useLocalePreference' in mnemonClient
+  ? mnemonClient.useLocalePreference
+  : language => language
+
+function shippedLocale(preference: LocalePreference): ShippedLocale {
+  const candidates = typeof preference === 'string' ? [preference.trim().replaceAll('_', '-').split('-')[0]!] : preference
+  return candidates.map(id => id.toLowerCase()).find((id): id is ShippedLocale => SHIPPED_LOCALE_SET.has(id)) ?? 'en'
+}
+
+function sourceTranslate(bound: Translate, preference: LocalePreference): Translate {
+  const dictionaries = copy as Record<ShippedLocale, Readonly<Record<SourceKey, string>>>
+  const dictionary = dictionaries[shippedLocale(preference)]
+  const packFirst = typeof preference === 'string'
+    ? !/^(en|zh)([-_]|$)/i.test(preference)
+    : preference[0] !== 'en' && preference[0] !== 'zh'
+  return (key, params) => {
+    if (packFirst) {
+      const text = bound(key, params)
+      if (text !== key) return text
+    }
+    return Object.hasOwn(dictionary, key) ? interpolate(dictionary[key as SourceKey], params) : bound(key, params)
+  }
+}
+
 export function useT(): Translate {
   const override = useContext(TranslationOverride)
   const fallback = useSharedT()
-  const locale = useLocale()
-  return useMemo(() => override ?? ((key: SourceKey | MnemonKey, params?: Record<string, unknown>) => {
-    const dictionary = locale.toLowerCase().startsWith('zh') ? copy.zh : copy.en
-    if (!/^(en|zh)(-|$)/i.test(locale)) {
-      const translated = fallback(key as MnemonKey, params)
-      if (translated !== key) return translated
-    }
-    if (!Object.hasOwn(dictionary, key)) return fallback(key as MnemonKey, params)
-    return interpolate(dictionary[key as SourceKey], params)
-  }), [override, locale, fallback])
+  const preference = useLocalePreference(useLocale())
+  return useMemo(() => override ?? sourceTranslate(fallback, preference), [override, preference, fallback])
 }
 
 export function languageChain(snapshot: DshLocaleSnapshot): string[] {
   const fallbacks = new Map(snapshot.locales.map(locale => [locale.id, locale.fallback]))
   const chain: string[] = []
-  for (let id: string | undefined = snapshot.active; id !== undefined && !chain.includes(id); id = fallbacks.get(id)) chain.push(id)
+  for (let id: string | undefined = snapshot.active; id !== undefined; id = fallbacks.get(id)) {
+    if (chain.includes(id) || (chain.length > 0 && !fallbacks.has(id))) break
+    chain.push(id)
+  }
+  if (!chain.includes('en')) chain.push('en')
   return chain
 }
 
 export function settingsTranslate(locale: DshLocale, chain: readonly string[] | undefined, language: string): Translate {
-  const bound = locale.bind('mnemon')
-  const head = chain === undefined ? language.toLowerCase().startsWith('zh') ? 'zh' : 'en' : chain.find(id => id === 'zh' || id === 'en') ?? 'en'
-  const own: Readonly<Record<string, string>> = head === 'en' ? copy.en : copy.zh
-  const packFirst = chain !== undefined && chain.length > 0 && chain[0] !== head
-  return (key, params) => {
-    if (packFirst) {
-      const text = bound(key as MnemonKey, params)
-      if (text !== key) return text
-    }
-    return Object.hasOwn(own, key) ? interpolate(own[key]!, params) : bound(key as MnemonKey, params)
-  }
+  return sourceTranslate(locale.bind('mnemon'), chain ?? language)
 }

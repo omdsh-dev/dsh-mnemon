@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Memória de execução",
+    "description": "Memória ativa limitada e determinística, injetada diretamente em cada turno elegível."
+  }
+}

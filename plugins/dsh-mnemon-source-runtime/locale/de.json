@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Laufzeitspeicher",
+    "description": "Begrenzter, deterministischer Direktspeicher, der direkt in jede geeignete Runde eingefügt wird."
+  }
+}

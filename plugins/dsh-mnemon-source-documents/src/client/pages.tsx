@@ -14,14 +14,11 @@ function PathText(props: { path: string }): JSX.Element {
 }
 
 function DocumentMarkdown(props: { content: string }): JSX.Element {
-  const locale = useLocale()
-  const labels = useMemo<MarkdownLabels>(() => {
-    const zh = locale.startsWith('zh')
-    return {
-      code: { copyLabel: zh ? '复制' : 'Copy', copiedLabel: zh ? '已复制' : 'Copied' },
-      footnotes: zh ? '脚注' : 'Footnotes',
-    }
-  }, [locale])
+  const t = useT()
+  const labels = useMemo<MarkdownLabels>(() => ({
+    code: { copyLabel: t('documents.markdown.copy'), copiedLabel: t('documents.markdown.copied') },
+    footnotes: t('documents.markdown.footnotes'),
+  }), [t])
   return (
     <div className={css.markdownBody}>
       {canRenderMarkdown ? <MarkdownText text={props.content} labels={labels} /> : props.content}

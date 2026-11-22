@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Mémoire d'exécution",
+    "description": "Mémoire vive bornée et déterministe injectée directement dans chaque tour éligible."
+  }
+}
