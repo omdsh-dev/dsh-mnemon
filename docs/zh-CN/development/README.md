@@ -161,7 +161,7 @@ Source 页面保留中文和英文文案。其他语言优先使用 Host 绑定�
 | `--native-directory-picker` | 使用 DSH 正式发布的原生 Host/UI 目录选择器包，替代默认浏览式夹具；在宿主显示器打开系统目录选择器 | [PR #355](https://github.com/omdsh-dev/dsh-mnemon/pull/355) |
 | `--live-model` | 改由 DeepSeek API 作答，而不是回环模型桩，脚本化模型随之关闭。密钥读取 `DEEPSEEK_API_KEY`，设置了 `DEEPSEEK_BASE_URL` 时也读取它作为端点，两者都不会保存 | — |
 | `--log-model-requests` | 每行 `Fixture model request:` 还以 JSON 给出该请求所用的模型、由谁发出（`conversation` 为会话，`title` 为 DSH 的会话标题，`memory task` 为带有 Mnemon 完成协议的子 Agent）、工具数量，以及请求设定时的思考模式与推理强度。不能与替换模型桩的 `--live-model` 同用 | — |
-| `--docs-demo`（中文）、`--docs-demo=en` | 预置[WebUI 图集](../../assets/webui-v0.5.32/README.md)与[技能管理图集](../../assets/skills-v0.5.34/README.md)使用的虚构项目 Lumen：用户画像与工作记忆、六份项目档案、三个记忆空间以及六个技能、复盘证据、测试用例与回测。加上 `--live-model` 时由真实模型作答；界面变化后应以这种方式重新采集图集。`Docs demo:` | — |
+| `--docs-demo`（中文）、`--docs-demo=en` | 预置[WebUI 图集](../../assets/webui/README.md)与[技能管理图集](../../assets/skills/README.md)使用的虚构项目 Lumen：用户画像与工作记忆、六份项目档案、三个记忆空间以及六个技能、复盘证据、测试用例与回测。加上 `--live-model` 时由真实模型作答；界面变化后应以这种方式重新采集图集。`Docs demo:` | — |
 | `--plugin=<包目录>` | 再把一个测试用插件链接进 profile，可重复使用以链接多个 | [#340](https://github.com/omdsh-dev/dsh-mnemon/issues/340) |
 | `--better-sidebar=<包目录>` | 把一个布局或皮肤包（例如 Better Sidebar 或 ORCA LINK 皮肤）链接进 profile | [#232](https://github.com/omdsh-dev/dsh-mnemon/issues/232) |
 | `--electron=<可执行文件>` | 将正式发布的 DSH Web 栈运行在真实的 Electron 主进程内，Host 不设置 `ELECTRON_RUN_AS_NODE`，也无需重新编译 DSH；macOS 上指向 `Electron.app/Contents/MacOS/Electron`。通过 `npm_config_prefix` 给测试用 Electron 指定隔离的 npm 安装，通过 `MNEMON_CLI_PATH` 指定 CLI | [#201](https://github.com/omdsh-dev/dsh-mnemon/issues/201) |

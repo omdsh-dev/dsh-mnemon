@@ -204,10 +204,10 @@ Desktop 可能删除插件 generation 内的私有 `@deepseek-ai/*` 包，改用
 
 ### 产品素材
 
-[WebUI 图集](../../assets/webui-v0.5.32/README.md)覆盖双语桌面页面、DSH 的插件页与可组合记忆的页面，以及 390 × 844 下的窄屏布局（较长名称会截断，英文界面中当前的记忆系统标签可能位于屏幕之外）。它没有复测所有 Host 设置页、DSH 0.2.0 或真实手机，因此不宣称完整支持手机。
+[WebUI 图集](../../assets/webui/README.md)覆盖双语桌面页面、DSH 的插件页与可组合记忆的页面，以及 390 × 844 下的窄屏布局（较长名称会截断，英文界面中当前的记忆系统标签可能位于屏幕之外）。它没有复测所有 Host 设置页、DSH 0.2.0 或真实手机，因此不宣称完整支持手机。
 
 <a id="其他记录"></a>
 
 ### 旧版宿主
 
-较早 DSH 宿主上的历史版本记录见[安装图集](../../assets/install-v0.5.19/README.md)与 [CHANGELOG.zh-CN.md](../../../CHANGELOG.zh-CN.md)。
+较早 DSH 宿主上的历史版本记录见[安装图集](../../assets/install/README.md)与 [CHANGELOG.zh-CN.md](../../../CHANGELOG.zh-CN.md)。

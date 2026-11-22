@@ -14,7 +14,7 @@ Not installed yet? [Install and start](./installation.md) takes you from install
 
 Click **Memory System** in the sidebar. It opens on **Status**.
 
-![Status with each memory component and the Providers](../../assets/webui-v0.5.32/en/memory-status.jpg)
+![Status with each memory component and the Providers](../../assets/webui/en/memory-status.jpg)
 
 Check that:
 
@@ -43,7 +43,7 @@ In an empty storage root, the first Mnemon Native space uses Mnemon's `default` 
 
 **Check it.** Open **Memory Spaces → Recall**, ask a concrete question and choose **Search**. Each result keeps its memory space, category, importance and score; copy its id when you need it.
 
-![Direct search across the active memory spaces](../../assets/webui-v0.5.32/en/memory-recall.jpg)
+![Direct search across the active memory spaces](../../assets/webui/en/memory-recall.jpg)
 
 You can also use conversation commands:
 
@@ -61,7 +61,7 @@ Ask a question that depends on what you stored, and let the Agent decide whether
 - a **Turn memory** line appears if the turn used memory; expand it to see the documents and memories each tool read or wrote, and select one to open it where it lives;
 - the brain mark under the reply is **Save to memory**: it opens an editable dialog, **Cancel** writes nothing, and sending it to the task Agent returns a receipt.
 
-![An answer that uses working memory and Project Documents, with the documents the turn read](../../assets/webui-v0.5.32/en/chat-recall.jpg)
+![An answer that uses working memory and Project Documents, with the documents the turn read](../../assets/webui/en/chat-recall.jpg)
 
 Ordinary conversation does not force recall. Current requests, repository files and live tool results outrank remembered history.
 
@@ -71,7 +71,7 @@ Ordinary conversation does not force recall. Current requests, repository files 
 
 Open **Plugins → dsh-mnemon**, or the gear in the Memory System header.
 
-![The Memory composition board](../../assets/webui-v0.5.32/en/plugin-composition.jpg)
+![The Memory composition board](../../assets/webui/en/plugin-composition.jpg)
 
 - **Main strategy**: keep the **Layered strategy**, or choose the **General strategy** to offer every available source in one budget and let the model decide.
 - **Memory sources**: Runtime memory, Project Documents and Memory Spaces, one switch each. Turning one off stops its context, tools and background work without deleting data.

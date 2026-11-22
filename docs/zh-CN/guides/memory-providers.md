@@ -6,7 +6,7 @@
 
 只有 Mnemon Native 需要 Mnemon CLI。缺少 CLI 时，其他已就绪的 Provider 也可以为记忆空间服务，已保存的 Provider 选择依然有效。
 
-![插件中的记忆空间页面：Mnemon Native 与各第三方 Provider](../../assets/webui-v0.5.32/zh-CN/plugin-spaces.jpg)
+![插件中的记忆空间页面：Mnemon Native 与各第三方 Provider](../../assets/webui/zh-CN/plugin-spaces.jpg)
 
 每个适配器都是独立发布的 `dsh-mnemon-provider-*` 包，由 Memory Spaces Source 作为子插件安装。Starter 随附九个包，外部服务仍需显式配置后启用；不捆绑外部后端服务或 CLI。参见[官方包列表](../../../README.zh-CN.md#官方插件)和 [Provider 作者契约](../development/extensions.md)。
 

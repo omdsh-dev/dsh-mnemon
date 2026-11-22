@@ -17,13 +17,13 @@
 
 <p align="center">
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/ui-guide.md#in-a-conversation">
-    <img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui-v0.5.32/en/recall.gif" alt="A question answered from working memory and Project Documents; the expanded turn memory bar opens the document it read in Project Documents" width="880" />
+    <img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui/en/recall.gif" alt="A question answered from working memory and Project Documents; the expanded turn memory bar opens the document it read in Project Documents" width="880" />
   </a>
 </p>
 
 <p align="center">
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/installation.md"><strong>Install and start</strong></a> ·
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/webui-v0.5.32/README.md">Watch the demo</a> ·
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/webui/README.md">Watch the demo</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/README.md">Documentation</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/development/extensions.md">Build a plugin</a>
 </p>
@@ -47,22 +47,22 @@ These recordings come from a real WebUI with the live DeepSeek model answering, 
 **Save a new fact to memory.** A reply reports a new measurement. Select the brain mark under it, cut the candidate down to the sentence worth keeping and send it to the task Agent; the receipt names the Memory Space it went to and opens it in one click.
 
 <p align="center">
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/ui-guide.md#save-to-memory"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui-v0.5.32/en/save.gif" alt="Save to memory: edit the candidate, look at where it can go and keep Let the Agent decide, send it to the task Agent, then view the new memory from the Saved receipt" width="880" /></a>
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/ui-guide.md#save-to-memory"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui/en/save.gif" alt="Save to memory: edit the candidate, look at where it can go and keep Let the Agent decide, send it to the task Agent, then view the new memory from the Saved receipt" width="880" /></a>
 </p>
 
 **See all memory in one place.** Status, runtime memory, Project Documents and Memory Spaces live in the Memory System. The graph links memories through the entities they mention, and Ask Agent answers with the memories it cites, by content.
 
 <p align="center">
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/ui-guide.md#the-memory-system"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui-v0.5.32/en/memory.gif" alt="The Memory System: status, runtime memory, a document, the Memory Spaces graph, then an Agent answer with citations" width="880" /></a>
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/ui-guide.md#the-memory-system"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui/en/memory.gif" alt="The Memory System: status, runtime memory, a document, the Memory Spaces graph, then an Agent answer with citations" width="880" /></a>
 </p>
 
 **Compose memory on the Plugins page.** One main strategy, its memory sources and optional enhancements, each switch applying at once. Every component has its own page, and storage, backup and interface settings live here too.
 
 <p align="center">
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/ui-guide.md#on-the-plugins-page"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui-v0.5.32/en/plugins.gif" alt="DSH's Plugins page, then dsh-mnemon's page: memory composition, the main strategy menu, the Layered strategy's and Memory Spaces' pages, then storage and interface" width="880" /></a>
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/ui-guide.md#on-the-plugins-page"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui/en/plugins.gif" alt="DSH's Plugins page, then dsh-mnemon's page: memory composition, the main strategy menu, the Layered strategy's and Memory Spaces' pages, then storage and interface" width="880" /></a>
 </p>
 
-Every step is explained in the [UI guide](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/ui-guide.md); all screens and recordings are listed in the [WebUI media gallery](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/webui-v0.5.32/README.md).
+Every step is explained in the [UI guide](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/ui-guide.md); all screens and recordings are listed in the [WebUI media gallery](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/webui/README.md).
 
 ## Three kinds of memory
 
@@ -80,7 +80,7 @@ The default **Layered strategy** keeps runtime memory resident and reads the oth
 
 | A turn's review suggests an improvement | You adopt it after a backtest |
 |---|---|
-| [![The Turn skills line under a reply: release-notes, suggested 1](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/skills-v0.5.34/en/chat-skills.jpg)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/skills.md#in-a-conversation) | [![A draft of release-notes with its backtest, Current 40 → Draft 93 +53, and the diff](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/skills-v0.5.34/en/skills-draft.jpg)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/skills.md#evolution) |
+| [![The Turn skills line under a reply: release-notes, suggested 1](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/skills/en/chat-skills.jpg)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/skills.md#in-a-conversation) | [![A draft of release-notes with its backtest, Current 40 → Draft 93 +53, and the diff](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/skills/en/skills-draft.jpg)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/skills.md#evolution) |
 
 - **Manage.** Switch a skill off for the model or the `/` menu, use it in the conversation in one click, edit it, and go back to any earlier version.
 - **Evolve.** With self-evolution on, finished conversations are reviewed in the background for corrections, "from now on" instructions, failed tools and reusable procedures. A suggestion cites the steps it rests on; a task Agent drafts the new `SKILL.md`, which is backtested against the current version before you adopt it. Manual **Adopt** remains the default; opt-in automatic adoption can process new idle-review suggestions after complete, non-regressing backtests.
@@ -102,7 +102,7 @@ npx @deepseek-ai/dsh web
 ```
 
 <p align="center">
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/installation.md"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/install-v0.5.19/en/install.gif" alt="On the Plugins page: Add plugin, type dsh-mnemon, Install, Enable now; the Memory System appears in the sidebar" width="880" /></a>
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/installation.md"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/install/en/install.gif" alt="On the Plugins page: Add plugin, type dsh-mnemon, Install, Enable now; the Memory System appears in the sidebar" width="880" /></a>
 </p>
 
 1. In the page that opens, click **Plugins → Add plugin**, type `dsh-mnemon`, click **Install**, then **Enable now**.

@@ -18,13 +18,13 @@
 
 <p align="center">
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/ui-guide.md#在对话中">
-    <img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui-v0.5.32/zh-CN/recall.gif" alt="提问后，回答用到工作记忆、项目档案与记忆空间；展开回合记忆栏，点击读到的档案，直接在项目档案中打开它" width="880" />
+    <img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui/zh-CN/recall.gif" alt="提问后，回答用到工作记忆、项目档案与记忆空间；展开回合记忆栏，点击读到的档案，直接在项目档案中打开它" width="880" />
   </a>
 </p>
 
 <p align="center">
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/installation.md"><strong>安装与启动</strong></a> ·
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/webui-v0.5.32/README.md">观看演示</a> ·
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/webui/README.md">观看演示</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/README.md">文档中心</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/development/extensions.md">制作插件</a>
 </p>
@@ -48,22 +48,22 @@
 **把新事实存进记忆。** 回复中出现了新的测量结果：点击回复下的脑形图标，把候选内容改成要记住的那一句，交给任务 Agent；回执写明存进了哪个记忆空间，一键即可查看。
 
 <p align="center">
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/ui-guide.md#存入记忆"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui-v0.5.32/zh-CN/save.gif" alt="存入记忆：编辑候选内容，查看可以存到哪里并保留“由 Agent 决定”，交给任务 Agent，收到已存入的回执后在记忆空间中查看新记忆" width="880" /></a>
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/ui-guide.md#存入记忆"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui/zh-CN/save.gif" alt="存入记忆：编辑候选内容，查看可以存到哪里并保留“由 Agent 决定”，交给任务 Agent，收到已存入的回执后在记忆空间中查看新记忆" width="880" /></a>
 </p>
 
 **在一处查看全部记忆。** 状态、运行时记忆、项目档案与记忆空间集中在记忆系统中；图谱按实体把记忆连接起来，Agent 查询给出按内容引用记忆的回答。
 
 <p align="center">
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/ui-guide.md#记忆系统"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui-v0.5.32/zh-CN/memory.gif" alt="记忆系统：依次查看状态、运行时记忆、项目档案、记忆空间图谱，再用 Agent 查询得到带引用的回答" width="880" /></a>
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/ui-guide.md#记忆系统"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui/zh-CN/memory.gif" alt="记忆系统：依次查看状态、运行时记忆、项目档案、记忆空间图谱，再用 Agent 查询得到带引用的回答" width="880" /></a>
 </p>
 
 **在插件页组合记忆。** 一个主策略、它的记忆来源与可选增强，每个开关即时生效；每个组件都有自己的页面，存储、备份与界面设置也在这里。
 
 <p align="center">
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/ui-guide.md#在插件页中"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui-v0.5.32/zh-CN/plugins.gif" alt="DSH 的插件页，再进入可组合记忆的页面：记忆组合、主策略菜单、分层策略与记忆空间的组件页，以及存储与界面" width="880" /></a>
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/ui-guide.md#在插件页中"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui/zh-CN/plugins.gif" alt="DSH 的插件页，再进入可组合记忆的页面：记忆组合、主策略菜单、分层策略与记忆空间的组件页，以及存储与界面" width="880" /></a>
 </p>
 
-更多画面与每一步的说明见[界面指南](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/ui-guide.md)，全部截图与录屏见 [WebUI 图集](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/webui-v0.5.32/README.md)。
+更多画面与每一步的说明见[界面指南](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/ui-guide.md)，全部截图与录屏见 [WebUI 图集](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/webui/README.md)。
 
 ## 三类记忆
 
@@ -81,7 +81,7 @@
 
 | 回合复盘提出改进 | 回测之后由你采纳 |
 |---|---|
-| [![回复下方的本回合技能一行：release-notes · 建议 1](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/skills-v0.5.34/zh-CN/chat-skills.jpg)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/skills.md#对话中) | [![release-notes 的草案：回测“当前 40 → 草案 93 +53”与差异](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/skills-v0.5.34/zh-CN/skills-draft.jpg)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/skills.md#进化) |
+| [![回复下方的本回合技能一行：release-notes · 建议 1](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/skills/zh-CN/chat-skills.jpg)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/skills.md#对话中) | [![release-notes 的草案：回测“当前 40 → 草案 93 +53”与差异](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/skills/zh-CN/skills-draft.jpg)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/skills.md#进化) |
 
 - **管理。** 让技能不被模型加载或不出现在 `/` 菜单里，一键在对话中使用，直接编辑，并能回到任意历史版本。
 - **进化。** 开启自进化后，对话结束会在后台复盘，寻找多次纠正、“以后都这样做”的指示、工具失败和可复用的流程。每条建议都标出所依据的步骤；任务 Agent 写出新的 `SKILL.md`，先与当前版本回测对比，再由你采纳。默认仍须手动**采纳**；可显式开启自动采纳，让新的空闲审查建议在完整回测不退步时落地。
@@ -103,7 +103,7 @@ npx @deepseek-ai/dsh web
 ```
 
 <p align="center">
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/installation.md"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/install-v0.5.19/zh-CN/install.gif" alt="在插件页点击添加插件，输入 dsh-mnemon，安装后立即启用，侧栏出现记忆系统" width="880" /></a>
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/installation.md"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/install/zh-CN/install.gif" alt="在插件页点击添加插件，输入 dsh-mnemon，安装后立即启用，侧栏出现记忆系统" width="880" /></a>
 </p>
 
 1. 在打开的页面中点击**插件 → 添加插件**，输入 `dsh-mnemon`，点击**安装**，再点击**立即启用**。
