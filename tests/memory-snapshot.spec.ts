@@ -394,7 +394,7 @@ describe('Source-neutral View guidance', () => {
     expect(SNAPSHOT_GUIDANCE).toContain('does not imply deletion from storage')
   })
 
-  it('uses pinned Strategy instructions and removes stale default instructions on a Strategy switch', () => {
+  it('keeps pinned View guidance ordered and removes stale instructions on a Strategy switch', () => {
     const assembly = {
       sections: [{ name: 'host', text: 'Host protocol' }, { name: 'mnemon:routing', text: 'stale routing' },
         { name: 'mnemon:strategy', text: 'stale strategy' }, { name: 'mnemon:runtime-memory-protocol', text: 'stale legacy' }],
@@ -402,12 +402,19 @@ describe('Source-neutral View guidance', () => {
     }
     const selected = { guidance: { system: 'Trusted instruction {{model}}', routing: 'Selected routing' } } as ComposableMemoryView
     const result = applyMemoryViewGuidance(assembly, selected)
-    expect(result.sections).toEqual([{ name: 'host', text: 'Host protocol' }, { name: 'mnemon:snapshot-history', text: SNAPSHOT_GUIDANCE },
-      { name: 'mnemon:strategy', text: 'Trusted instruction {{model}}' }, { name: 'mnemon:routing', text: 'Selected routing' }])
+    expect(result.sections).toEqual([
+      { name: 'host', text: 'Host protocol' },
+      { name: 'mnemon:snapshot-history', order: 148, text: SNAPSHOT_GUIDANCE },
+      { name: 'mnemon:strategy', order: 149, text: 'Trusted instruction {{model}}' },
+      { name: 'mnemon:routing', order: 150, text: 'Selected routing' },
+    ])
     expect(result.contexts).toEqual([])
     expect(assembly.sections).toHaveLength(4)
     const custom = applyMemoryViewGuidance(result, {} as ComposableMemoryView, false)
-    expect(custom.sections).toEqual([{ name: 'host', text: 'Host protocol' }, { name: 'mnemon:snapshot-history', text: SNAPSHOT_GUIDANCE }])
+    expect(custom.sections).toEqual([
+      { name: 'host', text: 'Host protocol' },
+      { name: 'mnemon:snapshot-history', order: 148, text: SNAPSHOT_GUIDANCE },
+    ])
     expect(applyMemoryViewGuidance(custom, undefined).sections).toEqual([{ name: 'host', text: 'Host protocol' }])
   })
 
