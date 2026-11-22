@@ -147,9 +147,9 @@ function localizedText(value: MemoryPluginLocalizedText, label: string): MemoryP
     'zh-CN': requiredText(value['zh-CN'], `${label} (Simplified Chinese)`, 4_000),
   }
   for (const [key, entry] of Object.entries(value)) {
-    if (key === 'en' || key === 'zh-CN' || entry === undefined) continue
-    if (!LOCALE_TAG.test(key)) throw new Error(`${label} contains invalid locale tag: ${key}`)
-    result[key] = requiredText(entry, `${label} (${key})`, 4_000)
+    if (key === 'en' || key === 'zh-CN' || !LOCALE_TAG.test(key) || typeof entry !== 'string') continue
+    const translation = entry.trim()
+    if (translation.length > 0 && translation.length <= 4_000) result[key] = translation
   }
   return deepFreeze(result as unknown as MemoryPluginLocalizedText)
 }

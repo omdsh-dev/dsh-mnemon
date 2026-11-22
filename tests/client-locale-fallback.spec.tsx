@@ -191,6 +191,27 @@ describe('Source locale fallback, built-in 8 languages, and language packs', () 
     expect(editor.fields[0]?.label).toEqual(label)
     expect(editor.fields[0]?.description).toEqual(label)
   })
+
+  it('accepts bilingual plugin descriptors with legacy extension metadata', () => {
+    const label = { en: 'Sample', 'zh-CN': '示例', fr: 'Exemple', 'x-metadata': { legacy: true } }
+    const plugin = defineMemoryPlugin({
+      packageName: 'dsh-mnemon-strategy-sample',
+      label,
+      description: label,
+      roles: ['strategy'],
+      provides: [{ id: 'strategy' }],
+    })
+    expect(plugin.label).toEqual({ en: 'Sample', 'zh-CN': '示例', fr: 'Exemple' })
+    const editor = defineMemoryStrategyConfiguration({
+      kind: 'strategy',
+      typeId: 'sample',
+      label,
+      description: label,
+      fields: [{ key: 'note', input: 'text', label }],
+      create: () => ({ plugin, strategies: [] }),
+    })
+    expect(pickLocalizedText(editor.fields[0]?.label, 'fr')).toBe('Exemple')
+  })
 })
 
 describe('Official DSH LocaleRuntime integration', () => {

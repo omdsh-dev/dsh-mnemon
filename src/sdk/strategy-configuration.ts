@@ -25,18 +25,10 @@ export function defineMemoryStrategyConfiguration(value: Omit<MemoryStrategyConf
 }
 
 export function readMemoryStrategyConfiguration(value: MemoryStrategyConfiguration): MemoryStrategyConfiguration {
-  const localeTag = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u
-  const text = (input: unknown) => {
-    if (typeof input !== 'object' || input === null || Array.isArray(input)) return false
-    const record = input as Record<string, unknown>
-    const required = ['en', 'zh-CN'].every(key => {
-      const item = record[key]
-      return typeof item === 'string' && item.trim() !== '' && item.length <= 4_000
-    })
-    if (!required) return false
-    return Object.entries(record).every(([key, item]) =>
-      item === undefined || (localeTag.test(key) && typeof item === 'string' && item.trim() !== '' && item.length <= 4_000))
-  }
+  const text = (input: unknown) => typeof input === 'object' && input !== null && ['en', 'zh-CN'].every(key => {
+    const item = (input as Record<string, unknown>)[key]
+    return typeof item === 'string' && item.trim() !== '' && item.length <= 4_000
+  })
   if (!value || value.apiVersion !== 'dsh-mnemon/strategy-configuration/v1' || typeof value.create !== 'function'
     || !['strategy', 'strategy-extension'].includes(value.kind) || !/^[a-z][a-z0-9-]{0,127}$/u.test(value.typeId)
     || !Array.isArray(value.fields) || value.fields.length > 16
