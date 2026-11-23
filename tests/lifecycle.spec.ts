@@ -509,6 +509,54 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.defaultModel.currentSelection).not.toHaveBeenCalled()
   })
 
+  it('omits coding presets and confines skill task Agents to read-only sandbox and never approval (#727)', async () => {
+    const value = fixture()
+    const appended: Array<{ type: string; data: unknown }> = []
+    value.createTaskAgent.mockImplementationOnce(async taskOptions => {
+      const taskCtx = {
+        get: (name: string) => name === 'sandboxPolicy'
+          ? { overrideOf: () => 'danger-full-access' }
+          : name === 'approval'
+            ? { overrideOf: () => 'ask' }
+            : undefined,
+        on: vi.fn(() => () => {}),
+        effect: vi.fn((callback: () => (() => unknown) | void) => {
+          const cleanup = callback()
+          return () => cleanup?.()
+        }),
+      }
+      const taskAgent = {
+        id: taskOptions.sessionId,
+        status: 'idle' as const,
+        ...(taskOptions.agentOptions === undefined ? {} : { options: taskOptions.agentOptions }),
+        session: {
+          header: taskOptions.meta ?? {},
+          snapshotEvents: () => [],
+          eventAt: () => undefined,
+          surface: { nodes: [] },
+          append: (type: string, data: unknown) => { appended.push({ type, data }) },
+        },
+        ctx: taskCtx as unknown as HostAgent['ctx'],
+        followup: vi.fn(),
+        steer: vi.fn(),
+        inject: vi.fn(),
+        cancel: vi.fn(),
+      }
+      await taskOptions.setup?.(taskCtx as never, taskAgent)
+      return { agent: taskAgent, dispose: vi.fn(async () => {}) }
+    })
+
+    await value.lifecycle.runSkillTask(workspaceTwo, new AbortController().signal, async () => 'done')
+
+    expect(value.agentPresets.resolve).not.toHaveBeenCalled()
+    expect(value.agentPresets.mount).not.toHaveBeenCalled()
+    expect(value.createTaskAgent.mock.calls[0]![0].meta).toEqual({ cwd: workspaceTwo, origin: 'subagent' })
+    expect(appended).toEqual([
+      { type: 'sandbox/mode', data: { mode: 'read-only', source: 'delegation' } },
+      { type: 'approval/policy', data: { policy: 'never', source: 'delegation' } },
+    ])
+  })
+
   it('follows the conversation that asked for the work once its inherited route is switched to follow it', async () => {
     const value = fixture(resolveConfig({ cliPath: '/fake/mnemon', taskAgentModel: { mode: 'inherit', followConversation: true } }), { sessionModel: { provider: 'ai', model: 'space-bunny', reasoningEffort: 'high' } })
 

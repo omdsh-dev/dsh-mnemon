@@ -162,6 +162,7 @@ export interface HostAgentContext {
   tools?: {
     execute?(input: HostToolExecutionInput): Promise<{ isError: boolean }>
     setExecutor?(executor: unknown): unknown
+    presentAs?(mode: 'native' | 'ptc'): unknown
     guard?(guard: (execution: ToolExecution) => string | undefined): unknown
     get?(name: string, scope?: HostAgent): unknown
     restrict?(filter: { allow?: string[]; deny?: string[] }): unknown
