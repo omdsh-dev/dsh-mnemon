@@ -24,13 +24,7 @@ function isAutoPermissionPreset(agent: HostAgent): boolean {
   }
 }
 
-function usesCodeModeSchemas(tools: HostTools, scope?: HostAgent): boolean | undefined {
-  const schemas = tools.schemas?.(scope)
-  if (!Array.isArray(schemas)) return undefined
-  return schemas.some(schema => schema?.name === RUN_CODE_TOOL) && !schemas.some(schema => schema?.name === RESULT_TOOL)
-}
-
-function resultToolVisible(tools: HostTools, agent: HostAgent): boolean {
+function resultToolVisible(tools: HostTools, agent?: HostAgent): boolean {
   if (typeof tools.executable === 'function') return tools.executable(RESULT_TOOL, agent) !== undefined
   if (typeof tools.get === 'function') return tools.get(RESULT_TOOL, agent) !== undefined
   return true
@@ -40,11 +34,11 @@ function probeCode(args: Record<string, unknown>): string {
   return `await tools.mnemon_subagent_result(${JSON.stringify(args)})`
 }
 
-function deniedByAgentGuards(tools: HostTools, agent: HostAgent, signal: AbortSignal): boolean {
-  if (typeof tools.checkGuards !== 'function') return false
-  const callId = randomUUID()
-  const args = Object.freeze({ requestId: randomUUID(), result: Object.freeze({}) })
-  const check = (name: string, input: Record<string, unknown>, parent?: symbol): boolean => tools.checkGuards!(Object.freeze({
+function deniedByAgentGuards(
+  tools: HostTools, agent: HostAgent, signal: AbortSignal, callId: string,
+  args: { requestId: string; result: Record<string, never> }, codeMode: boolean,
+): boolean {
+  const check = (name: string, input: Record<string, unknown>, parent?: symbol): boolean => tools.checkGuards?.(Object.freeze({
     token: Symbol('mnemon-review-admission'),
     callId,
     rootCallId: callId,
@@ -54,17 +48,9 @@ function deniedByAgentGuards(tools: HostTools, agent: HostAgent, signal: AbortSi
     signal,
     ...(parent === undefined ? {} : { parent }),
   })) !== undefined
-  if (check(RESULT_TOOL, args)) return true
-  if (usesCodeModeSchemas(tools, agent) !== true) return false
+  if (!codeMode) return check(RESULT_TOOL, args)
   return check(RUN_CODE_TOOL, { description: PROBE_DESCRIPTION, code: probeCode(args) })
     || check(RESULT_TOOL, args, Symbol('mnemon-review-admission-parent'))
-}
-
-function shouldTryCodeMode(tools: HostTools, probeAgent: HostAgent | undefined): boolean {
-  if (probeAgent !== undefined) return usesToolBatchExecution(tools) || tools.get?.(RUN_CODE_TOOL, probeAgent) !== undefined
-  const rootCodeMode = usesCodeModeSchemas(tools)
-  if (rootCodeMode !== undefined) return rootCodeMode
-  return usesToolBatchExecution(tools) || tools.get?.(RUN_CODE_TOOL) !== undefined
 }
 
 export class AutomaticReviewAdmission {
@@ -106,18 +92,24 @@ export class AutomaticReviewAdmission {
     if (tools?.execute === undefined) return unavailable('executor-unavailable')
     if (this.draining.has(agent)) return unavailable('check-in-flight')
     if (openAgentStep(agent) === undefined) return unavailable('no-open-step')
-    const autoPreset = isAutoPermissionPreset(agent)
-    const probeAgent = autoPreset ? undefined : agent
-    const eventHost: AdmissionEventHost = autoPreset ? (this.host ?? agent.ctx) : agent.ctx
+    const standaloneHost = usesToolBatchExecution(tools) && typeof tools.checkGuards === 'function' && isAutoPermissionPreset(agent)
+      ? this.host : undefined
+    const probeAgent = standaloneHost === undefined ? agent : undefined
+    const eventHost = standaloneHost ?? agent.ctx
     const controller = new AbortController()
     this.controllers.add(controller)
     const combined = AbortSignal.any([signal, controller.signal])
     const timeout = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS)
     timeout.unref?.()
-    const attempt = async (codeMode: boolean): Promise<boolean> => {
+    const attempt = async (codeMode: boolean): Promise<'available' | 'unknown-tool' | 'rejected'> => {
       combined.throwIfAborted()
       const requestId = randomUUID()
       const callId = randomUUID()
+      const args = { requestId, result: Object.freeze({}) }
+      if (standaloneHost !== undefined && deniedByAgentGuards(tools, agent, combined, callId, args, codeMode)) {
+        unavailable('handler-not-reached')
+        return 'rejected'
+      }
       const challenge: Challenge = { agent: probeAgent, accepted: false }
       this.challenges.set(requestId, challenge)
       const revoke = () => this.challenges.delete(requestId)
@@ -144,7 +136,6 @@ export class AutomaticReviewAdmission {
           }
           return decision
         }) as never, { prepend: true }))
-        const args = { requestId, result: {} }
         const pending = executeHostTool(tools, {
           callId, signal: combined,
           ...(probeAgent === undefined ? {} : { agent: probeAgent }),
@@ -160,9 +151,10 @@ export class AutomaticReviewAdmission {
         combined.throwIfAborted()
         if (challenge.execution !== undefined && challenge.accepted && outcome.isError === false) {
           this.statuses.set(agent, { state: 'available', checkedAt: new Date().toISOString() })
-          return true
+          return 'available'
         }
-        return unavailable(approvalRequired ? 'approval-required' : challenge.execution === undefined ? 'handler-not-reached' : 'result-rejected')
+        unavailable(approvalRequired ? 'approval-required' : challenge.execution === undefined ? 'handler-not-reached' : 'result-rejected')
+        return outcome.error?.code === 'UNKNOWN_TOOL' ? 'unknown-tool' : 'rejected'
       } finally {
         this.challenges.delete(requestId)
         combined.removeEventListener('abort', revoke)
@@ -170,11 +162,15 @@ export class AutomaticReviewAdmission {
       }
     }
     try {
-      if (autoPreset && (!resultToolVisible(tools, agent) || deniedByAgentGuards(tools, agent, combined))) {
+      if (standaloneHost !== undefined && (!resultToolVisible(tools, agent) || !resultToolVisible(tools))) {
         return unavailable('handler-not-reached')
       }
-      if (await attempt(false)) return true
-      return shouldTryCodeMode(tools, probeAgent) && await attempt(true)
+      const native = await attempt(false)
+      if (native === 'available') return true
+      const tryCodeMode = standaloneHost !== undefined
+        ? native === 'unknown-tool'
+        : usesToolBatchExecution(tools) || tools.get?.(RUN_CODE_TOOL, agent) !== undefined
+      return tryCodeMode && await attempt(true) === 'available'
     } catch {
       unavailable(signal.aborted ? 'cancelled' : this.disposed ? 'disposed' : controller.signal.aborted ? 'timeout' : 'execution-error')
       signal.throwIfAborted()

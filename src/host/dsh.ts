@@ -166,7 +166,6 @@ export interface HostAgentContext {
     checkGuards?(execution: ToolExecution): unknown
     executable?(name: string, scope?: HostAgent): unknown
     get?(name: string, scope?: HostAgent): unknown
-    schemas?(scope?: HostAgent): readonly { name?: string }[]
     restrict?(filter: { allow?: string[]; deny?: string[] }): unknown
   }
   systemPrompt?: {

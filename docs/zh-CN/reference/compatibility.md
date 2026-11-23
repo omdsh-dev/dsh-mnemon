@@ -165,7 +165,7 @@ Mnemon 消息使用 Session V3、V4 均接受的生产者专属来源 `dsh-mnemo
 
 ## PTC 空闲审查历史恢复
 
-v0.5.38 的自动审查可能在 `turn/end` 之后执行 PTC 可用性探测。DSH v4 读取器随后会以 `tool/ptc-dispatch-start is outside an open turn` 拒绝整个会话。v0.5.39–v0.5.43 将探针移到 `agent/turn-stopping` 后，虽然位于回合内，却仍在 step 外，留下的孤儿 PTC 记录可能让 Auto 审查拒绝此后所有工具调用（#602）。准入现改为在 `step/start` 之后、可等待的 `agent/request` 钩子中执行，同一回合和策略至多检查一次，并在 step 关闭前等待全部收尾；停止钩子只消费检查结果。普通原生工具/PTC 自动审查保留权限检查、配额与取消语义。当会话启用原生 `auto` 权限预设时，准入会检查 Agent 作用域的工具可见性与守卫（`tools.executable` / `tools.get` 及宿主提供的 `tools.checkGuards`），并以不绑定会话的独立宿主调用完成可用性探测，避免写入孤儿 `tool/ptc-dispatch-start` 记录和触发 `AUTO_REVIEW_FAILED` 缺少根调用报错（#704）；后台审查 Agent 自身由模型发起的工具调用仍继续接受 Auto 审查与既有工具守卫。升级防止新增 step 外记录，不自动改写已有历史。
+v0.5.38 的自动审查可能在 `turn/end` 之后执行 PTC 可用性探测。DSH v4 读取器随后会以 `tool/ptc-dispatch-start is outside an open turn` 拒绝整个会话。v0.5.39–v0.5.43 将探针移到 `agent/turn-stopping` 后，虽然位于回合内，却仍在 step 外，留下的孤儿 PTC 记录可能让 Auto 审查拒绝此后所有工具调用（#602）。准入现改为在 `step/start` 之后、可等待的 `agent/request` 钩子中执行，同一回合和策略至多检查一次，并在 step 关闭前等待全部收尾；停止钩子只消费检查结果。普通原生工具/PTC 自动审查保留权限检查、配额与取消语义。宿主支持批量工具执行与 `tools.checkGuards` 时，启用原生 `auto` 权限预设的会话会先检查 Agent 作用域的工具可见性与守卫，并以不绑定会话的独立宿主调用完成可用性探测，避免写入孤儿 `tool/ptc-dispatch-start` 记录和触发 `AUTO_REVIEW_FAILED` 缺少根调用报错（#704）；后台审查 Agent 自身由模型发起的工具调用仍继续接受 Auto 审查与既有工具守卫。旧宿主继续使用绑定 Agent 的探测。升级防止新增 step 外记录，不自动改写已有历史。
 
 对于受影响的**未继承历史的 v4 根会话**，包内恢复 CLI 可以生成单独副本。先停止 DSH，备份整个会话目录，并在已存在的备份目录中选择新输出路径：
 

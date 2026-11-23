@@ -298,7 +298,6 @@ describe('AutomaticReviewAdmission under DSH 0.2.2 batch Auto review (issue 704)
 
   function createBatchAutoHarness(options: {
     rootPtc?: boolean
-    agentPtc?: boolean
     executableVisible?: boolean
     guardDeny?: (execution: { name?: string; agent?: HostAgent; parent?: symbol }) => string | undefined
     rootAsk?: boolean
@@ -341,9 +340,6 @@ describe('AutomaticReviewAdmission under DSH 0.2.2 batch Auto review (issue 704)
     const tools = {
       setExecutor: () => undefined,
       executable: (name: string) => name === 'mnemon_subagent_result' && options.executableVisible === false ? undefined : { name },
-      schemas: (scope?: HostAgent) => (scope === undefined ? options.rootPtc : options.agentPtc)
-        ? [{ name: 'run_code' }]
-        : [{ name: 'mnemon_subagent_result' }],
       checkGuards: (execution: { name?: string; agent?: HostAgent; parent?: symbol }) => {
         guardChecks.push({ name: execution.name, agent: execution.agent, nested: execution.parent !== undefined })
         const reason = options.guardDeny?.(execution)
@@ -361,7 +357,7 @@ describe('AutomaticReviewAdmission under DSH 0.2.2 batch Auto review (issue 704)
         }
         const rootPtc = options.rootPtc === true
         if (rootPtc && call.name !== 'run_code') {
-          return { results: [{ callId: call.id, result: { isError: true } }], additionalContexts: [], concluded: false }
+          return { results: [{ callId: call.id, result: { isError: true, error: { code: 'UNKNOWN_TOOL' } } }], additionalContexts: [], concluded: false }
         }
         const parsed = JSON.parse(call.arguments) as { requestId?: string; code?: string }
         const args = call.name === 'run_code'
@@ -403,21 +399,18 @@ describe('AutomaticReviewAdmission under DSH 0.2.2 batch Auto review (issue 704)
     return { admission, agent, dispatches, guardChecks }
   }
 
-  it('uses standalone native batch probe and agent checkGuards when agent uses Code Mode under Auto', async () => {
-    const h = createBatchAutoHarness({ agentPtc: true })
+  it("uses the standalone native probe with the agent's result tool guard under Auto", async () => {
+    const h = createBatchAutoHarness()
     expect(await h.admission.check(h.agent, new AbortController().signal)).toBe(true)
     expect(h.admission.status(h.agent)).toEqual({ state: 'available', checkedAt: expect.any(String) })
     expect(h.dispatches).toEqual([{ name: 'mnemon_subagent_result', agent: undefined }])
     expect(h.guardChecks).toEqual([
       { name: 'mnemon_subagent_result', agent: h.agent, nested: false },
-      { name: 'run_code', agent: h.agent, nested: false },
-      { name: 'mnemon_subagent_result', agent: h.agent, nested: true },
     ])
   })
 
   it('rejects admission when agent-scoped checkGuards denies mnemon_subagent_result or run_code under Auto', async () => {
     const deniedTool = createBatchAutoHarness({
-      agentPtc: true,
       guardDeny: exec => exec.agent !== undefined && exec.name === 'mnemon_subagent_result' ? 'Blocked by agent guard.' : undefined,
     })
     expect(await deniedTool.admission.check(deniedTool.agent, new AbortController().signal)).toBe(false)
@@ -425,34 +418,47 @@ describe('AutomaticReviewAdmission under DSH 0.2.2 batch Auto review (issue 704)
     expect(deniedTool.dispatches).toEqual([])
 
     const deniedPtc = createBatchAutoHarness({
-      agentPtc: true,
+      rootPtc: true,
       guardDeny: exec => exec.agent !== undefined && exec.name === 'run_code' ? 'Blocked run_code.' : undefined,
     })
     expect(await deniedPtc.admission.check(deniedPtc.agent, new AbortController().signal)).toBe(false)
     expect(deniedPtc.admission.status(deniedPtc.agent)).toMatchObject({ state: 'unavailable', reason: 'handler-not-reached' })
-    expect(deniedPtc.dispatches).toEqual([])
+    expect(deniedPtc.dispatches).toEqual([{ name: 'mnemon_subagent_result', agent: undefined }])
+  })
+
+  it('retains the scoped probe when an Auto host cannot check agent guards', async () => {
+    const h = createBatchAutoHarness()
+    delete h.agent.ctx.tools!.checkGuards
+    expect(await h.admission.check(h.agent, new AbortController().signal)).toBe(false)
+    expect(h.dispatches.length).toBeGreaterThan(0)
+    expect(h.dispatches.every(dispatch => dispatch.agent === h.agent)).toBe(true)
   })
 
   it('rejects admission when executable hides mnemon_subagent_result under Auto', async () => {
-    const h = createBatchAutoHarness({ agentPtc: true, executableVisible: false })
+    const h = createBatchAutoHarness({ executableVisible: false })
     expect(await h.admission.check(h.agent, new AbortController().signal)).toBe(false)
     expect(h.admission.status(h.agent)).toMatchObject({ state: 'unavailable', reason: 'handler-not-reached' })
     expect(h.dispatches).toEqual([])
   })
 
   it('preserves approval-required without trying run_code when root executor is native under Auto', async () => {
-    const h = createBatchAutoHarness({ agentPtc: true, rootAsk: true })
+    const h = createBatchAutoHarness({ rootAsk: true })
     expect(await h.admission.check(h.agent, new AbortController().signal)).toBe(false)
     expect(h.admission.status(h.agent)).toMatchObject({ state: 'unavailable', reason: 'approval-required' })
     expect(h.dispatches).toEqual([{ name: 'mnemon_subagent_result', agent: undefined }])
   })
 
   it('falls back to standalone run_code when the root executor itself is PTC under Auto', async () => {
-    const h = createBatchAutoHarness({ rootPtc: true, agentPtc: true })
+    const h = createBatchAutoHarness({ rootPtc: true })
     expect(await h.admission.check(h.agent, new AbortController().signal)).toBe(true)
     expect(h.dispatches).toEqual([
       { name: 'mnemon_subagent_result', agent: undefined },
       { name: 'run_code', agent: undefined },
+    ])
+    expect(h.guardChecks).toEqual([
+      { name: 'mnemon_subagent_result', agent: h.agent, nested: false },
+      { name: 'run_code', agent: h.agent, nested: false },
+      { name: 'mnemon_subagent_result', agent: h.agent, nested: true },
     ])
   })
 })

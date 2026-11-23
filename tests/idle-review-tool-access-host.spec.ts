@@ -36,6 +36,7 @@ const fork = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-fork-in-
 const sessionApi = await import(requireDsh.resolve('@deepseek-ai/dsh-session'))
 const format = await import(requireDsh.resolve('@deepseek-ai/dsh-session-format-v3-to-v4'))
 const ptc = await import(requireDsh.resolve('@deepseek-ai/dsh-ptc-runtime-node'))
+const toolRuntime = (await import(requireDsh.resolve('@deepseek-ai/dsh-tools'))).default.prototype
 const ptcServices = await Promise.all(['dsh-fs-local', 'dsh-subprocess-local', 'dsh-sandbox-local', 'dsh-sandbox-policy']
   .map(name => import(requireDsh.resolve(`@deepseek-ai/${name}`))))
 
@@ -66,8 +67,14 @@ async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = 
         ? options.messages.find(message => message.role === 'user')?.content.find(block => block.type === 'text' && block.text.startsWith('ENVIRONMENT\n'))
         : undefined
       if (reviewBlock?.type === 'text') {
-        const actionJson = reviewBlock.text.split('\n\nPENDING_ACTION\n\n')[1]
-        const actionName = actionJson === undefined ? '' : String((JSON.parse(actionJson) as { name?: unknown }).name ?? '')
+        const legacyAction = reviewBlock.text.split('\n\nPENDING_ACTION\n\n')[1]
+        const pending = options.messages.findLast(message => message.role === 'user')?.content.findLast(block => block.type === 'text')
+        const actionText = legacyAction ?? (pending?.type === 'text' ? pending.text : undefined)
+        const action = actionText === undefined ? undefined : JSON.parse(actionText) as { kind?: string; name?: string }
+        if (typeof action?.name !== 'string' || legacyAction === undefined && action.kind !== 'tool-call') {
+          throw new Error('Expected a pending tool call in the Auto review request')
+        }
+        const actionName = action.name
         autoReviewActions.push(actionName)
         const text = autoDecision?.(actionName) ?? '{"risk":"low","decision":"allow"}'
         yield { type: 'block-start', index: 0, blockType: 'text' }
@@ -325,6 +332,7 @@ it.each([false, true])('never probes between step/end and turn/end (PTC=%s)', as
 })
 
 const hasAutoReview = (() => { try { requireDsh.resolve('@deepseek-ai/dsh-experimental-auto-review'); return true } catch { return false } })()
+const hasStandaloneAutoReview = hasAutoReview && typeof toolRuntime.setExecutor === 'function' && typeof toolRuntime.checkGuards === 'function'
 it.skipIf(!hasAutoReview).each([false, true])('keeps foreground tools usable after switching to published Auto review (PTC=%s)', async codeMode => {
   const f = await fixture('spawn', false, codeMode, true)
   try {
@@ -338,7 +346,7 @@ it.skipIf(!hasAutoReview).each([false, true])('keeps foreground tools usable aft
   } finally { await f.close() }
 })
 
-it.skipIf(!hasAutoReview).each([
+it.skipIf(!hasStandaloneAutoReview).each([
   { provider: 'spawn', codeMode: false },
   { provider: 'spawn', codeMode: true },
   { provider: 'fork', codeMode: false },
@@ -371,7 +379,7 @@ it.skipIf(!hasAutoReview).each([
   } finally { await f.close() }
 }, 20_000)
 
-it.skipIf(!hasAutoReview)('keeps Auto review gating active on idle review child writes (issue 704)', async () => {
+it.skipIf(!hasStandaloneAutoReview)('keeps Auto review gating active on idle review child writes (issue 704)', async () => {
   const f = await fixture('spawn', false, true, true, true, undefined, action => action === 'mnemon_runtime_memory'
     ? '{"risk":"medium","decision":"deny","reason":"Synthetic Auto denial"}'
     : '{"risk":"low","decision":"allow"}')
@@ -389,7 +397,7 @@ it.skipIf(!hasAutoReview)('keeps Auto review gating active on idle review child 
   } finally { await f.close() }
 }, 20_000)
 
-it.skipIf(!hasAutoReview).each([false, true])('still honors global policies and agent tool restrictions under published Auto review (PTC=%s, issue 704)', async codeMode => {
+it.skipIf(!hasStandaloneAutoReview).each([false, true])('still honors global policies and agent tool restrictions under published Auto review (PTC=%s, issue 704)', async codeMode => {
   const f = await fixture('spawn', false, codeMode, true)
   try {
     f.live.config.idleReview.enabled = false
