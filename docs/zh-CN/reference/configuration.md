@@ -47,6 +47,7 @@ mnemon:
   defaultRecallLimit: 10
   runtimeMemory:
     inheritToSubagents: false
+    snapshotRefresh: on-change # on-change | session-start
     memoryLimitBytes: 10240
     userLimitBytes: 4096
     maintenanceMaxTokens: 8192
@@ -112,6 +113,7 @@ mnemon:
 | `runtimeMemory.userLimitBytes` | `4096` | 1–1048576 字节 | 完整 `USER.md` 投影的 UTF-8 字节上限 |
 | `runtimeMemory.bm25Recall` | `false` | 布尔 | 在 Layered 主对话实验性地匹配工作记忆和项目文档标题 |
 | `runtimeMemory.indexPush` | `false` | 布尔 | 在 Layered 主对话首步实验性地推送记忆空间名称/说明与项目档案摘要的轻量索引 |
+| `runtimeMemory.snapshotRefresh` | `on-change` | `on-change` / `session-start` | 记忆变化时在已打开会话的下一轮重新投影（`on-change`），或会话开始后冻结初始快照以保持缓存稳定（`session-start`），新会话与召回工具仍实时读取最新记忆 |
 | `runtimeMemory.maintenanceMaxTokens` | `8192` | 128–131072 tokens | Runtime 迁移与压缩 worker 的完成 token 预算；不改变项目档案归档与元信息维护预算 |
 | `documents.limitBytes` | `10485760` | 1–104857600 字节 | 项目档案活跃副本的总 UTF-8 字节上限（默认 10 MiB） |
 | `embedding` | `{ enabled: false, endpoint: http://localhost:11434, model: nomic-embed-text, apiKey: '', protocol: auto }` | enabled + HTTP(S) endpoint + model + 可选 apiKey + protocol（auto/ollama/openai） | 开启后，Host 为每个 Mnemon CLI 子进程注入保存的 endpoint、模型、API Key 与协议覆盖；endpoint 以 `/v1` 结尾时 Mnemon 自动使用 OpenAI 兼容协议并以 Bearer 头携带 apiKey，`protocol: openai` 可对非 `/v1` 端点显式指定；关闭后不干预既有 Host 环境和 Mnemon 默认值 |
@@ -172,6 +174,18 @@ Git 同步的默认提交者跟随 Host 在 `state/sync/git` 中解析的 Git �
 在 **插件 → dsh-mnemon → 运行时记忆** 中，**子 Agent 自动继承 Runtime 记忆**控制是否自动注入用户画像与工作记忆。开关**默认关闭**；已有配置未设置该字段时也保持关闭。可以通过界面开启，或设置 `runtimeMemory.inheritToSubagents: true`。
 
 设置作用于新建子 Agent。每个子 Agent 在派发时捕获当前选择，并与委托记忆 View 一起保留，运行中切换设置不会改变该任务的选择。开启后，在每轮首个被接受的步骤追加捕获的 Runtime 投影，兼容原生工具与 PTC；后续工具步骤不重复追加，也不改写已有请求前缀。开关只过滤各个 Runtime Source 实例的投影，父任务明确提供的上下文、记忆工具访问、其他来源投影及后台维护的必要输入仍按原规则工作；不会移除任务或会话历史中已经包含的内容。
+
+### 会话开始时冻结运行时快照
+
+运行时记忆设置页的**快照刷新策略**对应 `runtimeMemory.snapshotRefresh`，默认为 `on-change`。在 `on-change` 模式下，`USER.md` 或 `MEMORY.md` 发生变化后，已打开会话会在下一轮重新投影更新后的运行时快照。
+
+选择**会话开始时冻结**（`runtimeMemory.snapshotRefresh: session-start`）可将实时记忆存储与已打开会话的提示词前缀解耦：
+
+- Source 确认投影完整且 Git 分支可见性明确后，会话保留初始运行时快照，同会话写入、并行会话写入或闲时审查更新存储时均继续使用该快照；
+- 新建会话立即获取最新运行时快照，显式工具（`mnemon_recall`、`mnemon_runtime_memory`、`mnemon_document_search`、`mnemon_view_route`）继续实时读写最新存储；
+- 权限、范围、策略、工作区排除与 Git 分支可见边界保持 fail-closed，发生变化时仍立即退役并刷新受影响快照；DSH 压缩成功后，Mnemon 会在下一个被接受的步骤重新投影最新快照并继续冻结。
+
+该选项不修改任何记忆数据或会话日志格式；切回 `on-change` 或删除该字段即可在下一轮恢复按变化刷新。
 
 ### 低优先级 Runtime 条目按需读取
 

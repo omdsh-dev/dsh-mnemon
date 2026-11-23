@@ -90,7 +90,7 @@ async function fixture(mode: Mode, start = true, runtimeMemory?: RuntimeMemoryCo
     const host = ctx as unknown as HostContextShape
     coordinator = new MnemonSubagentCoordinator(host.subagents, f.live, host)
     stopTools = registerTools(host, f.live, coordinator, f.extensions)
-    const lifecycle = new MnemonLifecycle(host, coordinator, f.config, f.live)
+    const lifecycle = new MnemonLifecycle(host, coordinator, f.live.config, f.live)
     const stopLifecycle = () => { stop?.(); stop = undefined }
     const startLifecycle = () => { stopLifecycle(); stop = lifecycle.start() }
     if (start) startLifecycle()
@@ -1188,4 +1188,133 @@ it.each([
     }
     expect(handle.agent.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.id === legacy.id)).toBe(true)
   } finally { await handle.dispose(); await f.close() }
+})
+
+it('freezes open-session snapshots under snapshotRefresh=session-start while new sessions and live tools see updates', async () => {
+  const f = await fixture('native', true, { snapshotRefresh: 'session-start', deferLowPriority: true })
+  const createNamed = (id: string) => f.ctx.agents.create({
+    sessionId: SessionId(id),
+    meta: { cwd: f.workspace },
+    agentOptions: { provider: 'fixture', model: 'fixture' },
+  })
+  let sessionA = await createNamed('freeze-session-a')
+  let sessionB = await createNamed('freeze-session-b')
+  let sessionC: Awaited<ReturnType<typeof createNamed>> | undefined
+  try {
+    await f.turn(sessionA.agent)
+    await f.turn(sessionB.agent)
+    const initialA = f.requests.filter(request => request.sessionId === 'freeze-session-a')
+    const initialB = f.requests.filter(request => request.sessionId === 'freeze-session-b')
+    const generationA = sessionA.agent.session.surface.contentGeneration
+    const generationB = sessionB.agent.session.surface.contentGeneration
+    expect(snapshots(initialA.at(-1)!.messages)).toHaveLength(1)
+    expect(snapshots(initialB.at(-1)!.messages)).toHaveLength(1)
+
+    await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Synthetic cross-session addition.' })
+    await f.graph.source('runtime').mutate('mutate', {
+      action: 'replace', target: 'memory', oldText: 'Synthetic turn-view retained fact.', content: 'Synthetic replaced retained fact.',
+    })
+    await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Synthetic deferred low note.', importance: 'low' })
+
+    await f.turn(sessionA.agent)
+    const liveReads: string[] = []
+    const stopRead = f.ctx.on('tools/execute', async (execution, next) => {
+      const result = await next()
+      if (execution.agent?.id === 'freeze-session-b' && execution.name === 'mnemon_status') {
+        const search = await executeTool(sessionB.agent.ctx, {
+          agent: sessionB.agent,
+          signal: new AbortController().signal,
+          callId: ToolCallId('freeze-live-runtime-search'),
+          name: 'mnemon_view_route',
+          arguments: { routeId: 'source:mnemon-source-runtime/search', input: { query: 'Synthetic' } },
+        })
+        expect(search.isError).toBe(false)
+        liveReads.push(JSON.stringify(search.content))
+      }
+      return result
+    })
+    try { await f.turn(sessionB.agent) } finally { stopRead() }
+    expect(liveReads).toHaveLength(1)
+    expect(liveReads[0]).toContain('Synthetic cross-session addition.')
+    expect(liveReads[0]).toContain('Synthetic replaced retained fact.')
+    expect(liveReads[0]).toContain('Synthetic deferred low note.')
+    const afterA = f.requests.filter(request => request.sessionId === 'freeze-session-a')
+    const afterB = f.requests.filter(request => request.sessionId === 'freeze-session-b')
+    expect(snapshots(afterA.at(-1)!.messages)).toEqual(snapshots(initialA.at(-1)!.messages))
+    expect(snapshots(afterB.at(-1)!.messages)).toEqual(snapshots(initialB.at(-1)!.messages))
+    expect(afterA[3]!.messages.slice(0, initialA.at(-1)!.messages.length)).toEqual(initialA.at(-1)!.messages)
+    expect(afterB[3]!.messages.slice(0, initialB.at(-1)!.messages.length)).toEqual(initialB.at(-1)!.messages)
+    expect(sessionA.agent.session.surface.contentGeneration).toBe(generationA)
+    expect(sessionB.agent.session.surface.contentGeneration).toBe(generationB)
+    expect(sessionA.agent.session.snapshotEvents().filter(event => event.type === 'developer/message' && event.data.message.source.kind === 'dsh-mnemon' && event.data.message.source.form === 'memory-snapshot-retired')).toHaveLength(0)
+    expect(sessionB.agent.session.snapshotEvents().filter(event => event.type === 'developer/message' && event.data.message.source.kind === 'dsh-mnemon' && event.data.message.source.form === 'memory-snapshot-retired')).toHaveLength(0)
+
+    await sessionB.dispose()
+    sessionB = await f.ctx.agents.resume({ resumeSessionId: SessionId('freeze-session-b'), agentOptions: { provider: 'fixture', model: 'fixture' } })
+    await f.turn(sessionB.agent)
+    const resumedB = f.requests.filter(request => request.sessionId === 'freeze-session-b')
+    expect(snapshots(resumedB.at(-1)!.messages)).toEqual(snapshots(initialB.at(-1)!.messages))
+
+    sessionC = await createNamed('freeze-session-c')
+    await f.turn(sessionC.agent)
+    const initialC = f.requests.filter(request => request.sessionId === 'freeze-session-c')
+    expect(snapshots(initialC.at(-1)!.messages)).toHaveLength(1)
+    expect(initialC[0]!.text).toContain('Synthetic cross-session addition.')
+    expect(initialC[0]!.text).toContain('Synthetic replaced retained fact.')
+    expect(initialC[0]!.text).not.toContain('Synthetic turn-view retained fact.')
+
+    f.live.swap(createRuntimeGraph(resolveConfig({
+      ...f.config,
+      runtimeMemory: { ...f.config.runtimeMemory, snapshotRefresh: 'on-change', deferLowPriority: true },
+    }), f.workspace, f.extensions))
+    await f.turn(sessionA.agent)
+    const refreshedA = f.requests.filter(request => request.sessionId === 'freeze-session-a')
+    expect(refreshedA.at(-1)!.text).toContain('Synthetic replaced retained fact.')
+    expect(refreshedA.at(-1)!.text).toContain('Synthetic cross-session addition.')
+    expect(refreshedA.at(-1)!.text).not.toContain('Synthetic turn-view retained fact.')
+  } finally {
+    await sessionC?.dispose()
+    await sessionB.dispose()
+    await sessionA.dispose()
+    await f.close()
+  }
+}, 20_000)
+
+it.runIf(supportsSnapshotCompaction)('refreshes a frozen snapshot left in the surface by stock DSH compaction', async () => {
+  const f = await fixture('native', true, { snapshotRefresh: 'session-start' })
+  try {
+    await f.ctx.plugin((await import(requireDsh.resolve('@deepseek-ai/dsh-token-meter'))).default)
+    const { BasicCompactionEngine } = await import(requireDsh.resolve('@deepseek-ai/dsh-compaction-basic'))
+    await f.compactionContext.plugin(BasicCompactionEngine, { auto: false, retainTokens: 50 })
+    const handle = await f.create()
+    try {
+      await f.turn(handle.agent)
+      await f.turn(handle.agent, false, 'Second synthetic user turn.')
+      const session = handle.agent.session
+      const snapshotSeq = session.surface.nodes.find(seq => {
+        const event = session.eventAt(seq)
+        return event?.type === 'user/message' && event.data.source.kind === 'dsh-mnemon' && event.data.source.form === 'memory-snapshot'
+      })!
+      const laterUser = session.surface.nodes.find(seq => seq > snapshotSeq && session.eventAt(seq)?.type === 'user/message')!
+      const lastReply = session.surface.nodes.findLast(seq => session.eventAt(seq)?.type === 'assistant/message')!
+      await f.graph.source('runtime').mutate('mutate', { action: 'replace', target: 'memory',
+        oldText: 'Synthetic turn-view retained fact.', content: 'Synthetic fact after checkpoint.' })
+      let compacted = false
+      const stop = f.ctx.on('agent/request', async (request, next) => {
+        const route = await next()
+        if (!compacted && request.agent === handle.agent) {
+          compacted = true
+          await f.compactionContext.compaction.compactRegion(laterUser, lastReply, handle.agent, request.signal)
+          expect(session.surface.nodes).toContain(snapshotSeq)
+        }
+        return route
+      })
+      try { await f.turn(handle.agent) } finally { stop() }
+      expect(compacted).toBe(true)
+      const after = f.requests.at(-1)!
+      expect(snapshots(after.messages)).toHaveLength(1)
+      expect(after.text).toContain('Synthetic fact after checkpoint.')
+      expect(after.text).not.toContain('Synthetic turn-view retained fact.')
+    } finally { await handle.dispose() }
+  } finally { await f.close() }
 })

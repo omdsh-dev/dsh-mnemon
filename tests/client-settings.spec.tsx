@@ -1052,6 +1052,29 @@ describe('MnemonSettingsCard', () => {
     expect(checked(screen.getByRole('switch', { name: 'Push Memory Space and Document indexes (experimental)' }))).toBe(true)
   })
 
+  it.each([false, true])('saves or rejects Runtime snapshotRefresh without losing staged capacities (reject=%s)', async rejected => {
+    const mutate = rejected ? vi.fn(async () => { throw new Error('Synthetic rejection') }) : vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({ runtimeMemory: { maintenanceMaxTokens: 32768 } }), mutate)
+    const view = render(runtime(scope))
+    expect(selector('快照刷新策略').textContent).toBe('变化时刷新')
+    fireEvent.change(screen.getByRole('spinbutton', { name: '用户画像上限（字节）' }), { target: { value: '8192' } })
+    choose('快照刷新策略', '会话开始时冻结')
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['runtimeMemory', 'snapshotRefresh'], value: 'session-start' }]))
+    if (rejected) {
+      expect((await screen.findByRole('alert')).textContent).toContain('Synthetic rejection')
+      expect(selector('快照刷新策略').textContent).toBe('变化时刷新')
+      expect(scope.snapshot.value?.runtimeMemory?.snapshotRefresh).toBeUndefined()
+    } else {
+      await waitFor(() => expect(scope.snapshot.value?.runtimeMemory?.snapshotRefresh).toBe('session-start'))
+      expect(selector('快照刷新策略').textContent).toBe('会话开始时冻结')
+    }
+    expect((screen.getByRole('spinbutton', { name: '用户画像上限（字节）' }) as HTMLInputElement).value).toBe('8192')
+    view.unmount()
+    render(runtime(scope, { writable: false }, translateEn))
+    expect(selector('Snapshot refresh').disabled).toBe(true)
+    expect(selector('Snapshot refresh').textContent).toBe(rejected ? 'Refresh on change' : 'Freeze at session start')
+  })
+
   it('keeps both Runtime recall preferences when their saves overlap', async () => {
     const recallSave = deferred<void>()
     const deferredSave = deferred<void>()

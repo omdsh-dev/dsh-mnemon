@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { ComposableMemoryView } from '../core/contracts/index.ts'
 import { canonicalMemoryJson } from '../core/definitions.ts'
+import type { RuntimeSnapshotRefreshMode } from './protocol/config.ts'
 
 export interface MemorySnapshotState {
   version: 1
@@ -24,10 +25,11 @@ export function readMemorySnapshotState(value: unknown): MemorySnapshotState | u
   }
 }
 
-export function memorySnapshotState(view: ComposableMemoryView | undefined): MemorySnapshotState | undefined {
+export function memorySnapshotState(view: ComposableMemoryView | undefined, refresh: RuntimeSnapshotRefreshMode = 'on-change'): MemorySnapshotState | undefined {
   if (view === undefined) return undefined
   const entries: string[] = []
   const branchVisibility: string[] = []
+  const runtimeScopes = new Map<string, string>()
   let completeRuntime = true
   const projection = view.projection.map(fragment => {
     const provenance = fragment.provenance
@@ -37,18 +39,30 @@ export function memorySnapshotState(view: ComposableMemoryView | undefined): Mem
       completeRuntime = false
       return fragment
     }
-    if (hash(snapshot.branchVisibility)) branchVisibility.push(digest([fragment.sourceInstanceKey, fragment.id, snapshot.branchVisibility]))
-    else completeRuntime = false
+    if (hash(snapshot.branchVisibility)) {
+      branchVisibility.push(digest([fragment.sourceInstanceKey, fragment.id, snapshot.branchVisibility]))
+      if (refresh === 'session-start') runtimeScopes.set(fragment.sourceInstanceKey, snapshot.scope)
+    } else completeRuntime = false
     entries.push(...snapshot.entries.map(entry => digest([fragment.sourceInstanceKey, fragment.id, entry])))
     const { text: _text, revision: _revision, ...identity } = fragment
     return { ...identity, provenance: { ...provenance, snapshot: { version: 1, scope: snapshot.scope } } }
   })
+  const grantIds = new Map<string, string>()
+  const grants = !completeRuntime || runtimeScopes.size === 0 ? view.readGrants : view.readGrants.map(grant => {
+    const scope = grant.schema === 'dsh-mnemon.runtime/v1' && grant.consistency === 'exact-snapshot' ? runtimeScopes.get(grant.sourceInstanceKey) : undefined
+    if (scope === undefined) return grant
+    const stableId = `${grant.sourceInstanceKey}/grant/${scope}`
+    grantIds.set(grant.id, stableId)
+    return { ...grant, id: stableId, revision: scope, value: null }
+  })
+  const routes = grantIds.size === 0 ? view.routes
+    : view.routes.map(route => ({ ...route, readGrantId: grantIds.get(route.readGrantId) ?? route.readGrantId }))
   return {
     version: 1,
     boundary: digest({
       generation: view.runtimeGeneration, scope: view.scope,
       strategy: [view.strategyInstanceKey, view.strategyTypeId, view.strategyExtensions ?? []],
-      projection, routes: view.routes, actions: view.actionOffers, grants: view.readGrants,
+      projection, routes, actions: view.actionOffers, grants,
       guidance: view.guidance ?? null, diagnostics: view.diagnostics ?? [],
     }),
     entries: entries.sort(),
