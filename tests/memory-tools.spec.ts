@@ -11,6 +11,7 @@ import { MEMORY_TOOLS, memoryTool, type MemoryToolPage } from '../src/host/proto
 import { mutationResultCommitted } from '../src/host/receipts.ts'
 import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } from '../src/host/runtime.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
+import { AutomaticReviewAdmission } from '../src/host/review-admission.ts'
 import { executeHostTool, usesToolBatchExecution } from '../src/host/tool-execution.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { modelMemoryWake, presentMemoryWake, unofferedViewId } from '../src/host/view-presentation.ts'
@@ -272,6 +273,193 @@ describe('Host tool execution contracts', () => {
 
   it('rejects an unavailable tool execution service', async () => {
     await expect(executeHostTool({}, input)).rejects.toThrow('unavailable')
+  })
+
+  it('omits agent for standalone batch execution when undefined', async () => {
+    const received: unknown[] = []
+    const result = { isError: false }
+    const tools = batchHost(async value => {
+      received.push(value)
+      return { results: [{ callId: input.callId, result }], additionalContexts: [], concluded: false }
+    })
+    const { agent: _omitted, ...standalone } = input
+    expect(await executeHostTool(tools, standalone)).toBe(result)
+    expect(received).toEqual([{
+      calls: [{ type: 'tool-call', id: 'synthetic-admission', name: 'mnemon_subagent_result', arguments: '{"requestId":"synthetic-challenge","result":{}}' }],
+      signal: input.signal,
+    }])
+    expect('agent' in (received[0] as Record<string, unknown>)).toBe(false)
+  })
+})
+
+describe('AutomaticReviewAdmission under DSH 0.2.2 batch Auto review (issue 704)', () => {
+  type ResultListener = (execution: { callId?: string; rootCallId?: string; agent?: HostAgent; name?: string; signal: AbortSignal }, result: { isError: boolean }) => void
+  type PreExecuteListener = (execution: { callId?: string; rootCallId?: string; agent?: HostAgent; name?: string; signal: AbortSignal }, next: () => Promise<{ kind: string }>) => Promise<{ kind: string }>
+
+  function createBatchAutoHarness(options: {
+    rootPtc?: boolean
+    executableVisible?: boolean
+    guardDeny?: (execution: { name?: string; agent?: HostAgent; parent?: symbol }) => string | undefined
+    rootAsk?: boolean
+  } = {}) {
+    const resultListeners = new Set<ResultListener>()
+    const preListeners: PreExecuteListener[] = []
+    const dispatches: Array<{ name: string; agent: HostAgent | undefined }> = []
+    const guardChecks: Array<{ name: string | undefined; agent: HostAgent | undefined; nested: boolean }> = []
+    const host = {
+      on(event: string, listener: (...args: never[]) => unknown, opts?: { prepend?: boolean }) {
+        if (event === 'tools/result') {
+          resultListeners.add(listener as unknown as ResultListener)
+          return () => { resultListeners.delete(listener as unknown as ResultListener) }
+        }
+        if (event === 'tools/pre-execute') {
+          const fn = listener as unknown as PreExecuteListener
+          if (opts?.prepend) preListeners.unshift(fn)
+          else preListeners.push(fn)
+          return () => {
+            const index = preListeners.indexOf(fn)
+            if (index >= 0) preListeners.splice(index, 1)
+          }
+        }
+        return () => undefined
+      },
+    }
+    const admission = new AutomaticReviewAdmission(host)
+    const runPre = async (execution: { callId?: string; rootCallId?: string; agent?: HostAgent; name?: string; signal: AbortSignal }): Promise<{ kind: string }> => {
+      const dispatch = (index: number): Promise<{ kind: string }> => {
+        const listener = preListeners[index]
+        if (listener === undefined) return Promise.resolve({ kind: options.rootAsk ? 'ask' : 'allow' })
+        return listener(execution, () => dispatch(index + 1))
+      }
+      return dispatch(0)
+    }
+    const openEvents: HostSessionEvent[] = [
+      { type: 'turn/start', seq: 0, data: { turn: 1 } },
+      { type: 'step/start', seq: 1, data: { turn: 1, step: 1 } },
+    ]
+    const tools = {
+      setExecutor: () => undefined,
+      executable: (name: string) => name === 'mnemon_subagent_result' && options.executableVisible === false ? undefined : { name },
+      checkGuards: (execution: { name?: string; agent?: HostAgent; parent?: symbol }) => {
+        guardChecks.push({ name: execution.name, agent: execution.agent, nested: execution.parent !== undefined })
+        const reason = options.guardDeny?.(execution)
+        return reason === undefined ? undefined : { reason }
+      },
+      execute: async (batch: { calls: { id: string; name: string; arguments: string }[]; agent?: HostAgent; signal: AbortSignal }) => {
+        const call = batch.calls[0]!
+        dispatches.push({ name: call.name, agent: batch.agent })
+        if (batch.agent !== undefined) {
+          return {
+            results: [{ callId: call.id, result: { isError: true } }],
+            additionalContexts: [],
+            concluded: false,
+          }
+        }
+        const rootPtc = options.rootPtc === true
+        if (rootPtc && call.name !== 'run_code') {
+          return { results: [{ callId: call.id, result: { isError: true, error: { info: { code: 'UNKNOWN_TOOL' } } } }], additionalContexts: [], concluded: false }
+        }
+        const parsed = JSON.parse(call.arguments) as { requestId?: string; code?: string }
+        const args = call.name === 'run_code'
+          ? JSON.parse(parsed.code!.match(/mnemon_subagent_result\((.+)\)$/u)![1]!) as { requestId: string }
+          : parsed
+        const execution = {
+          callId: call.id,
+          rootCallId: call.id,
+          name: 'mnemon_subagent_result',
+          signal: batch.signal,
+          ...(batch.agent === undefined ? {} : { agent: batch.agent }),
+        }
+        const pre = await runPre(execution)
+        if (pre.kind !== 'allow') {
+          return { results: [{ callId: call.id, result: { isError: true } }], additionalContexts: [], concluded: false }
+        }
+        const acknowledged = admission.acknowledge(args, execution)
+        const outcome = { isError: !acknowledged }
+        for (const listener of [...resultListeners]) listener(execution, outcome)
+        return { results: [{ callId: call.id, result: outcome }], additionalContexts: [], concluded: false }
+      },
+    }
+    const agent = {
+      id: 'auto-batch-parent',
+      status: 'running',
+      session: {
+        seq: openEvents.length,
+        snapshotEvents: (from = 0, to = openEvents.length) => openEvents.slice(from, to),
+        eventAt: (seq: number) => openEvents[seq],
+        surface: { nodes: [] },
+      },
+      ctx: {
+        tools,
+        get: (name: string) => name === 'permissionPresets' ? { current: () => 'auto' } : undefined,
+        on: () => () => undefined,
+        effect: () => () => undefined,
+      },
+    } as unknown as HostAgent
+    return { admission, agent, dispatches, guardChecks }
+  }
+
+  it("uses the standalone native probe with the agent's result tool guard under Auto", async () => {
+    const h = createBatchAutoHarness()
+    expect(await h.admission.check(h.agent, new AbortController().signal)).toBe(true)
+    expect(h.admission.status(h.agent)).toEqual({ state: 'available', checkedAt: expect.any(String) })
+    expect(h.dispatches).toEqual([{ name: 'mnemon_subagent_result', agent: undefined }])
+    expect(h.guardChecks).toEqual([
+      { name: 'mnemon_subagent_result', agent: h.agent, nested: false },
+    ])
+  })
+
+  it('rejects admission when agent-scoped checkGuards denies mnemon_subagent_result or run_code under Auto', async () => {
+    const deniedTool = createBatchAutoHarness({
+      guardDeny: exec => exec.agent !== undefined && exec.name === 'mnemon_subagent_result' ? 'Blocked by agent guard.' : undefined,
+    })
+    expect(await deniedTool.admission.check(deniedTool.agent, new AbortController().signal)).toBe(false)
+    expect(deniedTool.admission.status(deniedTool.agent)).toMatchObject({ state: 'unavailable', reason: 'handler-not-reached' })
+    expect(deniedTool.dispatches).toEqual([])
+
+    const deniedPtc = createBatchAutoHarness({
+      rootPtc: true,
+      guardDeny: exec => exec.agent !== undefined && exec.name === 'run_code' ? 'Blocked run_code.' : undefined,
+    })
+    expect(await deniedPtc.admission.check(deniedPtc.agent, new AbortController().signal)).toBe(false)
+    expect(deniedPtc.admission.status(deniedPtc.agent)).toMatchObject({ state: 'unavailable', reason: 'handler-not-reached' })
+    expect(deniedPtc.dispatches).toEqual([{ name: 'mnemon_subagent_result', agent: undefined }])
+  })
+
+  it('retains the scoped probe when an Auto host cannot check agent guards', async () => {
+    const h = createBatchAutoHarness()
+    delete h.agent.ctx.tools!.checkGuards
+    expect(await h.admission.check(h.agent, new AbortController().signal)).toBe(false)
+    expect(h.dispatches.length).toBeGreaterThan(0)
+    expect(h.dispatches.every(dispatch => dispatch.agent === h.agent)).toBe(true)
+  })
+
+  it('rejects admission when executable hides mnemon_subagent_result under Auto', async () => {
+    const h = createBatchAutoHarness({ executableVisible: false })
+    expect(await h.admission.check(h.agent, new AbortController().signal)).toBe(false)
+    expect(h.admission.status(h.agent)).toMatchObject({ state: 'unavailable', reason: 'handler-not-reached' })
+    expect(h.dispatches).toEqual([])
+  })
+
+  it('preserves approval-required without trying run_code when root executor is native under Auto', async () => {
+    const h = createBatchAutoHarness({ rootAsk: true })
+    expect(await h.admission.check(h.agent, new AbortController().signal)).toBe(false)
+    expect(h.admission.status(h.agent)).toMatchObject({ state: 'unavailable', reason: 'approval-required' })
+    expect(h.dispatches).toEqual([{ name: 'mnemon_subagent_result', agent: undefined }])
+  })
+
+  it('falls back to standalone run_code when the root executor itself is PTC under Auto', async () => {
+    const h = createBatchAutoHarness({ rootPtc: true })
+    expect(await h.admission.check(h.agent, new AbortController().signal)).toBe(true)
+    expect(h.dispatches).toEqual([
+      { name: 'mnemon_subagent_result', agent: undefined },
+      { name: 'run_code', agent: undefined },
+    ])
+    expect(h.guardChecks).toEqual([
+      { name: 'mnemon_subagent_result', agent: h.agent, nested: false },
+      { name: 'run_code', agent: h.agent, nested: false },
+      { name: 'mnemon_subagent_result', agent: h.agent, nested: true },
+    ])
   })
 })
 

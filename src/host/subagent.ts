@@ -242,7 +242,7 @@ export class MnemonSubagentCoordinator {
   private readonly providerNames = new Set(['spawn', 'fork'])
   private readonly providerObservers: Array<() => unknown> = []
   private disposed = false
-  private readonly reviewAdmission = new AutomaticReviewAdmission()
+  private readonly reviewAdmission: AutomaticReviewAdmission
 
   constructor(
     private readonly subagents: HostSubagentsService,
@@ -252,6 +252,7 @@ export class MnemonSubagentCoordinator {
     private readonly maintenanceMaxTokens?: () => number,
     private readonly maintenanceRunner?: RuntimeMaintenanceTaskRunner,
   ) {
+    this.reviewAdmission = new AutomaticReviewAdmission(resultRuntime)
     if (resultRuntime === undefined) return
     const registration = resultRuntime.tools.register({
       name: RESULT_TOOL_NAME,

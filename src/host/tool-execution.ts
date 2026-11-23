@@ -1,7 +1,7 @@
 import type { HostAgentContext, HostToolExecutionInput } from './dsh.ts'
 
 type HostTools = NonNullable<HostAgentContext['tools']>
-type Outcome = { isError: boolean }
+type Outcome = { isError: boolean; error?: { info?: { code?: string } } }
 
 export function usesToolBatchExecution(tools: HostTools): boolean {
   return typeof tools.setExecutor === 'function'
@@ -13,13 +13,13 @@ export async function executeHostTool(tools: HostTools, input: HostToolExecution
   const batchTools = tools as unknown as {
     execute(input: {
       calls: { type: 'tool-call'; id: string; name: string; arguments: string }[]
-      agent: HostToolExecutionInput['agent']
+      agent?: HostToolExecutionInput['agent']
       signal: AbortSignal
     }): Promise<{ results?: { callId?: string; result?: Outcome }[] } | undefined>
   }
   const batch = await batchTools.execute({
     calls: [{ type: 'tool-call', id: input.callId, name: input.name, arguments: JSON.stringify(input.arguments) }],
-    agent: input.agent,
+    ...(input.agent === undefined ? {} : { agent: input.agent }),
     signal: input.signal,
   })
   const results = batch?.results
