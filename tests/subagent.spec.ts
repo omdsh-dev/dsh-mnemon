@@ -1730,6 +1730,171 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(host.dispose).toHaveBeenCalledOnce()
   })
 
+  it('guards text-only skill children against run_code and foreign tools, forces native presentation, and sets read-only policies (#727)', async () => {
+    const owner = parent()
+    const resultTools = toolRegistry()
+    const guards: Array<(execution: ToolExecution) => string | undefined> = []
+    const appended: Array<{ type: string; data: unknown }> = []
+    const restorePresentation = vi.fn()
+    let mode: 'ptc' | 'native' = 'ptc'
+    const presentAs = vi.fn((nextMode: 'native' | 'ptc') => {
+      mode = nextMode
+      return restorePresentation
+    })
+    const child = {
+      ...parent('subagent'),
+      id: 'child-run-1',
+      session: {
+        header: { origin: 'subagent' },
+        snapshotEvents: () => [],
+        eventAt: () => undefined,
+        surface: { nodes: [] },
+        append: (type: string, data: unknown) => { appended.push({ type, data }) },
+      },
+      ctx: {
+        get: (name: string) => name === 'sandboxPolicy'
+          ? { overrideOf: () => 'danger-full-access' }
+          : name === 'approval'
+            ? { overrideOf: () => 'ask' }
+            : undefined,
+        tools: {
+          presentAs,
+          get: (name: string) => name === 'run_code' && mode === 'ptc' ? { name } : undefined,
+          guard: (callback: (execution: ToolExecution) => string | undefined) => {
+            guards.push(callback)
+            return () => {}
+          },
+        },
+      },
+    } as unknown as HostAgent
+    let guardDuringRun: ((execution: ToolExecution) => string | undefined) | undefined
+    const host = subagents({ answer: 'done' }, 'completed', ['spawn'], child)
+    host.start.mockImplementationOnce(async () => {
+      resultTools.publish(child, owner)
+      guardDuringRun = guards[0]
+      return {
+        id: child.id,
+        localAgent: child,
+        result: Promise.resolve({ output: [], structured: { answer: 'done' }, stopReason: 'completed' }),
+        dispose: host.dispose,
+      }
+    })
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools.value)
+    const schema = { type: 'object', properties: { answer: { type: 'string' } }, required: ['answer'], additionalProperties: false }
+
+    await expect(coordinator.skillTask(owner, 'Skill draft', 'Write a draft', schema, 'Write skills.', new AbortController().signal))
+      .resolves.toMatchObject({ structured: { answer: 'done' } })
+
+    expect(presentAs).toHaveBeenCalledWith('native')
+    expect(restorePresentation).toHaveBeenCalledOnce()
+    expect(appended).toEqual([
+      { type: 'sandbox/mode', data: { mode: 'read-only', source: 'delegation' } },
+      { type: 'approval/policy', data: { policy: 'never', source: 'delegation' } },
+    ])
+    expect(guardDuringRun).toBeDefined()
+    expect(guardDuringRun!({ name: 'mnemon_subagent_result', agent: child, signal: new AbortController().signal })).toBeUndefined()
+    expect(guardDuringRun!({ name: 'run_code', agent: child, signal: new AbortController().signal })).toContain('cannot execute "run_code"')
+    expect(guardDuringRun!({ name: 'write_file', agent: child, signal: new AbortController().signal })).toContain('cannot execute "write_file"')
+  })
+
+  it('denies run_code on preset-free batch-executor skill children and confines preset-bound answer children to read-only (#727)', async () => {
+    const owner = parent()
+    const resultTools = toolRegistry()
+    const makeBatchChild = (id: string, composedPreset: string | undefined) => {
+      const guards: Array<(execution: ToolExecution) => string | undefined> = []
+      const appended: Array<{ type: string; data: unknown }> = []
+      const child = {
+        ...parent('subagent'),
+        id,
+        session: {
+          header: { origin: 'subagent' },
+          snapshotEvents: () => [],
+          eventAt: () => undefined,
+          surface: { nodes: [] },
+          append: (type: string, data: unknown) => { appended.push({ type, data }) },
+        },
+        ctx: {
+          get: (name: string) => name === 'agentPresets'
+            ? { composedPreset: () => composedPreset }
+            : name === 'sandboxPolicy'
+              ? { overrideOf: () => 'danger-full-access' }
+              : undefined,
+          tools: {
+            setExecutor: () => {},
+            guard: (callback: (execution: ToolExecution) => string | undefined) => {
+              guards.push(callback)
+              return () => {}
+            },
+          },
+        },
+      } as unknown as HostAgent
+      return { child, guards, appended }
+    }
+
+    const presetFree = makeBatchChild('skill-child', undefined)
+    const presetBound = makeBatchChild('answer-child', 'deep-ptc')
+    const host = subagents({}, 'completed', ['spawn'])
+    host.start
+      .mockImplementationOnce(async () => {
+        resultTools.publish(presetFree.child, owner)
+        return { id: presetFree.child.id, localAgent: presetFree.child, result: Promise.resolve({ output: [], structured: { ok: true }, stopReason: 'completed' }), dispose: host.dispose }
+      })
+      .mockImplementationOnce(async () => {
+        resultTools.publish(presetBound.child, owner)
+        return { id: presetBound.child.id, localAgent: presetBound.child, result: Promise.resolve({ output: [], structured: { answer: 'SQLite', citations: [] }, stopReason: 'completed' }), dispose: host.dispose }
+      })
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools.value)
+    const schema = { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'], additionalProperties: false }
+
+    await coordinator.skillTask(owner, 'Skill draft', 'Write a draft', schema, 'Write skills.', new AbortController().signal)
+    await coordinator.answer(owner, 'Which database?', [], new AbortController().signal)
+
+    expect(presetFree.guards[0]!({ name: 'run_code', agent: presetFree.child, signal: new AbortController().signal })).toContain('cannot execute "run_code"')
+    expect(presetFree.guards[0]!({ name: 'mnemon_subagent_result', agent: presetFree.child, signal: new AbortController().signal })).toBeUndefined()
+    expect(presetFree.appended).toContainEqual({ type: 'sandbox/mode', data: { mode: 'read-only', source: 'delegation' } })
+
+    expect(presetBound.guards[0]!({ name: 'run_code', agent: presetBound.child, signal: new AbortController().signal })).toBeUndefined()
+    expect(presetBound.guards[0]!({ name: 'write_file', agent: presetBound.child, signal: new AbortController().signal })).toContain('cannot execute "write_file"')
+    expect(presetBound.appended).toContainEqual({ type: 'sandbox/mode', data: { mode: 'read-only', source: 'delegation' } })
+  })
+
+  it('rejects foreign own-scope tools in delegated write children while preserving spaceWriteGuard (#727)', async () => {
+    const owner = parent()
+    const resultTools = toolRegistry()
+    const guards: Array<(execution: ToolExecution) => string | undefined> = []
+    const child = {
+      ...parent('subagent'),
+      id: 'write-child',
+      ctx: {
+        tools: {
+          guard: (callback: (execution: ToolExecution) => string | undefined) => {
+            guards.push(callback)
+            return () => {}
+          },
+        },
+      },
+    } as unknown as HostAgent
+    const host = subagents({ action: 'skipped', summary: 'No write needed.', memoryBodyIds: [], documentIds: [] }, 'completed', ['spawn'], child)
+    host.start.mockImplementationOnce(async () => {
+      resultTools.publish(child, owner)
+      return {
+        id: child.id,
+        localAgent: child,
+        result: Promise.resolve({ output: [], structured: { action: 'skipped', summary: 'No write needed.', memoryBodyIds: [], documentIds: [] }, stopReason: 'completed' }),
+        dispose: host.dispose,
+      }
+    })
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools.value)
+
+    await coordinator.remember(owner, { content: 'Keep release checklists durable.' }, new AbortController().signal)
+
+    expect(guards).toHaveLength(1)
+    expect(guards[0]!({ name: 'write_file', agent: child, signal: new AbortController().signal })).toContain('cannot execute "write_file"')
+    expect(guards[0]!({ name: 'mnemon_memory_body_merge', agent: child, signal: new AbortController().signal })).toContain('never merges Memory Spaces')
+    expect(guards[0]!({ name: 'mnemon_remember', arguments: { memoryBodyId: 'project', content: 'x' }, agent: child, signal: new AbortController().signal })).toBeUndefined()
+    expect(guards[0]!({ name: 'run_code', agent: child, signal: new AbortController().signal })).toBeUndefined()
+  })
+
   it('pins a fixed task Agent model onto the bounded idle review delegation', async () => {
     const host = subagents({ summary: 'No mutation needed.', action: 'skipped', memoryBodyIds: [] }, 'completed', ['spawn', 'fork'])
     const resultTools = toolRegistry()

@@ -15,7 +15,8 @@ import { emptyDocumentSnapshot, foreignMachines, parseReconcileResult, pendingOp
 import { DEFAULT_MEMORY_VIEW_BUDGET, type ComposableMemoryView, type MemoryEvidence, type MemoryJsonValue, type MemoryMutationReceipt, type MemoryOperationScope, type MemorySourceManagementRequest, type MemorySourceManagementResult } from '../core/contracts/index.ts'
 import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } from './runtime.ts'
 import type { ComposableMemoryTurn } from '../core/turns.ts'
-import { idleReviewBlockReason, reviewLayerPolicy, startGuardedChild, startGuardedReview, type ReviewToolHost } from './review-tools.ts'
+import { confineReadOnlyPolicy, idleReviewBlockReason, presentNativeTools, reviewLayerPolicy, startGuardedChild, startGuardedReview, type ReviewToolHost } from './review-tools.ts'
+import { usesToolBatchExecution } from './tool-execution.ts'
 import { reviewCheckpoint } from './review-checkpoint.ts'
 import { startWithContinuationTurns } from './continuation-turn.ts'
 import { assertAgentMemoryIncluded } from './workspace-exclusion.ts'
@@ -208,6 +209,16 @@ function writeLanded(value: Record<string, unknown>): boolean {
   if (mutationResultCommitted(value)) return true
   const state = [value.action, value.status, value.state].find((entry): entry is string => typeof entry === 'string')?.trim().toLocaleLowerCase()
   return state === 'accepted' || state === 'queued' || state === 'pending' || state === 'processing'
+}
+
+function requiresPtcTransport(agent: HostAgent): boolean {
+  const tools = agent.ctx?.tools
+  if (tools === undefined) return false
+  if (usesToolBatchExecution(tools)) {
+    const presets = agent.ctx?.get?.('agentPresets') as { composedPreset?(ctx: unknown): string | undefined } | undefined
+    return presets?.composedPreset?.(agent.ctx) !== undefined
+  }
+  return tools.get?.('run_code', agent) !== undefined
 }
 
 export function isSubagent(agent: HostAgent | undefined): boolean {
@@ -1133,6 +1144,7 @@ This is the only completion channel for this run. Do not finish with a plain-tex
       const baseAgentOptions = perOpMaxTokens === undefined ? undefined : { maxTokens: perOpMaxTokens }
       const resolvedAgentOptions = fixed === undefined ? baseAgentOptions : { ...(baseAgentOptions ?? {}), provider: fixed.provider, model: fixed.model }
       const host = this.resultRuntime
+      const allowedTools = [...this.availableTools(parent, tools), resultToolName]
       const start = () => startWithContinuationTurns(host, parent, () => {
         if (operation === 'review') { signal.throwIfAborted(); admission?.() }
         return startSubagent(this.subagents, host.agents, provider, {
@@ -1143,14 +1155,38 @@ This is the only completion channel for this run. Do not finish with a plain-tex
           signal,
           ...(resolvedAgentOptions === undefined ? {} : { agentOptions: resolvedAgentOptions }),
           maxDepth: this.delegationLimit(parent),
-          toolFilter: { allow: [...this.availableTools(parent, tools), resultToolName] },
+          toolFilter: { allow: allowedTools },
           persona: capture!.completionPersona,
         }, host)
       })
-      run = operation === 'review'
-        ? await startGuardedReview(this.resultRuntime, parent, [...tools, resultToolName], start, child => { capture!.setRunId(child.id) }, reviewLayerPolicy())
-        : guard !== undefined ? await startGuardedChild(this.resultRuntime, parent, start, guard, { purpose: operation, optional: true })
-        : await start()
+      if (operation === 'review') {
+        run = await startGuardedReview(this.resultRuntime, parent, [...tools, resultToolName], start, child => { capture!.setRunId(child.id) }, reviewLayerPolicy())
+      } else {
+        const allowed = new Set(allowedTools)
+        const textOnly = tools.length === 0
+        const ptcTransportAllowed = new WeakSet<HostAgent>()
+        const childGuard = (execution: ToolExecution): string | undefined => {
+          const name = execution.name
+          const allowRunCode = name === 'run_code' && (!textOnly || (execution.agent !== undefined && ptcTransportAllowed.has(execution.agent)))
+          if (!allowRunCode && (name === undefined || !allowed.has(name))) {
+            return `Mnemon ${operation} cannot execute ${JSON.stringify(name)}; only ${allowedTools.join(', ')} ${allowedTools.length === 1 ? 'is' : 'are'} permitted.`
+          }
+          return guard?.(execution)
+        }
+        run = await startGuardedChild(this.resultRuntime, parent, start, childGuard, {
+          purpose: operation,
+          optional: true,
+          published: child => { capture!.setRunId(child.id) },
+          ...(textOnly ? {
+            configure: child => {
+              confineReadOnlyPolicy(child)
+              const restorePresentation = presentNativeTools(child)
+              if (requiresPtcTransport(child)) ptcTransportAllowed.add(child)
+              return restorePresentation
+            },
+          } : {}),
+        })
+      }
       const activeRun = run
       capture.setRunId(activeRun.id)
       const result = await activeRun.result

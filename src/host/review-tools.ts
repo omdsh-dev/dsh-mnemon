@@ -67,9 +67,33 @@ export function startGuardedReview(
   }, { purpose: 'review', ...(published === undefined ? {} : { published }) })
 }
 
+export function confineReadOnlyPolicy(agent: HostAgent): void {
+  if (typeof agent.session.append !== 'function') return
+  const sandbox = agent.ctx?.get?.('sandboxPolicy') as { overrideOf?(session: unknown): unknown } | undefined
+  if (sandbox !== undefined && sandbox.overrideOf?.(agent.session) !== 'read-only') {
+    agent.session.append('sandbox/mode', { mode: 'read-only', source: 'delegation' })
+  }
+  const approval = agent.ctx?.get?.('approval') as { overrideOf?(session: unknown): unknown } | undefined
+  if (approval !== undefined && approval.overrideOf?.(agent.session) !== 'never') {
+    agent.session.append('approval/policy', { policy: 'never', source: 'delegation' })
+  }
+}
+
+export function presentNativeTools(agent: HostAgent): (() => unknown) | undefined {
+  const tools = agent.ctx?.tools
+  if (typeof tools?.presentAs !== 'function') return undefined
+  try {
+    const dispose = tools.presentAs('native')
+    return typeof dispose === 'function' ? dispose as () => unknown : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export interface GuardedChildOptions {
   purpose: string
   published?: (agent: HostAgent) => void
+  configure?: (agent: HostAgent) => (() => unknown) | void
   optional?: boolean
 }
 
@@ -81,7 +105,7 @@ export async function startGuardedChild(
   options: GuardedChildOptions,
 ): Promise<HostSubagentRun> {
   parent.ctx?.fiber?.assertActive()
-  const { purpose, published } = options
+  const { purpose, published, configure } = options
   const agents = host.agents
   const reserved = activationOwned(host.subagents)
   if (reserved && typeof agents?.get !== 'function') throw new Error(`Mnemon ${purpose} requires exact live Agent lookup`)
@@ -105,9 +129,27 @@ export async function startGuardedChild(
         if (options.optional === true && !reserved) return
         throw new Error(`Mnemon ${purpose} requires DSH scoped tool guard support`)
       }
-      const dispose = tools.guard(guard)
-      if (typeof dispose !== 'function') throw new Error(`Mnemon ${purpose} tool guard did not return a disposer`)
-      guards.set(agent, dispose as () => unknown)
+      const restore = configure?.(agent)
+      let dispose: unknown
+      try {
+        dispose = tools.guard(guard)
+        if (typeof dispose !== 'function') throw new Error(`Mnemon ${purpose} tool guard did not return a disposer`)
+      } catch (error) {
+        if (typeof restore === 'function') {
+          try { restore() } catch { }
+        }
+        throw error
+      }
+      const stopGuard = dispose as () => unknown
+      guards.set(agent, typeof restore === 'function' ? async () => {
+        const outcomes = await Promise.allSettled([
+          Promise.resolve().then(() => stopGuard()),
+          Promise.resolve().then(() => restore()),
+        ])
+        const failed = outcomes.filter(outcome => outcome.status === 'rejected')
+        if (failed.length === 1) throw failed[0]!.reason
+        if (failed.length > 1) throw new AggregateError(failed.map(outcome => outcome.reason), `Mnemon ${purpose} guard cleanup failed`)
+      } : stopGuard)
       published?.(agent)
     } catch (error) {
       attachmentError = error
