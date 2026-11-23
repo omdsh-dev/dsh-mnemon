@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon",
-  "version": "0.5.53",
+  "version": "0.5.54",
   "description": "Composable, view-based context for DeepSeek Harness. Pluggable sources and strategies, with layered memory and self-evolving skills out of the box.",
   "keywords": [
     "deepseek-harness",
