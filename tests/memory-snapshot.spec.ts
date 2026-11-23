@@ -265,11 +265,11 @@ describe('memory snapshot surface updates', () => {
     resumed.retire(2, 1)
     expect(restored.deriveMessages()).toEqual(initialMessages)
 
-    const branchChanged = plan('Switched git branch', { ...initialState, branchVisibility: '2'.repeat(64), entries: ['2'.repeat(64)] })
-    expect(branchChanged.message?.content).toEqual([{ type: 'text', text: 'Switched git branch' }])
+    const branchChanged = plan('Changed branch visibility', { ...initialState, branchVisibility: '2'.repeat(64) })
+    expect(branchChanged.message?.content).toEqual([{ type: 'text', text: 'Changed branch visibility' }])
     f.commit(branchChanged)
     expect(f.session.deriveMessages()).toHaveLength(1)
-    expect(f.session.deriveMessages()[0]?.content).toEqual([{ type: 'text', text: 'Switched git branch' }])
+    expect(f.session.deriveMessages()[0]?.content).toEqual([{ type: 'text', text: 'Changed branch visibility' }])
 
     const boundaryChanged = plan('Boundary changed', { ...state(['3'.repeat(64)], 'c'.repeat(64)), branchVisibility: '2'.repeat(64) })
     expect(boundaryChanged.message?.content).toEqual([{ type: 'text', text: 'Boundary changed' }])
@@ -292,6 +292,17 @@ describe('memory snapshot surface updates', () => {
     expect(excluded.message).toBeUndefined()
     f.commit(excluded)
     expect(f.session.deriveMessages()).toEqual([])
+  })
+
+  it('does not freeze snapshots without a certified branch boundary', () => {
+    const f = fixture()
+    const plan = (text: string, snapshotState: MemorySnapshotState) =>
+      prepareMemorySnapshot(f.session as unknown as HostSession, text, snapshotState, { freeze: true })
+    f.commit(plan('Old projection', state(['a'.repeat(64)])))
+    const update = plan('Latest authorized projection', state(['b'.repeat(64)]))
+    expect(update.message?.content).toEqual([{ type: 'text', text: 'Latest authorized projection' }])
+    f.commit(update)
+    expect(f.session.deriveMessages()).toHaveLength(1)
   })
 
   it('checkpoints changed authority even with identical text, and retires removed or corrected facts', () => {
@@ -445,6 +456,9 @@ describe('memory snapshot authority boundaries', () => {
 
   it('keeps the boundary stable across Runtime search grant entry revisions while checkpointing grant or route removal', () => {
     const first = view()
+    first.projection[0]!.provenance = { sourceTypeId: 'runtime', snapshot: {
+      version: 1, scope: 'a'.repeat(64), entries: ['b'.repeat(64)], branchVisibility: 'c'.repeat(64),
+    } }
     first.readGrants.push({
       id: 'runtime/grant/rev-1',
       sourceInstanceKey: 'runtime',
@@ -468,15 +482,16 @@ describe('memory snapshot authority boundaries', () => {
     updated.readGrants[1]!.revision = 'rev-2'
     updated.readGrants[1]!.value = { entries: [{ target: 'memory', content: 'Entry one' }, { target: 'memory', content: 'Entry two' }] }
     updated.routes[1]!.readGrantId = 'runtime/grant/rev-2'
-    expect(memorySnapshotState(updated)!.boundary).toBe(memorySnapshotState(first)!.boundary)
+    expect(memorySnapshotState(updated)!.boundary).not.toBe(memorySnapshotState(first)!.boundary)
+    expect(memorySnapshotState(updated, 'session-start')!.boundary).toBe(memorySnapshotState(first, 'session-start')!.boundary)
 
     const grantRemoved = structuredClone(first)
     grantRemoved.readGrants.pop()
-    expect(memorySnapshotState(grantRemoved)!.boundary).not.toBe(memorySnapshotState(first)!.boundary)
+    expect(memorySnapshotState(grantRemoved, 'session-start')!.boundary).not.toBe(memorySnapshotState(first, 'session-start')!.boundary)
 
     const routeRemoved = structuredClone(first)
     routeRemoved.routes.pop()
-    expect(memorySnapshotState(routeRemoved)!.boundary).not.toBe(memorySnapshotState(first)!.boundary)
+    expect(memorySnapshotState(routeRemoved, 'session-start')!.boundary).not.toBe(memorySnapshotState(first, 'session-start')!.boundary)
   })
 })
 

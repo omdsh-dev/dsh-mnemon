@@ -148,14 +148,16 @@ export function prepareMemorySnapshot(session: HostSession, text: string | undef
     }]
   })
   const latest = snapshots.at(-1)
-  const frozen = options.freeze === true && options.checkpoint !== true && current !== undefined
-    && state !== undefined && snapshots.length > 0
+  const freeze = options.freeze === true
+  const frozen = freeze && options.checkpoint !== true && current !== undefined
+    && state?.branchVisibility !== undefined && snapshots.length > 0
     && snapshots.every(snapshot => snapshot.state?.boundary === state.boundary
       && snapshot.state?.branchVisibility === state.branchVisibility)
   const appendOnly = options.deferRetirement === true && state?.branchVisibility !== undefined
     && (options.runtimeRanges?.length ?? 0) > 0 && snapshots.every(snapshot =>
       snapshot.state?.branchVisibility === state.branchVisibility && (snapshot.runtimeRanges?.length ?? 0) > 0)
   const compatible = state !== undefined && snapshots.every(snapshot => snapshot.state?.boundary === state.boundary
+    && (!freeze || snapshot.state.branchVisibility === state.branchVisibility)
     && (appendOnly || retainsSnapshotEntries(snapshot.state.entries, state.entries)))
   const unchanged = current !== undefined && latest?.text === current
   const count = snapshots.length + (unchanged ? 0 : 1)
@@ -165,6 +167,7 @@ export function prepareMemorySnapshot(session: HostSession, text: string | undef
   const retained = current === undefined ? []
     : frozen ? snapshots
     : options.checkpoint === true ? unchanged && state !== undefined && latest?.state?.boundary === state.boundary
+      && (!freeze || latest.state.branchVisibility === state.branchVisibility)
       && retainsSnapshotEntries(latest.state.entries, state.entries) ? [latest] : []
     : compatible && withinBudget ? snapshots
     : state === undefined && unchanged ? [latest!] : []

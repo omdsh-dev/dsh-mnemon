@@ -397,7 +397,8 @@ class MnemonAgentLifecycle {
       ? decision.messages.filter(message => message.source.kind === 'user')
         .flatMap(message => message.content.flatMap(block => block.type === 'text' ? [block.text] : [])).join('\n')
       : undefined
-    if (deferRetirement && this.snapshotCheckpoint === undefined) {
+    const checkpointSnapshots = deferRetirement || this.config.runtimeMemory.snapshotRefresh === 'session-start'
+    if (checkpointSnapshots && this.snapshotCheckpoint === undefined) {
       const latest = findSessionEvent(this.agent.session, event => {
         if (event.type === 'compaction/end') return event.data.error === undefined
         const source = event.type === 'developer/message'
@@ -406,7 +407,7 @@ class MnemonAgentLifecycle {
       })?.event
       this.snapshotCheckpoint = latest?.type === 'compaction/end'
     }
-    const checkpoint = deferRetirement && this.snapshotCheckpoint === true
+    const checkpoint = checkpointSnapshots && this.snapshotCheckpoint === true
     const update = this.planSnapshot({ deferRetirement, checkpoint,
       ...(experiment === undefined ? {} : { recall: { view: experiment, query, checkpoint: recallCheckpoint } }),
     })
@@ -544,8 +545,9 @@ class MnemonAgentLifecycle {
     const view = presentation ?? this.memoryTurn?.current?.context.view
     const wake = this.config.lifecycleEnabled && !this.memoryTurn?.excluded ? this.memoryWake(presentation) : undefined
     const ranges = wake === undefined ? undefined : runtimeSnapshotRanges(wake)
-    return prepareMemorySnapshot(this.agent.session, wake?.text, wake === undefined ? undefined : memorySnapshotState(view),
-      { freeze: this.config.runtimeMemory.snapshotRefresh === 'session-start', ...options, ...(ranges === undefined ? {} : { runtimeRanges: ranges }) })
+    const refresh = this.config.runtimeMemory.snapshotRefresh
+    return prepareMemorySnapshot(this.agent.session, wake?.text, wake === undefined ? undefined : memorySnapshotState(view, refresh),
+      { ...options, freeze: refresh === 'session-start', ...(ranges === undefined ? {} : { runtimeRanges: ranges }) })
   }
 
   private restoreSnapshotAfterCompaction(active: PendingMemorySnapshot, authority: SnapshotAuthority | undefined): void {
@@ -555,7 +557,7 @@ class MnemonAgentLifecycle {
       try {
         const pinnedView = this.memoryTurn?.current?.context.view
         const pinnedRecall = (this.config.runtimeMemory.bm25Recall || this.config.runtimeMemory.indexPush) ? bm25View(pinnedView) : undefined
-        const pinned = memorySnapshotState(pinnedRecall?.view ?? pinnedView)
+        const pinned = memorySnapshotState(pinnedRecall?.view ?? pinnedView, this.config.runtimeMemory.snapshotRefresh)
         const currentState = authority?.state
         const authorized = pinned !== undefined && currentState?.boundary === pinned.boundary
           && currentState.branchVisibility === pinned.branchVisibility

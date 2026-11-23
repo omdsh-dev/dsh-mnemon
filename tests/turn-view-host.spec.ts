@@ -1279,3 +1279,42 @@ it('freezes open-session snapshots under snapshotRefresh=session-start while new
     await f.close()
   }
 }, 20_000)
+
+it.runIf(supportsSnapshotCompaction)('refreshes a frozen snapshot left in the surface by stock DSH compaction', async () => {
+  const f = await fixture('native', true, { snapshotRefresh: 'session-start' })
+  try {
+    await f.ctx.plugin((await import(requireDsh.resolve('@deepseek-ai/dsh-token-meter'))).default)
+    const { BasicCompactionEngine } = await import(requireDsh.resolve('@deepseek-ai/dsh-compaction-basic'))
+    await f.compactionContext.plugin(BasicCompactionEngine, { auto: false, retainTokens: 50 })
+    const handle = await f.create()
+    try {
+      await f.turn(handle.agent)
+      await f.turn(handle.agent, false, 'Second synthetic user turn.')
+      const session = handle.agent.session
+      const snapshotSeq = session.surface.nodes.find(seq => {
+        const event = session.eventAt(seq)
+        return event?.type === 'user/message' && event.data.source.kind === 'dsh-mnemon' && event.data.source.form === 'memory-snapshot'
+      })!
+      const laterUser = session.surface.nodes.find(seq => seq > snapshotSeq && session.eventAt(seq)?.type === 'user/message')!
+      const lastReply = session.surface.nodes.findLast(seq => session.eventAt(seq)?.type === 'assistant/message')!
+      await f.graph.source('runtime').mutate('mutate', { action: 'replace', target: 'memory',
+        oldText: 'Synthetic turn-view retained fact.', content: 'Synthetic fact after checkpoint.' })
+      let compacted = false
+      const stop = f.ctx.on('agent/request', async (request, next) => {
+        const route = await next()
+        if (!compacted && request.agent === handle.agent) {
+          compacted = true
+          await f.compactionContext.compaction.compactRegion(laterUser, lastReply, handle.agent, request.signal)
+          expect(session.surface.nodes).toContain(snapshotSeq)
+        }
+        return route
+      })
+      try { await f.turn(handle.agent) } finally { stop() }
+      expect(compacted).toBe(true)
+      const after = f.requests.at(-1)!
+      expect(snapshots(after.messages)).toHaveLength(1)
+      expect(after.text).toContain('Synthetic fact after checkpoint.')
+      expect(after.text).not.toContain('Synthetic turn-view retained fact.')
+    } finally { await handle.dispose() }
+  } finally { await f.close() }
+})

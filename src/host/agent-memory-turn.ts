@@ -135,7 +135,7 @@ export class AgentMemoryTurn {
           || this.runtime.forAgent(this.agent, { independent: true }) !== graph
           || graph.memoryComposition.current() !== lease.generation) return undefined
         const recall = (this.runtime.config.runtimeMemory.bm25Recall || this.runtime.config.runtimeMemory.indexPush) ? bm25View(view) : undefined
-        return { state: memorySnapshotState(recall?.view ?? view), recall }
+        return { state: memorySnapshotState(recall?.view ?? view, this.runtime.config.runtimeMemory.snapshotRefresh), recall }
       } finally { lease.release() }
     } catch {
       signal?.throwIfAborted()

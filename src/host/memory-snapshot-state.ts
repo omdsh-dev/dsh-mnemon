@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { ComposableMemoryView } from '../core/contracts/index.ts'
 import { canonicalMemoryJson } from '../core/definitions.ts'
+import type { RuntimeSnapshotRefreshMode } from './protocol/config.ts'
 
 export interface MemorySnapshotState {
   version: 1
@@ -24,7 +25,7 @@ export function readMemorySnapshotState(value: unknown): MemorySnapshotState | u
   }
 }
 
-export function memorySnapshotState(view: ComposableMemoryView | undefined): MemorySnapshotState | undefined {
+export function memorySnapshotState(view: ComposableMemoryView | undefined, refresh: RuntimeSnapshotRefreshMode = 'on-change'): MemorySnapshotState | undefined {
   if (view === undefined) return undefined
   const entries: string[] = []
   const branchVisibility: string[] = []
@@ -38,16 +39,17 @@ export function memorySnapshotState(view: ComposableMemoryView | undefined): Mem
       completeRuntime = false
       return fragment
     }
-    runtimeScopes.set(fragment.sourceInstanceKey, snapshot.scope)
-    if (hash(snapshot.branchVisibility)) branchVisibility.push(digest([fragment.sourceInstanceKey, fragment.id, snapshot.branchVisibility]))
-    else completeRuntime = false
+    if (hash(snapshot.branchVisibility)) {
+      branchVisibility.push(digest([fragment.sourceInstanceKey, fragment.id, snapshot.branchVisibility]))
+      if (refresh === 'session-start') runtimeScopes.set(fragment.sourceInstanceKey, snapshot.scope)
+    } else completeRuntime = false
     entries.push(...snapshot.entries.map(entry => digest([fragment.sourceInstanceKey, fragment.id, entry])))
     const { text: _text, revision: _revision, ...identity } = fragment
     return { ...identity, provenance: { ...provenance, snapshot: { version: 1, scope: snapshot.scope } } }
   })
   const grantIds = new Map<string, string>()
-  const grants = view.readGrants.map(grant => {
-    const scope = grant.schema === 'dsh-mnemon.runtime/v1' ? runtimeScopes.get(grant.sourceInstanceKey) : undefined
+  const grants = !completeRuntime || runtimeScopes.size === 0 ? view.readGrants : view.readGrants.map(grant => {
+    const scope = grant.schema === 'dsh-mnemon.runtime/v1' && grant.consistency === 'exact-snapshot' ? runtimeScopes.get(grant.sourceInstanceKey) : undefined
     if (scope === undefined) return grant
     const stableId = `${grant.sourceInstanceKey}/grant/${scope}`
     grantIds.set(grant.id, stableId)
