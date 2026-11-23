@@ -1972,6 +1972,102 @@ describe('Mnemon memory subagent coordinator', () => {
       agentOptions: { provider: 'pinned-provider', model: 'pinned-model', maxTokens: 32_768 },
     }))
   })
+
+  it('surfaces the redacted last failed tool detail when a delegated child completes without recording its result (#733)', async () => {
+    const resultTools = toolRegistry()
+    const host = observedSubagents(child => {
+      resultTools.emit('tools/result', {
+        name: 'run_code', arguments: {}, agent: child, signal: new AbortController().signal,
+      }, {
+        isError: true,
+        error: {
+          message: 'Local sandbox unavailable for mode "workspace-write" with Bearer tok_secret123',
+          info: { code: 'SANDBOX_UNAVAILABLE' },
+        },
+      })
+    })
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools.value)
+
+    const error = await coordinator.write(parent(), 'create-memory-body', {
+      name: 'Project decisions',
+      description: 'Durable architecture notes.',
+    }, new AbortController().signal).then(() => undefined, caught => caught)
+
+    expect(error).toBeInstanceOf(Error)
+    if (!(error instanceof Error)) throw new Error('expected write to reject')
+    expect(error.message).toBe(
+      'memory subagent completed without recording its result (last tool error in run_code: SANDBOX_UNAVAILABLE: Local sandbox unavailable for mode "workspace-write" with Bearer [redacted])',
+    )
+    expect(error.message).not.toContain('tok_secret123')
+  })
+
+  it('surfaces failed mnemon_subagent_result errors and ignores unrelated agent tool errors (#733)', async () => {
+    const resultTools = toolRegistry()
+    const failedResultHost = observedSubagents(child => {
+      resultTools.emit('tools/result', {
+        name: 'mnemon_subagent_result', arguments: {}, agent: child, signal: new AbortController().signal,
+      }, {
+        isError: true,
+        content: [{ type: 'text', text: 'Error: Invalid schema for sk-secret123456' }],
+      })
+    })
+    const failedResultCoordinator = new MnemonSubagentCoordinator(failedResultHost.value, runtimeSource(), resultTools.value)
+
+    await expect(failedResultCoordinator.remember(parent(), { content: 'Use SQLite.' }, new AbortController().signal))
+      .rejects.toThrow('memory subagent completed without recording its result (last tool error in mnemon_subagent_result: Invalid schema for [redacted])')
+
+    const isolatedTools = toolRegistry()
+    const otherChild = { ...parent('subagent'), id: 'other-child-run' } as HostAgent
+    const unrelatedHost = observedSubagents(() => {
+      isolatedTools.emit('tools/result', {
+        name: 'run_code', arguments: {}, agent: otherChild, signal: new AbortController().signal,
+      }, { isError: true, error: { message: 'other child error', info: { code: 'CODE_RUN_FAILED' } } })
+      isolatedTools.emit('tools/result', {
+        name: 'run_code', arguments: {}, agent: parent(), signal: new AbortController().signal,
+      }, { isError: true, error: { message: 'parent error', info: { code: 'CODE_RUN_FAILED' } } })
+    })
+    const isolatedCoordinator = new MnemonSubagentCoordinator(unrelatedHost.value, runtimeSource(), isolatedTools.value)
+
+    const error = await isolatedCoordinator.remember(parent(), { content: 'Use SQLite.' }, new AbortController().signal)
+      .then(() => undefined, caught => caught)
+    expect(error).toBeInstanceOf(Error)
+    if (!(error instanceof Error)) throw new Error('expected remember to reject')
+    expect(error.message).toBe('memory subagent completed without recording its result')
+  })
+
+  it('surfaces failed tool details and redacts stopped diagnostics for standalone idle reviews (#733)', async () => {
+    const resultTools = toolRegistry()
+    const runtime = runtimeSource()
+    runtime.config.idleReview.silent = true
+    const host = subagents(undefined, 'completed', ['spawn'])
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtime, resultTools.value)
+
+    coordinator.setIsolatedReviewRunner(async request => {
+      const reviewer = { ...parent(), id: request.sessionId } as HostAgent
+      resultTools.emit('tools/result', {
+        name: 'run_code', arguments: {}, agent: reviewer, signal: request.signal,
+      }, {
+        isError: true,
+        error: { message: 'Local sandbox unavailable', info: { code: 'SANDBOX_UNAVAILABLE' } },
+      })
+      return { stopReason: 'completed' }
+    })
+
+    await expect(coordinator.review(parent(), new AbortController().signal, () => {}))
+      .rejects.toThrow('memory subagent completed without recording its result (last tool error in run_code: SANDBOX_UNAVAILABLE: Local sandbox unavailable)')
+
+    coordinator.setIsolatedReviewRunner(async () => ({
+      stopReason: 'error',
+      detail: 'Gateway rejected Authorization: Bearer secret_abc123 and sk-secret123456',
+    }))
+
+    const error = await coordinator.review(parent(), new AbortController().signal, () => {}).then(() => undefined, caught => caught)
+    expect(error).toBeInstanceOf(Error)
+    if (!(error instanceof Error)) throw new Error('expected review to reject')
+    expect(error.message).toBe('memory subagent stopped with error: Gateway rejected Authorization: Bearer [redacted] and [redacted]')
+    expect(error.message).not.toContain('secret_abc123')
+    expect(error.message).not.toContain('sk-secret123456')
+  })
 })
 
 /**

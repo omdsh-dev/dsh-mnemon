@@ -25,7 +25,7 @@ import { childComposition, startSubagent, type SubagentStartAgents } from './sub
 import type { IdleReviewFailure, MemoryToolName } from './protocol.ts'
 import { assertDshOutputSchema, assertDshOutputValue } from './subagent-output-schema.ts'
 import { ANSWER_PERSONA, ANSWER_SCHEMA, AUTONOMOUS_WRITE_PERSONA, indentedText, METADATA_MAINTENANCE_PERSONA, METADATA_MAINTENANCE_SCHEMA, metadataSampleText, naturalEvidence, naturalRequest, PROVIDER_PLACEMENT_PERSONA, providerPlacementSchema, REQUEST_LABELS, reviewPersona, SUPERVISED_WRITE_PERSONA, TARGETED_WRITE_LABELS, WRITE_PERSONA, WRITE_SCHEMA } from './subagent-prompts.ts'
-import { isTool, object, optionalObject, recoverStructuredResult, reviewReceipt, strings, subagentFailureDetail, type CapturedSubagentResult, type CapturedToolReceipt, type ToolReceiptRecovery } from './subagent-receipts.ts'
+import { isTool, missingSubagentResultMessage, object, optionalObject, recoverStructuredResult, reviewReceipt, strings, subagentFailureDetail, toolFailureDetail, type CapturedSubagentResult, type CapturedToolFailure, type CapturedToolReceipt, type HostToolResultObservation, type ToolReceiptRecovery } from './subagent-receipts.ts'
 import { archivableElsewhere } from './archive-destinations.ts'
 import { runtimeArchiveSource, runtimeLocked, type RuntimeModelResult, type RuntimeWriteContext } from './runtime-capacity.ts'
 import { archiveDocumentLocked, documentLocked, type DocumentWorkflowHost } from './document-archive.ts'
@@ -130,11 +130,6 @@ export class IdleReviewError extends Error {
     super(message, options)
     this.name = 'IdleReviewError'
   }
-}
-
-interface HostToolResultObservation {
-  isError?: boolean
-  value?: unknown
 }
 
 interface RecallAuthority {
@@ -911,6 +906,7 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
     const reviewReceipts: CapturedToolReceipt[] = []
     const writeReceipts: CapturedToolReceipt[] = []
     const stagedReceipts = new Map<symbol, CapturedToolReceipt[]>()
+    const lastToolFailures = new Map<string, CapturedToolFailure>()
     let expectedChildId: string | undefined
     const canSubmit = (agent: HostAgent | undefined) => isSubagent(agent) || (agent !== undefined && this.standaloneReviewIds.has(agent.id))
     const observer = this.resultRuntime!.on('tools/result', ((execution: ToolExecution, result: HostToolResultObservation) => {
@@ -924,6 +920,10 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
         writeReceipts.push({ agentId: execution.agent.id, name: execution.name, arguments: execution.arguments, value: result.value })
       }
       if (signal.aborted) return
+      if (result.isError === true && execution.agent !== undefined && canSubmit(execution.agent)
+        && typeof execution.name === 'string' && execution.name !== '') {
+        lastToolFailures.set(execution.agent.id, { name: execution.name, detail: toolFailureDetail(result) })
+      }
       if (execution.token !== undefined) {
         const entries = stagedReceipts.get(execution.token)
         if (entries !== undefined) {
@@ -989,11 +989,11 @@ This is the only completion channel for this run. Do not finish with a plain-tex
           structured = recoverStructuredResult(recovery, committedReceipts.filter(receipt => receipt.agentId === runId))
         }
         if (result.stopReason !== 'completed') {
-          const detail = activeRun === undefined ? result.diagnostic : subagentFailureDetail(activeRun, result)
+          const detail = subagentFailureDetail(activeRun, result)
           throw new SubagentStoppedError(result.stopReason, perOpMaxTokens, detail)
         }
         if (structured !== undefined) assertDshOutputValue(outputSchema, structured)
-        if (structured === undefined) throw new Error('memory subagent completed without recording its result')
+        if (structured === undefined) throw new Error(missingSubagentResultMessage(lastToolFailures.get(runId)))
         if (operation === 'review' && ['failed', 'partial', 'unknown'].includes(String(object(structured).action))) throw new Error(`memory review reported ${object(structured).action}`)
         return {
           provider,
