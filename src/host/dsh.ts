@@ -153,7 +153,7 @@ export interface HostToolExecutionInput {
   callId: string
   name: string
   arguments: unknown
-  agent: HostAgent
+  agent?: HostAgent
   signal: AbortSignal
 }
 
@@ -163,7 +163,10 @@ export interface HostAgentContext {
     execute?(input: HostToolExecutionInput): Promise<{ isError: boolean }>
     setExecutor?(executor: unknown): unknown
     guard?(guard: (execution: ToolExecution) => string | undefined): unknown
+    checkGuards?(execution: ToolExecution): unknown
+    executable?(name: string, scope?: HostAgent): unknown
     get?(name: string, scope?: HostAgent): unknown
+    schemas?(scope?: HostAgent): readonly { name?: string }[]
     restrict?(filter: { allow?: string[]; deny?: string[] }): unknown
   }
   systemPrompt?: {

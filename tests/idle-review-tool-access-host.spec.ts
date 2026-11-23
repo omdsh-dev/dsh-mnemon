@@ -41,11 +41,12 @@ const ptcServices = await Promise.all(['dsh-fs-local', 'dsh-subprocess-local', '
 
 describe('idle review tool access host', () => {
 async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = false, codeMode = false, autoReview = false, publicationWrites = false,
-  visibility?: { silent: boolean }) {
+  visibility?: { silent: boolean }, autoDecision?: (actionName: string) => string) {
   const f = await compositionFixture({ idleReviewMs: 5_000, idleReview: { provider, persistWatermark, minIntervalMs: 5_000, maxPerSession: 2, ...visibility } })
   const body = publicationWrites ? await f.memorySpace() : undefined
   const ctx = new Context()
   const modelCalls: string[] = []
+  const autoReviewActions: string[] = []
   const children: string[] = []
   const reviewOwners: Agent[] = []
   const reviews: Array<{ id: string; origin: string | undefined; owner: string | undefined }> = []
@@ -61,8 +62,14 @@ async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = 
         const subagents = ctx.subagents as unknown as { rootOf?(agent: Agent): Agent }
         reviews.push({ id, origin: agent.session.header.origin, owner: subagents.rootOf?.(agent).id })
       }
-      if (autoReview && options.messages.some(message => message.role === 'user' && message.content.some(block => block.type === 'text' && block.text.startsWith('ENVIRONMENT\n')))) {
-        const text = '{"risk":"low","decision":"allow"}'
+      const reviewBlock = autoReview
+        ? options.messages.find(message => message.role === 'user')?.content.find(block => block.type === 'text' && block.text.startsWith('ENVIRONMENT\n'))
+        : undefined
+      if (reviewBlock?.type === 'text') {
+        const actionJson = reviewBlock.text.split('\n\nPENDING_ACTION\n\n')[1]
+        const actionName = actionJson === undefined ? '' : String((JSON.parse(actionJson) as { name?: unknown }).name ?? '')
+        autoReviewActions.push(actionName)
+        const text = autoDecision?.(actionName) ?? '{"risk":"low","decision":"allow"}'
         yield { type: 'block-start', index: 0, blockType: 'text' }
         yield { type: 'text-delta', index: 0, text }
         yield { type: 'block-end', index: 0, block: { type: 'text', text } }
@@ -80,12 +87,14 @@ async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = 
         yield { type: 'finish', reason: { kind: 'tool-calls' } }
         return
       }
-      if (String(options.sessionId) !== 'parent-denied' && (publicationWrites || !options.messages.some(message => message.role === 'tool'))) {
+      const delegatedStart = options.messages.findLastIndex(message => message.role === 'user' && JSON.stringify(message.content).includes('[dsh-mnemon:delegated '))
+      const childHasToolResult = options.messages.slice(Math.max(0, delegatedStart)).some(message => message.role === 'tool')
+      if (String(options.sessionId) !== 'parent-denied' && (publicationWrites || !childHasToolResult)) {
         const system = JSON.stringify(options.messages.filter(message => message.role === 'system'))
         const requestId = system.match(/requestId `([^`]+)`/u)?.[1]
         const ptc = options.tools?.some(tool => tool.name === 'run_code') && !options.tools?.some(tool => tool.name === 'mnemon_subagent_result')
         const write = JSON.stringify(options.messages).includes('[dsh-mnemon:delegated write]')
-        const mutation = !publicationWrites || options.messages.some(message => message.role === 'tool') ? undefined : write
+        const mutation = !publicationWrites || childHasToolResult ? undefined : write
           ? { name: 'mnemon_remember', input: { memoryBodyId: body!.id, content: 'Synthetic publication-safe memory.' } }
           : { name: 'mnemon_runtime_memory', input: { action: 'add', target: 'memory', content: 'Synthetic publication-safe runtime.' } }
         const tool = mutation?.name ?? 'mnemon_subagent_result'
@@ -156,7 +165,7 @@ async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = 
     const stop = parent.ctx.on('agent/request', async (_payload, next) => { await run(); return next() }, { prepend: true })
     try { await turn() } finally { stop() }
   }
-  return { ...f, ctx, coordinator, lifecycle, parent, turn, duringStep, modelCalls, children, reviewOwners, reviews, body,
+  return { ...f, ctx, coordinator, lifecycle, parent, turn, duringStep, modelCalls, autoReviewActions, children, reviewOwners, reviews, body,
     enableAuto: () => { preset = 'auto' },
     foreground: async () => { foregroundCall = true; await turn(); return foregroundExecutions },
     async close() {
@@ -326,6 +335,100 @@ it.skipIf(!hasAutoReview).each([false, true])('keeps foreground tools usable aft
     expect(await f.foreground(), JSON.stringify(f.parent.session.snapshotEvents().filter(event => event.type === 'tool/result').map(event => event.data))).toBe(1)
     expect(await f.foreground()).toBe(2)
     await assertReloadable(f)
+  } finally { await f.close() }
+})
+
+it.skipIf(!hasAutoReview).each([
+  { provider: 'spawn', codeMode: false },
+  { provider: 'spawn', codeMode: true },
+  { provider: 'fork', codeMode: false },
+  { provider: 'fork', codeMode: true },
+] as const)('starts idle review under published Auto review without orphan PTC dispatches ($provider, PTC=$codeMode, issue 704)', async ({ provider, codeMode }) => {
+  const f = await fixture(provider, false, codeMode, true, true)
+  try {
+    f.live.config.idleReview.runtimeMemory = true
+    f.enableAuto()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    expect(await f.foreground()).toBe(1)
+    expect(await f.foreground()).toBe(2)
+    const parentEvents = f.parent.session.snapshotEvents()
+    expect(parentEvents.filter(event => (event.type === 'tool/ptc-dispatch-start' || event.type === 'tool/ptc-dispatch')
+      && event.data.name === 'mnemon_subagent_result')).toEqual([])
+    expect(f.coordinator.reviewAccessStatus(f.parent as unknown as HostAgent)).toEqual({
+      state: 'available', checkedAt: expect.any(String),
+    })
+    expect(f.lifecycle.snapshot('parent-denied').current?.idleReviewBlocked).toBeUndefined()
+    const beforeReview = f.autoReviewActions.length
+    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.waitFor(() => expect(f.coordinator.snapshot().reviews).toBe(1), { timeout: 10_000 })
+    expect(f.lifecycle.snapshot('parent-denied').current).toMatchObject({ reviewRunning: false, lastReviewAction: 'added' })
+    expect(await f.graph.source('runtime').read('snapshot')).toMatchObject({
+      entries: [expect.objectContaining({ content: 'Synthetic publication-safe runtime.' })],
+    })
+    expect(f.autoReviewActions.slice(beforeReview)).toEqual(expect.arrayContaining(['mnemon_runtime_memory', 'mnemon_subagent_result']))
+    expect(await f.foreground()).toBe(3)
+    await assertReloadable(f)
+  } finally { await f.close() }
+}, 20_000)
+
+it.skipIf(!hasAutoReview)('keeps Auto review gating active on idle review child writes (issue 704)', async () => {
+  const f = await fixture('spawn', false, true, true, true, undefined, action => action === 'mnemon_runtime_memory'
+    ? '{"risk":"medium","decision":"deny","reason":"Synthetic Auto denial"}'
+    : '{"risk":"low","decision":"allow"}')
+  try {
+    f.live.config.idleReview.runtimeMemory = true
+    f.enableAuto()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    await f.turn()
+    await f.turn()
+    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.waitFor(() => expect(f.coordinator.snapshot().reviews).toBe(1), { timeout: 10_000 })
+    expect(f.autoReviewActions).toEqual(expect.arrayContaining(['mnemon_runtime_memory', 'mnemon_subagent_result']))
+    expect(await f.graph.source('runtime').read('snapshot')).toMatchObject({ entries: [] })
+    await assertReloadable(f)
+  } finally { await f.close() }
+}, 20_000)
+
+it.skipIf(!hasAutoReview).each([false, true])('still honors global policies and agent tool restrictions under published Auto review (PTC=%s, issue 704)', async codeMode => {
+  const f = await fixture('spawn', false, codeMode, true)
+  try {
+    f.live.config.idleReview.enabled = false
+    f.enableAuto()
+    let failure: unknown
+    let completed = false
+    await f.duringStep(async () => {
+      try {
+        const agent = f.parent as unknown as HostAgent
+        const signal = new AbortController().signal
+        const surface = [...f.parent.session.surface.nodes]
+        const beforeEvents = f.parent.session.snapshotEvents()
+        const guard = f.ctx.tools.guard(exec => exec.name.startsWith('mnemon_') ? 'Synthetic global guard.' : undefined)
+        expect(await f.coordinator.checkReviewAccess(agent, signal)).toBe(false)
+        expect(f.coordinator.reviewAccessStatus(agent)).toMatchObject({ state: 'unavailable', reason: 'handler-not-reached' })
+        guard()
+        const ask = f.ctx.on('tools/pre-execute', async (exec, next) => exec.name === 'mnemon_subagent_result' ? { kind: 'ask' } : next())
+        expect(await f.coordinator.checkReviewAccess(agent, signal)).toBe(false)
+        expect(f.coordinator.reviewAccessStatus(agent)).toMatchObject({ state: 'unavailable', reason: 'approval-required' })
+        ask()
+        const post = f.ctx.on('tools/post-execute', async (exec, _result, next) => exec.name === 'mnemon_subagent_result'
+          ? { kind: 'block', feedback: [{ type: 'text', text: 'Synthetic post block.' }] } : next())
+        expect(await f.coordinator.checkReviewAccess(agent, signal)).toBe(false)
+        expect(f.coordinator.reviewAccessStatus(agent)).toMatchObject({ state: 'unavailable', reason: 'result-rejected' })
+        post()
+        const restricted = f.parent.ctx.tools.restrict({ deny: ['mnemon_subagent_result'] })
+        expect(await f.coordinator.checkReviewAccess(agent, signal)).toBe(false)
+        expect(f.coordinator.reviewAccessStatus(agent)).toMatchObject({ state: 'unavailable', reason: 'handler-not-reached' })
+        restricted()
+        expect(await f.coordinator.checkReviewAccess(agent, signal)).toBe(true)
+        expect(f.coordinator.reviewAccessStatus(agent)).toEqual({ state: 'available', checkedAt: expect.any(String) })
+        expect(f.autoReviewActions).toEqual([])
+        expect(f.parent.session.surface.nodes).toEqual(surface)
+        expect(f.parent.session.snapshotEvents()).toEqual(beforeEvents)
+        completed = true
+      } catch (error) { failure = error }
+    })
+    if (failure !== undefined) throw failure
+    expect(completed).toBe(true)
   } finally { await f.close() }
 })
 
