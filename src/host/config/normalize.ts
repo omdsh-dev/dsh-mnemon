@@ -151,11 +151,16 @@ function resolveRuntimeMemory(value: RuntimeMemoryConfig | undefined): SharedRes
   if (typeof deferLowPriority !== 'boolean') throw new Error('dsh-mnemon: Runtime deferLowPriority must be a boolean')
   const inheritToSubagents = value?.inheritToSubagents ?? false
   if (typeof inheritToSubagents !== 'boolean') throw new Error('dsh-mnemon: Runtime inheritToSubagents must be a boolean')
+  const snapshotRefresh = value?.snapshotRefresh ?? 'on-change'
+  if (snapshotRefresh !== 'on-change' && snapshotRefresh !== 'session-start') {
+    throw new Error('dsh-mnemon: Runtime snapshotRefresh must be "on-change" or "session-start"')
+  }
   return {
     bm25Recall,
     indexPush,
     deferLowPriority,
     inheritToSubagents,
+    snapshotRefresh,
     memoryLimitBytes: boundedInteger(value?.memoryLimitBytes, DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES, MIN_RUNTIME_MEMORY_LIMIT_BYTES, MAX_RUNTIME_MEMORY_LIMIT_BYTES, 'Runtime MEMORY.md limit', ' bytes'),
     userLimitBytes: boundedInteger(value?.userLimitBytes, DEFAULT_RUNTIME_USER_LIMIT_BYTES, MIN_RUNTIME_MEMORY_LIMIT_BYTES, MAX_RUNTIME_MEMORY_LIMIT_BYTES, 'Runtime USER.md limit', ' bytes'),
     maintenanceMaxTokens: boundedInteger(value?.maintenanceMaxTokens, DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS, MIN_RUNTIME_MAINTENANCE_MAX_TOKENS, MAX_RUNTIME_MAINTENANCE_MAX_TOKENS, 'Runtime maintenance maxTokens'),

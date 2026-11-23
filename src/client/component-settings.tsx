@@ -113,6 +113,10 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
   const inheritance = useLive(configured?.inheritToSubagents === true, async value => {
     await scope.mutate([{ op: 'set', path: ['runtimeMemory', 'inheritToSubagents'], value }])
   })
+  const savedSnapshotRefresh: 'on-change' | 'session-start' = configured?.snapshotRefresh === 'session-start' ? 'session-start' : 'on-change'
+  const snapshotRefresh = useLive(savedSnapshotRefresh, async value => {
+    await scope.mutate([{ op: 'set', path: ['runtimeMemory', 'snapshotRefresh'], value }])
+  })
   const savedLimits: RuntimeLimits = {
     userLimitBytes: String(configured?.userLimitBytes ?? RUNTIME_MEMORY_LIMITS.user),
     memoryLimitBytes: String(configured?.memoryLimitBytes ?? RUNTIME_MEMORY_LIMITS.memory),
@@ -145,6 +149,12 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
             { value: 'global', label: t('config.runtimeUserScopeGlobal'), detail: t('config.runtimeUserScopeGlobalHint') },
           ]} />
         </div>
+        <div data-settings-section="snapshot-refresh">
+          <SelectRow id="mnemon-runtime-snapshot-refresh" label={t('config.runtimeSnapshotRefreshTitle')} value={snapshotRefresh.value} disabled={disabled} onChange={snapshotRefresh.set} options={[
+            { value: 'on-change', label: t('config.runtimeSnapshotRefreshOnChange'), detail: t('config.runtimeSnapshotRefreshOnChangeHint') },
+            { value: 'session-start', label: t('config.runtimeSnapshotRefreshSessionStart'), detail: t('config.runtimeSnapshotRefreshSessionStartHint') },
+          ]} />
+        </div>
         <div data-settings-section="inheritance">
           <ToggleRow id="mnemon-runtime-inherit-subagents" label={t('config.runtimeInheritance')}
             hint={t('config.runtimeInheritanceHint')} checked={inheritance.value} disabled={disabled} onChange={inheritance.set} />
@@ -160,7 +170,7 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
             hint={t('config.runtimeIndexPushHint')} checked={indexPush.value} disabled={disabled} onChange={indexPush.set} />
         </div>
       </div>
-      <WriteFailure error={profile.failed ?? inheritance.failed ?? deferred.failed ?? bm25.failed ?? indexPush.failed} t={t} />
+      <WriteFailure error={profile.failed ?? snapshotRefresh.failed ?? inheritance.failed ?? deferred.failed ?? bm25.failed ?? indexPush.failed} t={t} />
     </section>
     <section className={css.panelSection} data-settings-section="limits" aria-labelledby="mnemon-runtime-limits">
       <div className={css.panelHeading}>

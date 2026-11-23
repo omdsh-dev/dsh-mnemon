@@ -545,7 +545,7 @@ class MnemonAgentLifecycle {
     const wake = this.config.lifecycleEnabled && !this.memoryTurn?.excluded ? this.memoryWake(presentation) : undefined
     const ranges = wake === undefined ? undefined : runtimeSnapshotRanges(wake)
     return prepareMemorySnapshot(this.agent.session, wake?.text, wake === undefined ? undefined : memorySnapshotState(view),
-      { ...options, ...(ranges === undefined ? {} : { runtimeRanges: ranges }) })
+      { freeze: this.config.runtimeMemory.snapshotRefresh === 'session-start', ...options, ...(ranges === undefined ? {} : { runtimeRanges: ranges }) })
   }
 
   private restoreSnapshotAfterCompaction(active: PendingMemorySnapshot, authority: SnapshotAuthority | undefined): void {

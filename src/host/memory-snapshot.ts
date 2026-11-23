@@ -118,6 +118,7 @@ export function summaryWithoutTransientMemory(messages: readonly Message[], auth
 export interface MemorySnapshotOptions {
   deferRetirement?: boolean
   checkpoint?: boolean
+  freeze?: boolean
   runtimeRanges?: RuntimeSnapshotRange[]
   recall?: { view: Bm25View; query: string | undefined; checkpoint: boolean }
 }
@@ -147,6 +148,10 @@ export function prepareMemorySnapshot(session: HostSession, text: string | undef
     }]
   })
   const latest = snapshots.at(-1)
+  const frozen = options.freeze === true && options.checkpoint !== true && current !== undefined
+    && state !== undefined && snapshots.length > 0
+    && snapshots.every(snapshot => snapshot.state?.boundary === state.boundary
+      && snapshot.state?.branchVisibility === state.branchVisibility)
   const appendOnly = options.deferRetirement === true && state?.branchVisibility !== undefined
     && (options.runtimeRanges?.length ?? 0) > 0 && snapshots.every(snapshot =>
       snapshot.state?.branchVisibility === state.branchVisibility && (snapshot.runtimeRanges?.length ?? 0) > 0)
@@ -158,13 +163,14 @@ export function prepareMemorySnapshot(session: HostSession, text: string | undef
     || snapshots.reduce((total, snapshot) => total + Buffer.byteLength(snapshot.text, 'utf8'), 0)
       + (unchanged || current === undefined ? 0 : Buffer.byteLength(current, 'utf8')) <= MAX_SNAPSHOT_BYTES))
   const retained = current === undefined ? []
+    : frozen ? snapshots
     : options.checkpoint === true ? unchanged && state !== undefined && latest?.state?.boundary === state.boundary
       && retainsSnapshotEntries(latest.state.entries, state.entries) ? [latest] : []
     : compatible && withinBudget ? snapshots
     : state === undefined && unchanged ? [latest!] : []
   const recall = prepareBm25Recall(recalls, options.recall?.view, options.recall?.query, options.recall?.checkpoint === true)
   const stale = [...snapshots.filter(snapshot => !retained.includes(snapshot)).map(snapshot => snapshot.seq), ...unreadableRecalls, ...recall.retire]
-  const message = current === undefined || (unchanged && retained.includes(latest!))
+  const message = current === undefined || frozen || (unchanged && retained.includes(latest!))
     ? undefined : createPluginMessage(current, 'memory-snapshot', {
         ...(state === undefined ? {} : { snapshot: state }),
         ...(options.runtimeRanges === undefined ? {} : { runtimeRanges: options.runtimeRanges }),

@@ -61,11 +61,14 @@ export interface ResolvedDocumentsConfig {
   limitBytes: number
 }
 
+export type RuntimeSnapshotRefreshMode = 'on-change' | 'session-start'
+
 export interface RuntimeMemoryConfig {
   bm25Recall?: boolean
   indexPush?: boolean
   deferLowPriority?: boolean
   inheritToSubagents?: boolean
+  snapshotRefresh?: RuntimeSnapshotRefreshMode
   memoryLimitBytes?: number
   userLimitBytes?: number
   maintenanceMaxTokens?: number
@@ -76,6 +79,7 @@ export interface ResolvedRuntimeMemoryConfig {
   indexPush: boolean
   deferLowPriority: boolean
   inheritToSubagents: boolean
+  snapshotRefresh: RuntimeSnapshotRefreshMode
   memoryLimitBytes: number
   userLimitBytes: number
   maintenanceMaxTokens: number

@@ -124,12 +124,21 @@ describe('Mnemon settings bridge', () => {
     const handler = createSettingsHandler(settings)
     const recall = { op: 'set', path: ['runtimeMemory', 'bm25Recall'], value: true }
     const indexPush = { op: 'set', path: ['runtimeMemory', 'indexPush'], value: true }
+    const snapshotRefresh = { op: 'set', path: ['runtimeMemory', 'snapshotRefresh'], value: 'session-start' }
     const capacity = { op: 'set', path: ['runtimeMemory', 'userLimitBytes'], value: 8192 }
-    const ops = [recall, indexPush, capacity]
+    const ops = [recall, indexPush, snapshotRefresh, capacity]
 
     await expect(handler('mutate', { ops, expectedRevision: 3 })).resolves.toMatchObject({ ok: true })
     expect(mutate).toHaveBeenCalledWith('mnemon', ops, 3)
-    for (const op of [{ ...recall, value: 'false' }, { ...recall, value: null }, { ...indexPush, value: 'true' }, { ...indexPush, value: null }, { ...capacity, value: 0 }]) {
+    for (const op of [
+      { ...recall, value: 'false' },
+      { ...recall, value: null },
+      { ...indexPush, value: 'true' },
+      { ...indexPush, value: null },
+      { ...snapshotRefresh, value: 'never' },
+      { ...snapshotRefresh, value: null },
+      { ...capacity, value: 0 },
+    ]) {
       await expect(handler('mutate', { ops: [op] })).resolves.toMatchObject({ ok: false })
     }
     expect(mutate).toHaveBeenCalledTimes(1)

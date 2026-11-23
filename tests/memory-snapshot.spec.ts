@@ -238,6 +238,62 @@ describe('memory snapshot surface updates', () => {
     expect(f.session.deriveMessages()).toEqual(messages.slice(1))
   })
 
+  it('freezes the session-start snapshot across content changes while respecting authority, branch, exclusion and compaction boundaries', () => {
+    const f = fixture()
+    const plan = (text: string | undefined, snapshotState?: MemorySnapshotState, checkpoint = false) =>
+      prepareMemorySnapshot(f.session as unknown as HostSession, text, snapshotState, { freeze: true, checkpoint })
+    const initialState = { ...state(['a'.repeat(64)]), branchVisibility: 'd'.repeat(64) }
+    f.commit(plan('Initial session-start snapshot', initialState))
+    const initialMessages = f.session.deriveMessages()
+    expect(initialMessages).toHaveLength(1)
+
+    for (const [text, entries] of [
+      ['After adding an entry', ['a'.repeat(64), 'e'.repeat(64)]],
+      ['After replacing an entry', ['f'.repeat(64)]],
+      ['After removing every entry', []],
+    ] as const) {
+      const update = plan(text, { ...initialState, entries: [...entries] })
+      expect(update.message).toBeUndefined()
+      f.commit(update)
+      expect(f.session.deriveMessages()).toEqual(initialMessages)
+      expect(f.session.surface.contentGeneration).toBe(0)
+    }
+
+    const restored = Session.create(SessionId('snapshot-projection'), f.session.snapshotEvents())
+    const resumed = prepareMemorySnapshot(restored as unknown as HostSession, 'After resume edit', { ...initialState, entries: ['1'.repeat(64)] }, { freeze: true })
+    expect(resumed.message).toBeUndefined()
+    resumed.retire(2, 1)
+    expect(restored.deriveMessages()).toEqual(initialMessages)
+
+    const branchChanged = plan('Switched git branch', { ...initialState, branchVisibility: '2'.repeat(64), entries: ['2'.repeat(64)] })
+    expect(branchChanged.message?.content).toEqual([{ type: 'text', text: 'Switched git branch' }])
+    f.commit(branchChanged)
+    expect(f.session.deriveMessages()).toHaveLength(1)
+    expect(f.session.deriveMessages()[0]?.content).toEqual([{ type: 'text', text: 'Switched git branch' }])
+
+    const boundaryChanged = plan('Boundary changed', { ...state(['3'.repeat(64)], 'c'.repeat(64)), branchVisibility: '2'.repeat(64) })
+    expect(boundaryChanged.message?.content).toEqual([{ type: 'text', text: 'Boundary changed' }])
+    f.commit(boundaryChanged)
+    expect(f.session.deriveMessages()).toHaveLength(1)
+    expect(f.session.deriveMessages()[0]?.content).toEqual([{ type: 'text', text: 'Boundary changed' }])
+
+    const checkpointed = plan('After compaction checkpoint', { ...state(['4'.repeat(64)], 'c'.repeat(64)), branchVisibility: '2'.repeat(64) }, true)
+    expect(checkpointed.message?.content).toEqual([{ type: 'text', text: 'After compaction checkpoint' }])
+    f.commit(checkpointed)
+    expect(f.session.deriveMessages()).toHaveLength(1)
+    expect(f.session.deriveMessages()[0]?.content).toEqual([{ type: 'text', text: 'After compaction checkpoint' }])
+
+    const refrozen = plan('Edited after compaction', { ...state(['5'.repeat(64)], 'c'.repeat(64)), branchVisibility: '2'.repeat(64) })
+    expect(refrozen.message).toBeUndefined()
+    f.commit(refrozen)
+    expect(f.session.deriveMessages()[0]?.content).toEqual([{ type: 'text', text: 'After compaction checkpoint' }])
+
+    const excluded = plan(undefined, undefined)
+    expect(excluded.message).toBeUndefined()
+    f.commit(excluded)
+    expect(f.session.deriveMessages()).toEqual([])
+  })
+
   it('checkpoints changed authority even with identical text, and retires removed or corrected facts', () => {
     const f = fixture()
     f.commit(f.plan('identical text', state()))
@@ -385,6 +441,42 @@ describe('memory snapshot authority boundaries', () => {
     const reordered = structuredClone(previous)
     reordered.readGrants[0]!.value = { opaque: 'synthetic-private-grant', namespace: ['synthetic-one', 'synthetic-two'] }
     expect(memorySnapshotState(reordered)).toEqual(memorySnapshotState(previous))
+  })
+
+  it('keeps the boundary stable across Runtime search grant entry revisions while checkpointing grant or route removal', () => {
+    const first = view()
+    first.readGrants.push({
+      id: 'runtime/grant/rev-1',
+      sourceInstanceKey: 'runtime',
+      revision: 'rev-1',
+      consistency: 'exact-snapshot',
+      schema: 'dsh-mnemon.runtime/v1',
+      value: { entries: [{ target: 'memory', content: 'Entry one' }] },
+    })
+    first.routes.push({
+      id: 'runtime/search',
+      sourceInstanceKey: 'runtime',
+      sourceRouteId: 'search',
+      description: 'Search runtime.',
+      capability: 'search',
+      inputSchema: {},
+      readGrantId: 'runtime/grant/rev-1',
+      maxCalls: 4,
+    })
+    const updated = structuredClone(first)
+    updated.readGrants[1]!.id = 'runtime/grant/rev-2'
+    updated.readGrants[1]!.revision = 'rev-2'
+    updated.readGrants[1]!.value = { entries: [{ target: 'memory', content: 'Entry one' }, { target: 'memory', content: 'Entry two' }] }
+    updated.routes[1]!.readGrantId = 'runtime/grant/rev-2'
+    expect(memorySnapshotState(updated)!.boundary).toBe(memorySnapshotState(first)!.boundary)
+
+    const grantRemoved = structuredClone(first)
+    grantRemoved.readGrants.pop()
+    expect(memorySnapshotState(grantRemoved)!.boundary).not.toBe(memorySnapshotState(first)!.boundary)
+
+    const routeRemoved = structuredClone(first)
+    routeRemoved.routes.pop()
+    expect(memorySnapshotState(routeRemoved)!.boundary).not.toBe(memorySnapshotState(first)!.boundary)
   })
 })
 

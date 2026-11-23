@@ -47,6 +47,7 @@ mnemon:
   defaultRecallLimit: 10
   runtimeMemory:
     inheritToSubagents: false
+    snapshotRefresh: on-change # on-change | session-start
     memoryLimitBytes: 10240
     userLimitBytes: 4096
     maintenanceMaxTokens: 8192
@@ -112,6 +113,7 @@ mnemon:
 | `runtimeMemory.userLimitBytes` | `4096` | 1–1048576 bytes | UTF-8 byte limit for the complete `USER.md` projection |
 | `runtimeMemory.bm25Recall` | `false` | boolean | Experimental automatic matching of working memories and project Document titles in Layered conversations |
 | `runtimeMemory.indexPush` | `false` | boolean | Experimental first-step index push for Memory Space names/descriptions and Project Document summaries in Layered conversations |
+| `runtimeMemory.snapshotRefresh` | `on-change` | `on-change` / `session-start` | Re-project Runtime snapshots on storage changes (`on-change`), or freeze an open conversation's initial snapshot (`session-start`) while new sessions and recall tools read live memory |
 | `runtimeMemory.maintenanceMaxTokens` | `8192` | 128–131072 tokens | Completion-token budget for Runtime migration and compaction workers; does not change Document archive or metadata-maintenance budgets |
 | `documents.limitBytes` | `10485760` | 1–104857600 bytes | Total UTF-8 byte limit for active Project Documents copies (default 10 MiB) |
 | `embedding` | `{ enabled: false, endpoint: http://localhost:11434, model: nomic-embed-text, apiKey: '', protocol: auto }` | enabled + HTTP(S) endpoint + model + optional apiKey + protocol (auto/ollama/openai) | When enabled, the Host injects the saved endpoint, model, API key, and protocol override into every Mnemon CLI child process; an endpoint ending in `/v1` makes Mnemon use the OpenAI-compatible protocol with the API key as a Bearer token, and `protocol: openai` forces it for non-`/v1` endpoints; when disabled, existing Host environment and Mnemon defaults remain untouched |
@@ -172,6 +174,18 @@ No memory data is migrated or deleted. Disable the switch or remove the field to
 In **Plugins → dsh-mnemon → Runtime memory**, **Automatically share Runtime memory with subagents** controls automatic injection of the user profile and working memory. It is **off by default**, including for existing configurations without this field. Enable it with the switch or `runtimeMemory.inheritToSubagents: true`.
 
 The setting applies to newly created subagents. Each child captures the current choice at dispatch and keeps it across live settings changes, alongside its delegated memory View. When enabled, the captured Runtime projection is appended once per accepted turn, including native and PTC tool modes; later tool steps do not append another copy or rewrite the request prefix. The setting filters Runtime projections from all Runtime Source instances only. Parent task context, explicit memory-tool access, other Source projections and required background maintenance inputs retain their existing behavior. It does not remove content already included in a task or its conversation history.
+
+### Session-start snapshot freezing
+
+**Snapshot refresh** on Runtime memory's settings page controls `runtimeMemory.snapshotRefresh`, which defaults to `on-change`. In `on-change` mode, open conversations project updated Runtime snapshots on the next turn after `USER.md` or `MEMORY.md` changes.
+
+Choose **Freeze at session start** (`runtimeMemory.snapshotRefresh: session-start`) to decouple live memory storage from open conversation prefixes:
+
+- each open conversation projects one complete Runtime snapshot at session start and keeps it fixed across subsequent turns while storage changes in the same session, parallel sessions, or idle review;
+- new sessions immediately receive the latest Runtime snapshot, and explicit tools (`mnemon_recall`, `mnemon_runtime_memory`, `mnemon_document_search`, `mnemon_view_route`) continue reading and writing live storage;
+- authority, scope, strategy, exclusion, and Git branch visibility boundaries stay fail-closed and still retire and refresh affected snapshots immediately; DSH compaction re-establishes one fresh snapshot for the post-compaction surface and freezes it again.
+
+No memory data or session log format is changed. Switch back to `on-change` or remove the field to restore per-change refreshes on the next turn.
 
 ### Deferred low-priority Runtime entries
 
