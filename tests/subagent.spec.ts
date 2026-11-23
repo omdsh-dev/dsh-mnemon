@@ -1730,7 +1730,7 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(host.dispose).toHaveBeenCalledOnce()
   })
 
-  it('guards text-only skill children against run_code and foreign tools, forces native presentation, and sets read-only policies (#727)', async () => {
+  it.each([false, true])('guards native text-only skill children against extra tools and sets read-only policies (batch=%s, #727)', async batch => {
     const owner = parent()
     const resultTools = toolRegistry()
     const guards: Array<(execution: ToolExecution) => string | undefined> = []
@@ -1756,8 +1756,11 @@ describe('Mnemon memory subagent coordinator', () => {
           ? { overrideOf: () => 'danger-full-access' }
           : name === 'approval'
             ? { overrideOf: () => 'ask' }
-            : undefined,
+            : name === 'agentPresets'
+              ? { composedPreset: () => 'deep-ptc' }
+              : undefined,
         tools: {
+          ...(batch ? { setExecutor: () => {} } : {}),
           presentAs,
           get: (name: string) => name === 'run_code' && mode === 'ptc' ? { name } : undefined,
           guard: (callback: (execution: ToolExecution) => string | undefined) => {

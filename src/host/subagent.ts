@@ -1181,7 +1181,7 @@ This is the only completion channel for this run. Do not finish with a plain-tex
             configure: child => {
               confineReadOnlyPolicy(child)
               const restorePresentation = presentNativeTools(child)
-              if (requiresPtcTransport(child)) ptcTransportAllowed.add(child)
+              if (restorePresentation === undefined && requiresPtcTransport(child)) ptcTransportAllowed.add(child)
               return restorePresentation
             },
           } : {}),
