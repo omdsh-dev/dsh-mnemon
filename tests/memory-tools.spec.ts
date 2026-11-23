@@ -357,7 +357,7 @@ describe('AutomaticReviewAdmission under DSH 0.2.2 batch Auto review (issue 704)
         }
         const rootPtc = options.rootPtc === true
         if (rootPtc && call.name !== 'run_code') {
-          return { results: [{ callId: call.id, result: { isError: true, error: { code: 'UNKNOWN_TOOL' } } }], additionalContexts: [], concluded: false }
+          return { results: [{ callId: call.id, result: { isError: true, error: { info: { code: 'UNKNOWN_TOOL' } } } }], additionalContexts: [], concluded: false }
         }
         const parsed = JSON.parse(call.arguments) as { requestId?: string; code?: string }
         const args = call.name === 'run_code'

@@ -154,7 +154,7 @@ export class AutomaticReviewAdmission {
           return 'available'
         }
         unavailable(approvalRequired ? 'approval-required' : challenge.execution === undefined ? 'handler-not-reached' : 'result-rejected')
-        return outcome.error?.code === 'UNKNOWN_TOOL' ? 'unknown-tool' : 'rejected'
+        return outcome.error?.info?.code === 'UNKNOWN_TOOL' ? 'unknown-tool' : 'rejected'
       } finally {
         this.challenges.delete(requestId)
         combined.removeEventListener('abort', revoke)

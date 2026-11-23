@@ -1,7 +1,7 @@
 import type { HostAgentContext, HostToolExecutionInput } from './dsh.ts'
 
 type HostTools = NonNullable<HostAgentContext['tools']>
-type Outcome = { isError: boolean; error?: { code?: string } }
+type Outcome = { isError: boolean; error?: { info?: { code?: string } } }
 
 export function usesToolBatchExecution(tools: HostTools): boolean {
   return typeof tools.setExecutor === 'function'
