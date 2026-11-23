@@ -6,6 +6,7 @@
 
 ## v0.5
 
+- [v0.5.54 · 可选记忆快照冻结与可靠的闲时复盘](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.54)
 - [v0.5.53 · 多语言界面与更稳妥的更新](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.53)
 - [v0.5.52 · 维护整理与稳定的 README 链接](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.52)
 - [v0.5.51 · 共享存储与可选索引召回](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.51)

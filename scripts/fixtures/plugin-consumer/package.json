@@ -20,7 +20,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
-    "dsh-mnemon": "0.5.53",
+    "dsh-mnemon": "0.5.54",
     "dsh-mnemon-source-documents": "0.6.6",
     "dsh-mnemon-source-memory-spaces": "0.5.34",
     "dsh-mnemon-source-runtime": "0.5.25",
