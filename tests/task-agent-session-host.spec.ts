@@ -1275,7 +1275,7 @@ describe('remember target host (#387)', () => {
   const disposers: Array<() => Promise<void>> = []
   afterEach(async () => { for (const dispose of disposers.splice(0)) await dispose() })
 
-  async function host(attempts: () => string[], options: { query?: boolean } = {}) {
+  async function host(attempts: () => string[], options: { query?: boolean; finishWithText?: boolean } = {}) {
     const f = await compositionFixture()
     const project = await f.memorySpace()
     const spaces = f.graph.source('memory-spaces')
@@ -1286,22 +1286,22 @@ describe('remember target host (#387)', () => {
     const tried: string[] = []
     const seen: string[] = []
     const resumed: string[] = []
-    const adapter = new RememberAdapter(options => {
-      if (options.sessionId === 'parent') return 'Noted.'
-      const users = options.messages.filter(message => message.role === 'user').map(text)
+    const adapter = new RememberAdapter(request => {
+      if (request.sessionId === 'parent') return 'Noted.'
+      const users = request.messages.filter(message => message.role === 'user').map(text)
       const resume = users.findLastIndex(message => message.includes('RESUME:'))
       if (resume >= 0) {
-        const after = options.messages.slice(options.messages.findLastIndex(message => message.role === 'user' && text(message).includes('RESUME:')) + 1)
+        const after = request.messages.slice(request.messages.findLastIndex(message => message.role === 'user' && text(message).includes('RESUME:')) + 1)
         const answered = after.filter(message => message.role === 'tool').map(text)
         if (answered.length === 0) return { name: 'mnemon_remember', args: { content: 'Resumed: the index rebuild took four minutes.', memoryBodyId: trials.id } }
         resumed.push(...answered)
         return 'Done.'
       }
-      const system = JSON.stringify(options.messages.filter(message => message.role === 'system'))
+      const system = JSON.stringify(request.messages.filter(message => message.role === 'system'))
       const terminal = system.match(/Completion protocol: call `([^`]+)`/u)?.[1]
       const requestId = system.match(/requestId `([^`]+)`/u)?.[1]
       if (terminal === undefined || requestId === undefined) throw new Error('writer completion capability is missing')
-      const results = options.messages.filter(message => message.role === 'tool').map(text)
+      const results = request.messages.filter(message => message.role === 'tool').map(text)
       seen.splice(0, seen.length, ...results)
       const plan = attempts()
       const step = results.length
@@ -1309,6 +1309,7 @@ describe('remember target host (#387)', () => {
         tried.push(plan[step]!)
         return { name: 'mnemon_remember', args: { content: 'Tool trial batch 3: the search tool returned stale results until the index was rebuilt.', memoryBodyId: plan[step]! } }
       }
+      if (options.finishWithText === true) return 'Unable to complete the requested write.'
       return { name: terminal, args: { requestId, result: { summary: 'Saved the batch 3 finding.', action: 'stored', memoryBodyIds: [plan.at(-1)!] } } }
     })
     await ctx.plugin(LlmRuntime)
@@ -1402,5 +1403,18 @@ describe('remember target host (#387)', () => {
     await new Promise(resolve => setTimeout(resolve, 200))
     expect(h.resumed).toEqual(delivered ? [expect.stringContaining('This Mnemon task has finished')] : [])
     expect((await h.directory()).get(h.trials)?.active).toBe(false)
+  })
+
+  it('surfaces the real-Host tool error when a writer child stops in plain text without recording its result (#733)', async () => {
+    let plan: string[] = []
+    const h = await host(() => plan, { finishWithText: true })
+    plan = [h.trials]
+    const error = await h.coordinator.remember(h.parent, {
+      content: 'Tool trial batch 3: the search tool returned stale results until the index was rebuilt.',
+    }, new AbortController().signal).then(() => undefined, caught => caught)
+    expect(error).toBeInstanceOf(Error)
+    if (!(error instanceof Error)) throw new Error('expected remember to reject')
+    expect(error.message).toContain('memory subagent completed without recording its result (last tool error in mnemon_remember:')
+    expect(error.message).toContain(`Memory Space ${JSON.stringify(h.trials)} is switched off`)
   })
 })

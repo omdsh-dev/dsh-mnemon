@@ -29,6 +29,21 @@ export interface CapturedToolReceipt extends CapturedSubagentResult {
   arguments: unknown
 }
 
+export interface HostToolResultObservation {
+  isError?: boolean
+  value?: unknown
+  error?: {
+    message?: unknown
+    info?: { code?: unknown; reason?: unknown }
+  }
+  content?: ReadonlyArray<{ type?: unknown; text?: unknown }>
+}
+
+export interface CapturedToolFailure {
+  name: string
+  detail: string
+}
+
 export function reviewReceipt(receipt: CapturedToolReceipt): IdleReviewFailure['receipts'][number] | undefined {
   if (!mutationResultCommitted(receipt.value)) return undefined
   const value = object(receipt.value)
@@ -58,18 +73,59 @@ export function strings(value: unknown): string[] {
 
 export function safeFailureDetail(value: string): string {
   return value
+    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/gu, '[private key]')
     .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/gu, '[redacted]')
+    .replace(/\b((?:authorization|password|passwd|secret|token|api[-_]?key|access[-_]?token|refresh[-_]?token)["']?\s*[=:]\s*)(?:"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')/giu, '$1[redacted]')
+    .replace(/\b(Authorization:\s*(?:Bearer|Basic|Token|ApiKey)\s+)\S+/giu, '$1[redacted]')
+    .replace(/\b(Authorization:\s*)(?!(?:Bearer|Basic|Token|ApiKey)\s)\S+/giu, '$1[redacted]')
+    .replace(/\b(Bearer\s+)\S+/giu, '$1[redacted]')
+    .replace(/\b((?:password|passwd|secret|token|api[-_]?key|access[-_]?token|refresh[-_]?token)\s*[=:]\s*)[^\s&"',;]+/giu, '$1[redacted]')
     .replace(/\s+/gu, ' ')
     .trim()
     .slice(0, 500)
 }
 
-export function subagentFailureDetail(run: HostSubagentRun, result: HostSubagentResult): string | undefined {
+function toolContentText(content: HostToolResultObservation['content']): string {
+  if (!Array.isArray(content)) return ''
+  const diagnostic = content.find(block => block?.type === 'text'
+    && typeof block.text === 'string' && block.text.trimStart().startsWith('Error:'))
+  return typeof diagnostic?.text === 'string' ? diagnostic.text.trimStart().slice('Error:'.length).trim() : ''
+}
+
+export function toolFailureDetail(result: HostToolResultObservation): string {
+  const error = optionalObject(result.error)
+  const info = optionalObject(error?.info)
+  const code = typeof info?.code === 'string' ? info.code.trim() : ''
+  const message = typeof error?.message === 'string' && error.message.trim() !== ''
+    ? error.message.trim()
+    : typeof info?.reason === 'string' && info.reason.trim() !== ''
+      ? info.reason.trim()
+      : toolContentText(result.content)
+  const combined = code === ''
+    ? message
+    : message === ''
+      ? code
+      : message === code || message.startsWith(`${code}:`)
+        ? message
+        : `${code}: ${message}`
+  return safeFailureDetail(combined)
+}
+
+export function missingSubagentResultMessage(failure: CapturedToolFailure | undefined): string {
+  const base = 'memory subagent completed without recording its result'
+  if (failure === undefined) return base
+  const name = safeFailureDetail(failure.name)
+  return failure.detail === ''
+    ? `${base} (last tool error in ${name})`
+    : `${base} (last tool error in ${name}: ${failure.detail})`
+}
+
+export function subagentFailureDetail(run: HostSubagentRun | undefined, result: HostSubagentResult): string | undefined {
   if (typeof result.diagnostic === 'string') {
     const diagnostic = safeFailureDetail(result.diagnostic)
     if (diagnostic !== '') return diagnostic
   }
-  const events = run.localAgent === undefined ? [] : reverseSessionEvents(run.localAgent.session)
+  const events = run?.localAgent === undefined ? [] : reverseSessionEvents(run.localAgent.session)
   for (const { event } of events) {
     if (event?.type !== 'turn/end') continue
     const reason = event.data.reason

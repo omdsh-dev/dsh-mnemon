@@ -11,7 +11,7 @@ import type {
 } from '../src/host/dsh.ts'
 import { MnemonLifecycle, taskRoute } from '../src/host/lifecycle.ts'
 import { MemoryCompositionUnavailableError } from '../src/core/generation.ts'
-import { IdleReviewError } from '../src/host/subagent.ts'
+import { IdleReviewError, type IsolatedReviewRunner } from '../src/host/subagent.ts'
 import {
   LAYERED,
   cleanupLifecycleDirectories,
@@ -1938,5 +1938,183 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.composableTurns.beginTurn).toHaveBeenCalledOnce()
     expect(value.steer).not.toHaveBeenCalled()
     await expect(value.lifecycle.supervise('session-1', 'Durable preference')).resolves.toMatchObject({ delegated: true })
+  })
+
+  it('maps blocked isolated reviews to refusal (#733)', async () => {
+    const config = resolveConfig()
+    const value = fixture(config)
+    ;(value.composableTurns as unknown as { retainView?: () => () => void }).retainView = () => () => undefined
+    let runner: IsolatedReviewRunner | undefined
+    const coordinator = {
+      ...value.coordinator,
+      setIsolatedReviewRunner: vi.fn((callback: IsolatedReviewRunner | undefined) => { runner = callback }),
+    }
+    const agentEvents: Array<{ type: string; data: Record<string, unknown> }> = []
+    const taskCtx = {
+      on: vi.fn(() => () => undefined),
+      effect: vi.fn((callback: () => (() => unknown) | void) => {
+        const cleanup = callback()
+        return () => cleanup?.()
+      }),
+    }
+    const isolatedChild = {
+      id: 'mnemon-review-v1-blocked',
+      status: 'idle' as const,
+      session: {
+        header: {},
+        snapshotEvents: () => agentEvents,
+        eventAt: (seq: number) => agentEvents[seq],
+        surface: { nodes: [] },
+      },
+      ctx: taskCtx,
+      followup: vi.fn(() => {
+        agentEvents.push({ type: 'turn/end', data: { turn: 1, reason: { kind: 'blocked' } } })
+      }),
+      steer: vi.fn(),
+      inject: vi.fn(),
+      cancel: vi.fn(),
+      whenIdle: vi.fn(async () => undefined),
+    }
+    const ctx = {
+      agents: {
+        get: (id: string) => id === value.agent.id ? value.agent : id === isolatedChild.id ? isolatedChild : undefined,
+        roots: () => [value.agent],
+        create: vi.fn(async (taskOptions: { setup?: (agentCtx: unknown, child: unknown) => Promise<void> | void }) => {
+          await taskOptions.setup?.(taskCtx, isolatedChild)
+          return { agent: isolatedChild, dispose: vi.fn(async () => undefined) }
+        }),
+      },
+      subagents: {
+        getProvider: () => ({ capabilities: { outputSchema: true, depthLimit: true, toolFilter: true, persona: true } }),
+      },
+      get: vi.fn((name: string) => name === 'agentDefaultModel' ? value.defaultModel : name === 'agentPresets' ? value.agentPresets : undefined),
+      on: vi.fn(() => () => undefined),
+    }
+    const lifecycle = new MnemonLifecycle(ctx as never, coordinator as never, config, { ...value.runtimeSource, config } as never)
+    const stop = lifecycle.start()
+    try {
+      await value.preStep([userMessage()], 1)
+      expect(runner).toBeDefined()
+      const blocked = await runner!({
+        parent: value.agent,
+        provider: 'spawn',
+        sessionId: isolatedChild.id,
+        prompt: 'Review checkpoint.',
+        persona: 'Reviewer.',
+        allowedTools: ['mnemon_subagent_result'],
+        maxTokens: 1_024,
+        signal: new AbortController().signal,
+        guardTools: () => undefined,
+      })
+      expect(blocked).toEqual({ stopReason: 'refusal' })
+    } finally {
+      stop()
+      value.stop()
+    }
+  })
+
+  it('extracts redacted turn-end error details from managed isolated reviews when diagnostic is omitted (#733)', async () => {
+    const config = resolveConfig()
+    const value = fixture(config)
+    ;(value.composableTurns as unknown as { retainView?: () => () => void }).retainView = () => () => undefined
+    let runner: IsolatedReviewRunner | undefined
+    const coordinator = {
+      ...value.coordinator,
+      setIsolatedReviewRunner: vi.fn((callback: IsolatedReviewRunner | undefined) => { runner = callback }),
+    }
+    const rootListeners = new Map<string, (...args: never[]) => unknown>()
+    const createdAgents = new Map<string, HostAgent>()
+    createdAgents.set(value.agent.id, value.agent)
+    const makeCtx = () => ({
+      on: vi.fn(() => () => undefined),
+      effect: vi.fn((callback: () => (() => unknown) | void) => {
+        const cleanup = callback()
+        return () => cleanup?.()
+      }),
+      systemPrompt: { section: vi.fn(() => () => undefined), getSectionOrder: () => 0 },
+      tools: { restrict: vi.fn(() => () => undefined), guard: vi.fn(() => () => undefined) },
+    })
+    const managedEvents = [
+      { type: 'turn/end', data: { turn: 1, reason: { kind: 'error', error: { code: 'MODEL_ROUTE', message: 'rejected sk-secret123456' } } } },
+    ]
+    const managedChildId = 'mnemon-review-v1-managed-err'
+    const managedChild = {
+      id: managedChildId,
+      status: 'idle' as const,
+      session: {
+        header: { origin: 'subagent' as const },
+        snapshotEvents: () => managedEvents,
+        eventAt: (seq: number) => managedEvents[seq],
+        surface: { nodes: [] },
+      },
+      ctx: makeCtx(),
+      followup: vi.fn(),
+      steer: vi.fn(),
+      inject: vi.fn(),
+      cancel: vi.fn(),
+    } as unknown as HostAgent
+    const ctx = {
+      agents: {
+        get: (id: string) => createdAgents.get(id),
+        isOwnedBy: () => true,
+        roots: () => [value.agent],
+        create: vi.fn(async (taskOptions: { sessionId: string; setup?: (agentCtx: unknown, child: unknown) => Promise<void> | void }) => {
+          const ownerCtx = makeCtx()
+          const owner = {
+            id: taskOptions.sessionId,
+            status: 'idle' as const,
+            session: { header: {}, snapshotEvents: () => [], eventAt: () => undefined, surface: { nodes: [] } },
+            ctx: ownerCtx,
+            followup: vi.fn(),
+            steer: vi.fn(),
+            inject: vi.fn(),
+            cancel: vi.fn(),
+          } as unknown as HostAgent
+          await taskOptions.setup?.(ownerCtx, owner)
+          createdAgents.set(owner.id, owner)
+          return { agent: owner, dispose: vi.fn(async () => { createdAgents.delete(owner.id) }) }
+        }),
+      },
+      subagents: {
+        rootOf: (agent: HostAgent) => agent,
+        getProvider: () => ({ capabilities: { outputSchema: true, depthLimit: true }, prepareContinuable: () => undefined }),
+        startActivation: vi.fn(async (spec: { childId: string }) => {
+          createdAgents.set(spec.childId, managedChild)
+          const listener = rootListeners.get('agent/created') as ((payload: { agent: HostAgent }) => void) | undefined
+          listener?.({ agent: managedChild })
+          return {
+            childId: spec.childId,
+            result: Promise.resolve({ output: [], stopReason: 'error' }),
+            dispose: vi.fn(async () => { createdAgents.delete(spec.childId) }),
+          }
+        }),
+      },
+      get: vi.fn((name: string) => name === 'agentDefaultModel' ? value.defaultModel : name === 'agentPresets' ? value.agentPresets : undefined),
+      on: vi.fn((name: string, listener: (...args: never[]) => unknown) => {
+        rootListeners.set(name, listener)
+        return () => rootListeners.delete(name)
+      }),
+    }
+    const lifecycle = new MnemonLifecycle(ctx as never, coordinator as never, config, { ...value.runtimeSource, config } as never)
+    const stop = lifecycle.start()
+    try {
+      await value.preStep([userMessage()], 1)
+      expect(runner).toBeDefined()
+      const outcome = await runner!({
+        parent: value.agent,
+        provider: 'spawn',
+        sessionId: managedChildId,
+        prompt: 'Review checkpoint.',
+        persona: 'Reviewer.',
+        allowedTools: ['mnemon_subagent_result'],
+        maxTokens: 1_024,
+        signal: new AbortController().signal,
+        guardTools: () => undefined,
+      })
+      expect(outcome).toEqual({ stopReason: 'error', detail: 'MODEL_ROUTE: rejected [redacted]' })
+    } finally {
+      stop()
+      value.stop()
+    }
   })
 })

@@ -15,7 +15,7 @@ import { LiveMnemonRuntime } from '../src/host/runtime.ts'
 import { sessionTurnEvents } from '../src/host/session-events.ts'
 import { captureTurn, TurnSkillUseProjection } from '../src/host/skill-trajectory.ts'
 import type { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
-import { subagentFailureDetail } from '../src/host/subagent-receipts.ts'
+import { missingSubagentResultMessage, subagentFailureDetail, toolFailureDetail } from '../src/host/subagent-receipts.ts'
 import { sessionLog } from './fixtures/session-log.ts'
 import { memoryGraphFixture } from './helpers/memory-graph.ts'
 
@@ -313,6 +313,59 @@ describe('large session hot paths (issue 632)', () => {
     expect(reviewCheckpoint(session, 1_000)).toContain('Remember the SQLite decision.')
     expect(subagentFailureDetail({ localAgent: { session } } as never, { stopReason: 'failed' } as never)).toBe('MODEL: Synthetic failure')
     expect(vi.mocked(session.eventAt).mock.calls.length).toBeLessThan(600)
+  })
+
+  it('formats and redacts subagent and tool failure details without duplicating error codes (#733)', () => {
+    expect(subagentFailureDetail(undefined, {
+      output: [],
+      stopReason: 'error',
+      diagnostic: 'Authorization: Bearer tok_1234567890 api_key=mysecret sk-secret123456',
+    })).toBe('Authorization: Bearer [redacted] api_key=[redacted] [redacted]')
+    expect(toolFailureDetail({
+      isError: true,
+      error: { message: 'Local sandbox unavailable', info: { code: 'SANDBOX_UNAVAILABLE' } },
+    })).toBe('SANDBOX_UNAVAILABLE: Local sandbox unavailable')
+    expect(toolFailureDetail({
+      isError: true,
+      error: { message: 'CODE_RUN_FAILED: script threw', info: { code: 'CODE_RUN_FAILED' } },
+    })).toBe('CODE_RUN_FAILED: script threw')
+    expect(toolFailureDetail({
+      isError: true,
+      error: { info: { code: 'DENIED', reason: 'Approval required for token=abc123' } },
+    })).toBe('DENIED: Approval required for token=[redacted]')
+    expect(toolFailureDetail({
+      isError: true,
+      content: [{ type: 'text', text: 'Error: CLI failed with Authorization: Basic dXNlcjpwYXNz' }],
+    })).toBe('CLI failed with Authorization: Basic [redacted]')
+    const quoted = toolFailureDetail({
+      isError: true,
+      error: {
+        message: 'Provider rejected {"apiKey":"fixture-key","authorization":"Basic fixture-auth","accessToken":"fixture-access"} password="fixture with spaces"',
+        info: { code: 'PROVIDER_ERROR' },
+      },
+    })
+    expect(quoted).toContain('PROVIDER_ERROR: Provider rejected')
+    expect(quoted).not.toMatch(/fixture-(?:key|auth|access)|fixture with spaces/u)
+    expect(toolFailureDetail({
+      isError: true,
+      content: [
+        { type: 'text', text: 'Synthetic raw tool output' },
+        { type: 'text', text: 'Error: Sandbox unavailable' },
+        { type: 'text', text: 'Another raw block' },
+      ],
+    })).toBe('Sandbox unavailable')
+    expect(toolFailureDetail({
+      isError: true,
+      content: [{ type: 'text', text: 'Synthetic raw tool output' }],
+    })).toBe('')
+    expect(toolFailureDetail({ isError: true })).toBe('')
+    expect(missingSubagentResultMessage(undefined)).toBe('memory subagent completed without recording its result')
+    expect(missingSubagentResultMessage({ name: 'sk-fixture-example', detail: '' }))
+      .toBe('memory subagent completed without recording its result (last tool error in [redacted])')
+    expect(missingSubagentResultMessage({ name: 'run_code', detail: '' }))
+      .toBe('memory subagent completed without recording its result (last tool error in run_code)')
+    expect(missingSubagentResultMessage({ name: 'run_code', detail: 'SANDBOX_UNAVAILABLE: unavailable' }))
+      .toBe('memory subagent completed without recording its result (last tool error in run_code: SANDBOX_UNAVAILABLE: unavailable)')
   })
 
   it('keeps historical receipts across pages and reads only new events on refresh', () => {

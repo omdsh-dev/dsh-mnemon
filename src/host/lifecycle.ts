@@ -44,6 +44,7 @@ import type { SkillEvolution } from './skill-evolution.ts'
 import { IdleReviewWatermarkStore } from './idle-review-watermark.ts'
 import { activationOwned, contextIsActive, isInactiveContextError, isCreatingChild, isRootAgent, isTaskRecord, rootAgents, titleTask, withReservedChild } from './agent-compat.ts'
 import { childComposition, startSubagent } from './subagent-start.ts'
+import { subagentFailureDetail } from './subagent-receipts.ts'
 
 type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'config' | 'forAgent' | 'executions' | 'onChanged' | 'memoryParticipation'>
 
@@ -1692,7 +1693,7 @@ export class MnemonLifecycle {
       }
       if (request.signal.aborted || reason?.kind === 'aborted') return { stopReason: 'aborted' }
       if (reason?.kind === 'max-tokens') return { stopReason: 'max-tokens' }
-      if (reason?.kind === 'refusal') return { stopReason: 'refusal' }
+      if (reason?.kind === 'refusal' || reason?.kind === 'blocked') return { stopReason: 'refusal' }
       return { stopReason: 'completed' }
     } finally {
       request.signal.removeEventListener('abort', cancel)
@@ -1721,7 +1722,8 @@ export class MnemonLifecycle {
         parent: owner.agent, label: 'Idle review', cwd, prompt, agentOptions, maxDepth: 1, signal: request.signal,
       }, this.ctx, setup), true, request.sessionId)
       const result = await run.result
-      return { stopReason: result.stopReason, ...(result.diagnostic === undefined ? {} : { detail: result.diagnostic }) }
+      const detail = result.stopReason === 'completed' ? result.diagnostic : subagentFailureDetail(run, result)
+      return { stopReason: result.stopReason, ...(detail === undefined ? {} : { detail }) }
     } finally {
       try {
         await run?.dispose()
