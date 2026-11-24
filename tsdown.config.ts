@@ -42,6 +42,7 @@ const client: UserConfig = {
   outExtensions: () => ({ js: '.js' }),
   platform: 'browser',
   target: 'es2022',
+  minify: true,
   dts: false,
   sourcemap: false,
   clean: false,

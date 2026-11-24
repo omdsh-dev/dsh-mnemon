@@ -293,7 +293,7 @@ function readThemePalette(canvas: HTMLCanvasElement) {
 
 type ThemePalette = ReturnType<typeof readThemePalette>
 
-export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps): JSX.Element {
+export const MemoryGraph3D = /* @__PURE__ */ memo(function MemoryGraph3D(props: MemoryGraphProps): JSX.Element {
   const t = useT()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const paletteRef = useRef<ThemePalette | null>(null)

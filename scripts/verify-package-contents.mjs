@@ -34,9 +34,11 @@ const allowedRootFiles = new Set(['package.json', 'cordis.patch.yml', 'LICENSE',
 const missing = required.filter(path => !paths.includes(path))
 const unexpected = paths.filter(path => !allowedRootFiles.has(path) && !executables.includes(path) && !locales.includes(path) && !details.includes(path) && !(/^lib\/.+\.(?:js|d\.ts)$/.test(path)))
 const clientBundle = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
-const hostLeaks = ['require("node:', "require('node:", '#region src/host/version-updates.ts', '#region src/host/rpc.ts',
-  'login/device/code', 'login/oauth/access_token', 'api.github.com', 'Ov23liq4i7n8UsylGRfb']
-  .filter(pattern => clientBundle.includes(pattern))
+const hostLeaks = [
+  'require("node:', "require('node:", '#region src/host/version-updates.ts', '#region src/host/rpc.ts',
+  'https://registry.npmjs.org', 'dsh-mnemon-update-backup-', 'unsupported Source assistance operation',
+  'login/device/code', 'login/oauth/access_token', 'api.github.com', 'Ov23liq4i7n8UsylGRfb',
+].filter(pattern => clientBundle.includes(pattern))
 const readmeFiles = ['README.md', 'README.zh-CN.md']
 const relativeReadmeImages = readmeFiles.flatMap((path) => {
   const source = readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
