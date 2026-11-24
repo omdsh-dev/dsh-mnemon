@@ -3,9 +3,12 @@ import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { RUNTIME_MEMORY_LIMIT_MAX_BYTES, RUNTIME_MEMORY_LIMITS } from 'dsh-mnemon-source-runtime/contracts'
 import {
   DEFAULT_IDLE_REVIEW,
+  DEFAULT_IDLE_REVIEW_MS,
   DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS,
   DOCUMENTS_DEFAULT_LIMIT_BYTES,
   DOCUMENTS_MAX_LIMIT_BYTES,
+  MAX_IDLE_REVIEW_MS,
+  MIN_IDLE_REVIEW_MS,
   type ClientConnectionHandle,
   type ClientSettingsScope,
   type Config,
@@ -280,8 +283,12 @@ export function DocumentsSettings(props: ShippedSettingsServices & { page: Memor
 
 type ReviewChoice = Pick<ResolvedIdleReviewConfig, 'enabled' | 'silent' | 'runtimeMemory' | 'persistWatermark' | 'provider' | 'fallback' | 'agentTeams'>
 type ReviewLimits = Pick<ResolvedIdleReviewConfig, 'minIntervalMs' | 'maxPerSession' | 'maxContextChars' | 'maxTokens'>
+type ReviewLimitKey = 'idleReviewMs' | keyof ReviewLimits
+type ReviewLimitValues = ReviewLimits & { idleReviewMs: number }
 
-const LIMITS: ReadonlyArray<{ key: keyof ReviewLimits; min: number; max: number; scale: number; unit: string }> = [
+const REVIEW_LIMIT_KEYS: ReadonlyArray<keyof ReviewLimits> = ['minIntervalMs', 'maxPerSession', 'maxContextChars', 'maxTokens']
+const LIMITS: ReadonlyArray<{ key: ReviewLimitKey; min: number; max: number; scale: number; unit: string }> = [
+  { key: 'idleReviewMs', min: MIN_IDLE_REVIEW_MS, max: MAX_IDLE_REVIEW_MS, scale: 1_000, unit: 's' },
   { key: 'minIntervalMs', min: 5_000, max: 86_400_000, scale: 1_000, unit: 's' },
   { key: 'maxPerSession', min: 0, max: 200, scale: 1, unit: 'x' },
   { key: 'maxContextChars', min: 1_000, max: 1_000_000, scale: 1, unit: 'ch' },
@@ -292,9 +299,21 @@ function reviewOf(value: Config | undefined): ResolvedIdleReviewConfig {
   return { ...DEFAULT_IDLE_REVIEW, ...value?.idleReview }
 }
 
+function idleReviewMsOf(value: Config | undefined): number {
+  return typeof value?.idleReviewMs === 'number' ? value.idleReviewMs : DEFAULT_IDLE_REVIEW_MS
+}
+
 const choiceOf = (review: ResolvedIdleReviewConfig): ReviewChoice => ({ enabled: review.enabled, silent: review.silent, runtimeMemory: review.runtimeMemory, persistWatermark: review.persistWatermark, provider: review.provider, fallback: review.fallback, agentTeams: review.agentTeams })
-const limitsOf = (review: ResolvedIdleReviewConfig): Record<keyof ReviewLimits, string> =>
-  Object.fromEntries(LIMITS.map(limit => [limit.key, String(review[limit.key] / limit.scale)])) as Record<keyof ReviewLimits, string>
+const limitsOf = (review: ResolvedIdleReviewConfig, idleReviewMs: number): Record<ReviewLimitKey, string> => {
+  const values: ReviewLimitValues = {
+    idleReviewMs,
+    minIntervalMs: review.minIntervalMs,
+    maxPerSession: review.maxPerSession,
+    maxContextChars: review.maxContextChars,
+    maxTokens: review.maxTokens,
+  }
+  return Object.fromEntries(LIMITS.map(limit => [limit.key, String(values[limit.key] / limit.scale)])) as Record<ReviewLimitKey, string>
+}
 
 function limitValue(limit: typeof LIMITS[number], text: string): number | undefined {
   if (text.trim() === '') return undefined
@@ -312,16 +331,21 @@ export function ThreeTierSettings(props: ShippedSettingsServices & { page: Memor
   const { scope, connection, page, t } = props
   const snapshot = useScope(scope)
   const savedReview = reviewOf(snapshot.value)
+  const savedIdleReviewMs = idleReviewMsOf(snapshot.value)
   const taskAgent = useTaskAgentModel({ scope, connection, sessionId: page.sessionId, workspaceId: page.workspace?.id })
   const configured = snapshot.value?.idleReview
   const choice = useLive(choiceOf(savedReview), async next => {
     const operations = reviewWrite(configured, next, choiceOf(savedReview))
     if (operations.length > 0) await scope.mutate(operations)
   })
-  const limits = useStaged(limitsOf(savedReview), async draft => {
-    const next = Object.fromEntries(LIMITS.map(limit => [limit.key, limitValue(limit, draft[limit.key])!])) as ReviewLimits
-    const before = Object.fromEntries(LIMITS.map(limit => [limit.key, savedReview[limit.key]])) as ReviewLimits
-    const operations = reviewWrite(configured, next, before)
+  const limits = useStaged(limitsOf(savedReview, savedIdleReviewMs), async draft => {
+    const next = Object.fromEntries(LIMITS.map(limit => [limit.key, limitValue(limit, draft[limit.key])!])) as ReviewLimitValues
+    const nextReview = Object.fromEntries(REVIEW_LIMIT_KEYS.map(key => [key, next[key]])) as ReviewLimits
+    const beforeReview = Object.fromEntries(REVIEW_LIMIT_KEYS.map(key => [key, savedReview[key]])) as ReviewLimits
+    const operations: SettingsOperation[] = [
+      ...(next.idleReviewMs === savedIdleReviewMs ? [] : [{ op: 'set' as const, path: ['idleReviewMs'], value: next.idleReviewMs }]),
+      ...reviewWrite(configured, nextReview, beforeReview),
+    ]
     if (operations.length > 0) await scope.mutate(operations)
   })
   const disabled = !page.writable || snapshot.status === 'loading' || !snapshot.writable
@@ -344,7 +368,7 @@ export function ThreeTierSettings(props: ShippedSettingsServices & { page: Memor
 
 function IdleReviewRows(props: {
   choice: ReviewChoice
-  limits: ReturnType<typeof useStaged<Record<keyof ReviewLimits, string>>>
+  limits: ReturnType<typeof useStaged<Record<ReviewLimitKey, string>>>
   disabled: boolean
   activeSection?: string | undefined
   onChoice: (next: Partial<ReviewChoice>) => void
@@ -353,7 +377,7 @@ function IdleReviewRows(props: {
   const { choice, limits, t } = props
   const baseId = useId()
   const invalid = LIMITS.find(limit => limitValue(limit, limits.draft[limit.key]) === undefined)
-  const limitsBadge = `${limits.draft.minIntervalMs}s · ${limits.draft.maxPerSession}x`
+  const limitsBadge = `${limits.draft.idleReviewMs}s · ${limits.draft.minIntervalMs}s · ${limits.draft.maxPerSession}x`
   return <>
     <ToggleRow id="mnemon-idle-review" label={t('config.reviewTitle')} ariaLabel={t('config.reviewEnabled')} hint={t('config.reviewDescription')} checked={choice.enabled} disabled={props.disabled} onChange={enabled => props.onChoice({ enabled })} />
     {choice.enabled && <div className={css.evolutionGroup}>

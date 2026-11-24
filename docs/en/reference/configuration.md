@@ -133,7 +133,7 @@ mnemon:
 | `lifecycleEnabled` | `true` | boolean | Whether to enable the pre-step cue and score-based idle review |
 | `recallMode` | `guided` | `guided` / `off` | Whether to inject one durable on-demand recall cue per session; does not remove explicit recall |
 | `writebackMode` | `guided` | `guided` / `off` | Whether to inject one durable runtime-memory cue per session and enable scored, dirty-admitted idle review; does not remove explicit writes |
-| `idleReviewMs` | `30000` | 5000–600000 ms | Required continuous idle time after the threshold is reached |
+| `idleReviewMs` | `30000` | 5000–86400000 ms | Required continuous idle time after the threshold is reached (5 seconds to 24 hours; also editable under **Review limits** on the Layered strategy's page) |
 | `idleReview.enabled` | `true` | boolean | Independent automatic-review switch |
 | `idleReview.runtimeMemory` | `true` | boolean | Lets review change runtime memory (USER.md and MEMORY.md); `false` limits it to creating Documents |
 | `idleReview.silent` | `true` | boolean | Hide automatic spawn review sessions from the reviewed conversation |
@@ -522,7 +522,7 @@ Review requires local child publication, `agents.isOwnedBy`, and `agent.ctx.tool
 
 **What review writes.** Each piece of knowledge goes to one layer. Project records, such as a design, implementation details, paths, ports, scope agreements or a handoff, go to at most one Document. Working memory (MEMORY.md) takes only a compact rule the user stated, such as a convention, a correction, an environment fact or a tool quirk, that no Document or existing entry already covers; USER.md takes identity and preferences. The guard holds each pass to one layer: after a Document, working-memory changes are refused, and after a working-memory change, a Document is refused; USER.md changes stay independent. `idleReview.runtimeMemory: false` withholds `mnemon_runtime_memory` from review, so it only creates Documents. Review never writes Memory Spaces: working memory reaches them through capacity archiving and Documents through cold archiving, while **Save to memory** and `mnemon_remember` write them directly.
 
-`idleReviewMs` remains the continuous-idle debounce. `minIntervalMs` limits the interval between attempts, including failed and cancelled attempts; `maxPerSession` caps them, with zero pausing review. By default, a new parent Agent (including Host restart or reopening) receives a fresh in-memory budget.
+`idleReviewMs` remains the continuous-idle debounce (5 seconds to 24 hours, editable under **Review limits** as well as YAML). `minIntervalMs` limits the interval between attempts, including failed and cancelled attempts; `maxPerSession` caps them, with zero pausing review. By default, a new parent Agent (including Host restart or reopening) receives a fresh in-memory budget.
 
 With **Run idle reviews silently** enabled, automatic spawn reviews stay out of the conversation’s subagent list. Turn it off to run new reviews as visible children of the conversation. The startup cleanup of old ungrouped review records also respects this setting.
 

@@ -160,6 +160,35 @@ describe('MnemonSettingsCard', () => {
     expect(screen.queryByRole('button', { name: /^Agent Teams 兼容模式 / })).toBeNull()
   })
 
+  it.each([false, true])('edits hour-scale idleReviewMs inside Review limits and reports rejection (rejected: %s)', async rejected => {
+    const mutate = vi.fn(async () => { if (rejected) throw new Error('Synthetic rejection') })
+    const scope = liveSettingsScope<Config>(readySnapshot({ idleReview: { maxPerSession: 5 } }), mutate)
+    const view = render(threeTier(scope))
+    fireEvent.click(screen.getByRole('button', { name: '审查参数' }))
+    const idleInput = screen.getByRole('spinbutton', { name: '审查前空闲等待（秒）' }) as HTMLInputElement
+    expect(idleInput.value).toBe('30')
+    fireEvent.change(idleInput, { target: { value: '86401' } })
+    expect(screen.getByRole('alert').textContent).toBe('审查前空闲等待（秒）需在 5–86400 之间')
+    expect(apply().disabled).toBe(true)
+    fireEvent.change(idleInput, { target: { value: '7200' } })
+    fireEvent.click(apply())
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['idleReviewMs'], value: 7_200_000 }]))
+    if (rejected) {
+      expect((await screen.findByRole('alert')).textContent).toContain('Synthetic rejection')
+      expect(scope.snapshot.value?.idleReviewMs).toBeUndefined()
+    } else {
+      await waitFor(() => expect(scope.snapshot.value?.idleReviewMs).toBe(7_200_000))
+      await waitFor(() => expect(screen.queryByRole('button', { name: '应用' })).toBeNull())
+    }
+    view.unmount()
+    const readOnly = liveSettingsScope<Config>(readySnapshot({ idleReviewMs: 7_200_000 }, { writable: false }), mutate)
+    render(threeTier(readOnly, undefined, {}, translateEn))
+    fireEvent.click(screen.getByRole('button', { name: 'Review limits' }))
+    const enInput = screen.getByRole('spinbutton', { name: 'Idle wait before review (seconds)' }) as HTMLInputElement
+    expect(enInput.value).toBe('7200')
+    expect(enInput.disabled).toBe(true)
+  })
+
   it.each([false, true])('persists the review watermark choice only with a writable settings scope (read-only: %s)', async readOnly => {
     const mutate = vi.fn(async () => {})
     const scope = liveSettingsScope<Config>(readySnapshot({ idleReview: { maxPerSession: 3 } }, { writable: !readOnly }), mutate)

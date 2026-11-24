@@ -80,6 +80,23 @@ describe('Mnemon settings bridge', () => {
     expect(mutate).toHaveBeenCalledTimes(2)
   })
 
+  it('validates hour-scale idleReviewMs bounds through settings mutations', async () => {
+    const mutate = vi.fn(async () => {})
+    const settings = {
+      writable: true,
+      register: vi.fn(),
+      mutate,
+      describe: () => [{ ns: 'mnemon', value: {}, revision: 1, applies: 'live' as const }],
+    } as unknown as HostSettingsService
+    const handler = createSettingsHandler(settings)
+
+    await expect(handler('mutate', { ops: [{ op: 'set', path: ['idleReviewMs'], value: 7_200_000 }], expectedRevision: 1 })).resolves.toMatchObject({ ok: true })
+    await expect(handler('mutate', { ops: [{ op: 'set', path: ['idleReviewMs'], value: 86_400_000 }], expectedRevision: 1 })).resolves.toMatchObject({ ok: true })
+    await expect(handler('mutate', { ops: [{ op: 'set', path: ['idleReviewMs'], value: 4_999 }] })).resolves.toMatchObject({ ok: false, error: { code: 'settings-rejected' } })
+    await expect(handler('mutate', { ops: [{ op: 'set', path: ['idleReviewMs'], value: 86_400_001 }] })).resolves.toMatchObject({ ok: false, error: { code: 'settings-rejected' } })
+    expect(mutate).toHaveBeenCalledTimes(2)
+  })
+
   it('rejects unsupported settings fields', async () => {
     const settings = {
       writable: true,

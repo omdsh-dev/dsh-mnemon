@@ -187,6 +187,7 @@ export const coreEs: Record<CoreMnemonKey, string> = {
   'config.reviewTeamPauseHint': 'Omite la revisión mientras Agent Teams está en ejecución',
   'config.reviewTeamScoped': 'Revisión con Agente de tareas acotado',
   'config.reviewTeamScopedHint': 'Un Agente de tareas acotado realiza la revisión, sin herramientas de Teams',
+  'config.review.idleReviewMs': 'Espera inactiva antes de revisar (segundos)',
   'config.review.minIntervalMs': 'Intervalo mínimo de revisión (segundos)',
   'config.review.maxPerSession': 'Máximo de intentos por sesión',
   'config.review.maxContextChars': 'Presupuesto de caracteres del punto de control spawn',

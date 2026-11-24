@@ -133,7 +133,7 @@ mnemon:
 | `lifecycleEnabled` | `true` | boolean | 是否启用 pre-step cue 和评分空闲审查 |
 | `recallMode` | `guided` | `guided` / `off` | 是否在每个会话注入一次可持续复用的按需 recall cue；不移除显式召回 |
 | `writebackMode` | `guided` | `guided` / `off` | 是否在每个会话注入一次可持续复用的运行时记忆 cue，并启用评分加 dirty admission 的空闲审查；不移除显式写入 |
-| `idleReviewMs` | `30000` | 5000–600000 ms | 达标后需要连续空闲的时间 |
+| `idleReviewMs` | `30000` | 5000–86400000 ms | 达标后需要连续空闲的时间（5 秒至 24 小时；也可在分层策略页面的**审查参数**中修改） |
 | `idleReview.enabled` | `true` | boolean | 自动审查独立开关 |
 | `idleReview.runtimeMemory` | `true` | boolean | 允许审查修改运行时记忆（USER.md 与 MEMORY.md）；`false` 时只创建项目档案 |
 | `idleReview.silent` | `true` | boolean | 隐藏当前对话的自动 Spawn 审查会话 |
@@ -522,7 +522,7 @@ mnemon:
 
 **审查写入什么。**每条知识只进一层。项目记录（设计、实现细节、路径、端口、范围约定、交接说明等）最多写成一份项目档案。工作记忆（MEMORY.md）只收用户明确说过的简短规则，例如约定、纠正、环境事实或工具特性，且项目档案和已有条目都未涵盖；USER.md 收身份与偏好。guard 让每轮审查只写一层：建了项目档案后，修改工作记忆会被拒绝；修改工作记忆后，新建项目档案会被拒绝；USER.md 的修改不受影响。`idleReview.runtimeMemory: false` 会从审查中收回 `mnemon_runtime_memory`，审查只创建项目档案。审查从不写入记忆空间：工作记忆在容量整理时归档进去，项目档案在冷归档时建立索引；**存入记忆**与 `mnemon_remember` 则直接写入。
 
-`idleReviewMs` 仍是连续空闲防抖时间。`minIntervalMs` 限制尝试间隔，失败与取消也计入；`maxPerSession` 限制尝试次数，零表示暂停。默认情况下，新的父 Agent（包括重启 Host 或重新打开会话）获得新的内存内预算。
+`idleReviewMs` 仍是连续空闲防抖时间（5 秒至 24 小时，可在分层策略页面的**审查参数**或 YAML 中配置）。`minIntervalMs` 限制尝试间隔，失败与取消也计入；`maxPerSession` 限制尝试次数，零表示暂停。默认情况下，新的父 Agent（包括重启 Host 或重新打开会话）获得新的内存内预算。
 
 开启**静默运行空闲审查**后，自动 Spawn 审查会话会隐藏。关闭后，新审查仍会执行，会话会显示在当前对话的子 Agent 列表中。启动时清理未分组的旧审查记录也遵循此设置。
 

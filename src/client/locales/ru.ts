@@ -187,6 +187,7 @@ export const coreRu: Record<CoreMnemonKey, string> = {
   'config.reviewTeamPauseHint': 'Пропускает проверку во время работы Agent Teams',
   'config.reviewTeamScoped': 'Ограниченная проверка агентом задач',
   'config.reviewTeamScopedHint': 'Проверку выполняет ограниченный агент задач без инструментов Teams',
+  'config.review.idleReviewMs': 'Ожидание простоя перед проверкой (секунды)',
   'config.review.minIntervalMs': 'Минимальный интервал проверки (секунды)',
   'config.review.maxPerSession': 'Максимум попыток на сессию',
   'config.review.maxContextChars': 'Лимит символов контрольной точки spawn',
