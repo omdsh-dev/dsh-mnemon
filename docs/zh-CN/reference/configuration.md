@@ -181,7 +181,7 @@ Git 同步的默认提交者跟随 Host 在 `state/sync/git` 中解析的 Git �
 
 选择**会话开始时冻结**（`runtimeMemory.snapshotRefresh: session-start`）可将实时记忆存储与已打开会话的提示词前缀解耦：
 
-- Source 确认投影完整且 Git 分支可见性明确后，会话保留初始运行时快照，同会话写入、并行会话写入或闲时审查更新存储时均继续使用该快照；
+- Source 确认投影完整且 Git 分支可见性明确后，会话保留初始运行时快照，同会话写入、并行会话写入或闲时审查更新存储时（包括不改变路由、动作与权限边界的按需项目档案与记忆空间修订）均继续使用该快照；
 - 新建会话立即获取最新运行时快照，显式工具（`mnemon_recall`、`mnemon_runtime_memory`、`mnemon_document_search`、`mnemon_view_route`）继续实时读写最新存储；
 - 权限、范围、策略、工作区排除与 Git 分支可见边界保持 fail-closed，发生变化时仍立即退役并刷新受影响快照；DSH 压缩成功后，Mnemon 会在下一个被接受的步骤重新投影最新快照并继续冻结。
 

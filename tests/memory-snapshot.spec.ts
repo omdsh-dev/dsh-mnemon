@@ -493,6 +493,125 @@ describe('memory snapshot authority boundaries', () => {
     routeRemoved.routes.pop()
     expect(memorySnapshotState(routeRemoved, 'session-start')!.boundary).not.toBe(memorySnapshotState(first, 'session-start')!.boundary)
   })
+
+  it('keeps session-start boundary stable across routed Document and Memory Space revisions while keeping on-change and fail-closed boundaries strict', () => {
+    const first = view()
+    first.projection[0]!.provenance = { sourceTypeId: 'runtime', snapshot: {
+      version: 1, scope: 'a'.repeat(64), entries: ['b'.repeat(64)], branchVisibility: 'c'.repeat(64),
+    } }
+    first.projection.push(
+      {
+        id: 'documents/projection',
+        sourceInstanceKey: 'documents',
+        mode: 'routed',
+        text: '0 active project Documents available through the documents/search route.',
+        revision: 'doc-rev-1',
+        provenance: { sourceTypeId: 'documents' },
+      },
+      {
+        id: 'memory-spaces/projection',
+        sourceInstanceKey: 'memory-spaces',
+        mode: 'routed',
+        text: '1 active of 1 configured Memory Space available through scoped recall.',
+        revision: 'space-rev-1',
+        provenance: { sourceTypeId: 'memory-spaces' },
+      },
+    )
+    first.readGrants.push(
+      {
+        id: 'documents/grant/doc-rev-1',
+        sourceInstanceKey: 'documents',
+        revision: 'doc-rev-1',
+        consistency: 'namespace-pinned-live-read',
+        schema: 'dsh-mnemon.documents/v1',
+        value: { workspaceRoot: '/synthetic/workspace', documentIds: [], archivedDocumentIds: [] },
+      },
+      {
+        id: 'memory-spaces/grant/space-rev-1',
+        sourceInstanceKey: 'memory-spaces',
+        revision: 'space-rev-1',
+        consistency: 'namespace-pinned-live-read',
+        schema: 'dsh-mnemon.memory-spaces/v1',
+        value: { memoryBodyIds: ['space-1'], knownMemoryBodyIds: ['space-1'] },
+      },
+    )
+    first.routes.push(
+      {
+        id: 'documents/search',
+        sourceInstanceKey: 'documents',
+        sourceRouteId: 'search',
+        description: 'Search documents.',
+        capability: 'search',
+        inputSchema: {},
+        readGrantId: 'documents/grant/doc-rev-1',
+        maxCalls: 4,
+      },
+      {
+        id: 'memory-spaces/recall',
+        sourceInstanceKey: 'memory-spaces',
+        sourceRouteId: 'recall',
+        description: 'Recall spaces.',
+        capability: 'recall',
+        inputSchema: {},
+        readGrantId: 'memory-spaces/grant/space-rev-1',
+        maxCalls: 4,
+      },
+    )
+
+    const updated = structuredClone(first)
+    updated.projection[1]!.text = '1 active project Document available through the documents/search route.'
+    updated.projection[1]!.revision = 'doc-rev-2'
+    updated.readGrants[1]!.id = 'documents/grant/doc-rev-2'
+    updated.readGrants[1]!.revision = 'doc-rev-2'
+    updated.readGrants[1]!.value = { workspaceRoot: '/synthetic/workspace', documentIds: ['doc-1'], archivedDocumentIds: [] }
+    updated.routes[1]!.readGrantId = 'documents/grant/doc-rev-2'
+    updated.projection[2]!.text = '2 active of 2 configured Memory Spaces available through scoped recall.'
+    updated.projection[2]!.revision = 'space-rev-2'
+    updated.readGrants[2]!.id = 'memory-spaces/grant/space-rev-2'
+    updated.readGrants[2]!.revision = 'space-rev-2'
+    updated.readGrants[2]!.value = { memoryBodyIds: ['space-1', 'space-2'], knownMemoryBodyIds: ['space-1', 'space-2'] }
+    updated.routes[2]!.readGrantId = 'memory-spaces/grant/space-rev-2'
+
+    expect(memorySnapshotState(updated)!.boundary).not.toBe(memorySnapshotState(first)!.boundary)
+    expect(memorySnapshotState(updated, 'session-start')!.boundary).toBe(memorySnapshotState(first, 'session-start')!.boundary)
+
+    const baseline = memorySnapshotState(first, 'session-start')!.boundary
+    for (const mutate of [
+      (candidate: ComposableMemoryView) => { candidate.readGrants[1]!.value = { workspaceRoot: '/synthetic/other', documentIds: [], archivedDocumentIds: [] } },
+      (candidate: ComposableMemoryView) => { candidate.projection[1]!.mode = 'eager' },
+      (candidate: ComposableMemoryView) => { candidate.projection[2]!.mode = 'eager' },
+      (candidate: ComposableMemoryView) => { candidate.readGrants.splice(1, 1) },
+      (candidate: ComposableMemoryView) => { candidate.routes.splice(1, 1) },
+      (candidate: ComposableMemoryView) => { candidate.readGrants.splice(2, 1) },
+      (candidate: ComposableMemoryView) => { candidate.routes.splice(2, 1) },
+      (candidate: ComposableMemoryView) => {
+        candidate.readGrants[2]!.value = { memoryBodyIds: [], knownMemoryBodyIds: ['space-1'] }
+      },
+      (candidate: ComposableMemoryView) => {
+        candidate.readGrants[1]!.value = {
+          workspaceRoot: '/synthetic/workspace', documentIds: [], archivedDocumentIds: [], access: { namespace: 'narrowed' },
+        }
+      },
+      (candidate: ComposableMemoryView) => { candidate.readGrants[1]!.value = { workspaceRoot: '/synthetic/workspace', documentIds: 'bad', archivedDocumentIds: [] } as never },
+      (candidate: ComposableMemoryView) => { candidate.readGrants[0]!.value = { namespace: ['synthetic-one'], opaque: 'narrowed' } },
+    ]) {
+      const changed = structuredClone(first)
+      mutate(changed)
+      expect(memorySnapshotState(changed, 'session-start')!.boundary).not.toBe(baseline)
+    }
+
+    const uncertifiedFirst = structuredClone(first)
+    uncertifiedFirst.projection = [uncertifiedFirst.projection[1]!, uncertifiedFirst.projection[0]!]
+    uncertifiedFirst.projection[1]!.provenance = { sourceTypeId: 'runtime', snapshot: { version: 1, scope: 'a'.repeat(64), entries: ['b'.repeat(64)] } }
+    const uncertifiedUpdated = structuredClone(uncertifiedFirst)
+    uncertifiedUpdated.projection[0]!.text = '1 active project Document available through the documents/search route.'
+    uncertifiedUpdated.projection[0]!.revision = 'doc-rev-2'
+    uncertifiedUpdated.readGrants[1]!.id = 'documents/grant/doc-rev-2'
+    uncertifiedUpdated.readGrants[1]!.revision = 'doc-rev-2'
+    uncertifiedUpdated.readGrants[1]!.value = { workspaceRoot: '/synthetic/workspace', documentIds: ['doc-1'], archivedDocumentIds: [] }
+    uncertifiedUpdated.routes[1]!.readGrantId = 'documents/grant/doc-rev-2'
+    expect(memorySnapshotState(uncertifiedUpdated, 'session-start')!.boundary).not.toBe(memorySnapshotState(uncertifiedFirst, 'session-start')!.boundary)
+  })
 })
 
 describe('Source-neutral View guidance', () => {

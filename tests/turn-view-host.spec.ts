@@ -1280,6 +1280,55 @@ it('freezes open-session snapshots under snapshotRefresh=session-start while new
   }
 }, 20_000)
 
+it('keeps session-start frozen snapshots intact when Project Documents or Memory Spaces change while live tools see updates', async () => {
+  const f = await fixture('native', true, { snapshotRefresh: 'session-start' })
+  const firstSpace = await f.memorySpace()
+  const handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    const initialRequests = [...f.requests]
+    const initialGeneration = handle.agent.session.surface.contentGeneration
+    expect(snapshots(initialRequests.at(-1)!.messages)).toHaveLength(1)
+
+    await f.graph.source('documents').mutate('mutate', {
+      action: 'create', title: 'Synthetic idle review note', content: 'Synthetic document created after session start.',
+    })
+    const spaces = f.graph.source('memory-spaces')
+    const secondSpace = await spaces.mutate<{ id: string }>('body-create', {
+      name: 'Synthetic second space', description: 'Synthetic catalog addition.',
+      providerId: 'holographic', active: true, connection: { dataPath: join(f.root, 'second-routed-facts.json') },
+    })
+    expect(secondSpace.id).not.toBe(firstSpace.id)
+    await spaces.mutate('body-update', {
+      memoryBodyId: secondSpace.id, description: 'Synthetic updated space description.',
+    })
+
+    const beforeReceipts = f.receipts.length
+    await f.turn(handle.agent)
+    const afterRequests = [...f.requests]
+    const searchReceipt = f.receipts.slice(beforeReceipts).find(receipt => receipt.name === 'mnemon_document_search')
+    expect(searchReceipt?.isError).toBe(false)
+    expect(searchReceipt?.text).toContain('Synthetic idle review note')
+    expect(snapshots(afterRequests.at(-1)!.messages)).toEqual(snapshots(initialRequests.at(-1)!.messages))
+    expect(afterRequests[3]!.messages.slice(0, initialRequests.at(-1)!.messages.length)).toEqual(initialRequests.at(-1)!.messages)
+    expect(handle.agent.session.surface.contentGeneration).toBe(initialGeneration)
+    expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'developer/message' && event.data.message.source.kind === 'dsh-mnemon' && event.data.message.source.form === 'memory-snapshot-retired')).toHaveLength(0)
+
+    await spaces.mutate('body-update', { memoryBodyId: firstSpace.id, active: false })
+    await f.turn(handle.agent)
+    const afterScopeChange = handle.agent.session.surface.contentGeneration
+    expect(afterScopeChange).toBeGreaterThan(initialGeneration)
+
+    await spaces.mutate('body-update', { memoryBodyId: secondSpace.id, active: false })
+    await f.turn(handle.agent)
+    expect(handle.agent.session.surface.contentGeneration).toBeGreaterThan(afterScopeChange)
+    expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'developer/message' && event.data.message.source.kind === 'dsh-mnemon' && event.data.message.source.form === 'memory-snapshot-retired').length).toBeGreaterThan(0)
+  } finally {
+    await handle.dispose()
+    await f.close()
+  }
+}, 20_000)
+
 it.runIf(supportsSnapshotCompaction)('refreshes a frozen snapshot left in the surface by stock DSH compaction', async () => {
   const f = await fixture('native', true, { snapshotRefresh: 'session-start' })
   try {
