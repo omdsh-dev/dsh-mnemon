@@ -75,10 +75,11 @@ export function safeFailureDetail(value: string): string {
   return value
     .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/gu, '[private key]')
     .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/gu, '[redacted]')
+    .replace(/\b((?:authorization|password|passwd|secret|token|api[-_]?key|access[-_]?token|refresh[-_]?token)["']?\s*[=:]\s*)(?:"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')/giu, '$1[redacted]')
     .replace(/\b(Authorization:\s*(?:Bearer|Basic|Token|ApiKey)\s+)\S+/giu, '$1[redacted]')
     .replace(/\b(Authorization:\s*)(?!(?:Bearer|Basic|Token|ApiKey)\s)\S+/giu, '$1[redacted]')
     .replace(/\b(Bearer\s+)\S+/giu, '$1[redacted]')
-    .replace(/\b((?:password|passwd|secret|token|api_key|apikey|access_token|refresh_token)\s*[=:]\s*)[^\s&"',;]+/giu, '$1[redacted]')
+    .replace(/\b((?:password|passwd|secret|token|api[-_]?key|access[-_]?token|refresh[-_]?token)\s*[=:]\s*)[^\s&"',;]+/giu, '$1[redacted]')
     .replace(/\s+/gu, ' ')
     .trim()
     .slice(0, 500)
@@ -86,11 +87,9 @@ export function safeFailureDetail(value: string): string {
 
 function toolContentText(content: HostToolResultObservation['content']): string {
   if (!Array.isArray(content)) return ''
-  return content
-    .flatMap(block => block?.type === 'text' && typeof block.text === 'string' ? [block.text] : [])
-    .join(' ')
-    .trim()
-    .replace(/^Error:\s*/u, '')
+  const diagnostic = content.find(block => block?.type === 'text'
+    && typeof block.text === 'string' && block.text.trimStart().startsWith('Error:'))
+  return typeof diagnostic?.text === 'string' ? diagnostic.text.trimStart().slice('Error:'.length).trim() : ''
 }
 
 export function toolFailureDetail(result: HostToolResultObservation): string {
@@ -115,9 +114,10 @@ export function toolFailureDetail(result: HostToolResultObservation): string {
 export function missingSubagentResultMessage(failure: CapturedToolFailure | undefined): string {
   const base = 'memory subagent completed without recording its result'
   if (failure === undefined) return base
+  const name = safeFailureDetail(failure.name)
   return failure.detail === ''
-    ? `${base} (last tool error in ${failure.name})`
-    : `${base} (last tool error in ${failure.name}: ${failure.detail})`
+    ? `${base} (last tool error in ${name})`
+    : `${base} (last tool error in ${name}: ${failure.detail})`
 }
 
 export function subagentFailureDetail(run: HostSubagentRun | undefined, result: HostSubagentResult): string | undefined {

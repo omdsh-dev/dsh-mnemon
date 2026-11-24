@@ -921,7 +921,8 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
       }
       if (signal.aborted) return
       if (result.isError === true && execution.agent !== undefined && canSubmit(execution.agent)
-        && typeof execution.name === 'string' && execution.name !== '') {
+        && (expectedChildId === undefined || execution.agent.id === expectedChildId)
+        && typeof execution.name === 'string' && /^[\w.:-]{1,128}$/u.test(execution.name)) {
         lastToolFailures.set(execution.agent.id, { name: execution.name, detail: toolFailureDetail(result) })
       }
       if (execution.token !== undefined) {

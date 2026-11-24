@@ -337,8 +337,31 @@ describe('large session hot paths (issue 632)', () => {
       isError: true,
       content: [{ type: 'text', text: 'Error: CLI failed with Authorization: Basic dXNlcjpwYXNz' }],
     })).toBe('CLI failed with Authorization: Basic [redacted]')
+    const quoted = toolFailureDetail({
+      isError: true,
+      error: {
+        message: 'Provider rejected {"apiKey":"fixture-key","authorization":"Basic fixture-auth","accessToken":"fixture-access"} password="fixture with spaces"',
+        info: { code: 'PROVIDER_ERROR' },
+      },
+    })
+    expect(quoted).toContain('PROVIDER_ERROR: Provider rejected')
+    expect(quoted).not.toMatch(/fixture-(?:key|auth|access)|fixture with spaces/u)
+    expect(toolFailureDetail({
+      isError: true,
+      content: [
+        { type: 'text', text: 'Synthetic raw tool output' },
+        { type: 'text', text: 'Error: Sandbox unavailable' },
+        { type: 'text', text: 'Another raw block' },
+      ],
+    })).toBe('Sandbox unavailable')
+    expect(toolFailureDetail({
+      isError: true,
+      content: [{ type: 'text', text: 'Synthetic raw tool output' }],
+    })).toBe('')
     expect(toolFailureDetail({ isError: true })).toBe('')
     expect(missingSubagentResultMessage(undefined)).toBe('memory subagent completed without recording its result')
+    expect(missingSubagentResultMessage({ name: 'sk-fixture-example', detail: '' }))
+      .toBe('memory subagent completed without recording its result (last tool error in [redacted])')
     expect(missingSubagentResultMessage({ name: 'run_code', detail: '' }))
       .toBe('memory subagent completed without recording its result (last tool error in run_code)')
     expect(missingSubagentResultMessage({ name: 'run_code', detail: 'SANDBOX_UNAVAILABLE: unavailable' }))

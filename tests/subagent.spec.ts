@@ -2010,6 +2010,9 @@ describe('Mnemon memory subagent coordinator', () => {
         isError: true,
         content: [{ type: 'text', text: 'Error: Invalid schema for sk-secret123456' }],
       })
+      resultTools.emit('tools/result', {
+        name: 'invalid tool name with user text', arguments: {}, agent: child, signal: new AbortController().signal,
+      }, { isError: true, error: { message: 'Unknown tool quoted user text', info: { code: 'UNKNOWN_TOOL' } } })
     })
     const failedResultCoordinator = new MnemonSubagentCoordinator(failedResultHost.value, runtimeSource(), resultTools.value)
 
