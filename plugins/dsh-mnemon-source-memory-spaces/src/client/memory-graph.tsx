@@ -291,7 +291,7 @@ export interface MemoryGraphProps {
   onQuietChange?: (quiet: boolean) => void
 }
 
-export const MemoryGraph = memo(function MemoryGraph(props: MemoryGraphProps): JSX.Element {
+export const MemoryGraph = /* @__PURE__ */ memo(function MemoryGraph(props: MemoryGraphProps): JSX.Element {
   const t = useT()
   const visibleNodes = useMemo(() => {
     const spaces = props.graph.nodes.filter(node => graphNodeKind(node) === 'space')
