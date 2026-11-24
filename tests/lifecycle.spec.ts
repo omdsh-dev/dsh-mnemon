@@ -1211,6 +1211,19 @@ describe('Mnemon DSH lifecycle integration', () => {
     } finally { value.stop(); warn.mockRestore() }
   })
 
+  it('honors hour-scale idleReviewMs debounce up to 24 hours before launching idle review', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 7_200_000, idleReview: { provider: 'spawn', minIntervalMs: 300_000, maxPerSession: 2 } }))
+    try {
+      await completeDurableTurns(value, 1, 3)
+      expect(value.lifecycle.snapshot('session-1')).toMatchObject({ idleReviewMs: 7_200_000, current: expect.objectContaining({ idleReviewPending: true }) })
+      await vi.advanceTimersByTimeAsync(7_199_000)
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(value.coordinator.review).toHaveBeenCalledOnce()
+    } finally { value.stop() }
+  })
+
   it('pauses review before creating a child while Team tools are installed and resumes after removal', async () => {
     vi.useFakeTimers()
     const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))

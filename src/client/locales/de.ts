@@ -187,6 +187,7 @@ export const coreDe: Record<CoreMnemonKey, string> = {
   'config.reviewTeamPauseHint': 'Überspringt Prüfungen, während Agent Teams aktiv ist',
   'config.reviewTeamScoped': 'Eingeschränkte Task-Agent-Prüfung',
   'config.reviewTeamScopedHint': 'Ein eingeschränkter Task-Agent prüft ohne Teams-Tools',
+  'config.review.idleReviewMs': 'Leerlaufzeit vor Prüfung (Sekunden)',
   'config.review.minIntervalMs': 'Mindestabstand zwischen Prüfungen (Sekunden)',
   'config.review.maxPerSession': 'Maximale Versuche pro Sitzung',
   'config.review.maxContextChars': 'Zeichenbudget für Spawn-Checkpoints',

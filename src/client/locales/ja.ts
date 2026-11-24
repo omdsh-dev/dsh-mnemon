@@ -187,6 +187,7 @@ export const coreJa: Record<CoreMnemonKey, string> = {
   'config.reviewTeamPauseHint': 'Agent Teams 稼働中はレビューをスキップします',
   'config.reviewTeamScoped': '制限付きタスクエージェントレビュー',
   'config.reviewTeamScopedHint': 'Teams ツールなしで制限付きタスクエージェントがレビューします',
+  'config.review.idleReviewMs': 'レビュー前の待機時間（秒）',
   'config.review.minIntervalMs': '最小レビュー間隔（秒）',
   'config.review.maxPerSession': 'セッションあたりの最大試行回数',
   'config.review.maxContextChars': 'spawn チェックポイント文字数上限',

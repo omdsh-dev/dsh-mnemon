@@ -185,6 +185,7 @@ export const zh = {
   'config.reviewTeamPauseHint': 'Agent Teams 运行时跳过审查',
   'config.reviewTeamScoped': '受限任务 Agent 审查',
   'config.reviewTeamScopedHint': '由受限的任务 Agent 审查，不用 Teams 工具',
+  'config.review.idleReviewMs': '审查前空闲等待（秒）',
   'config.review.minIntervalMs': '最小审查间隔（秒）',
   'config.review.maxPerSession': '每会话最多尝试次数',
   'config.review.maxContextChars': 'spawn 检查点字符预算',

@@ -91,6 +91,14 @@ describe('Mnemon config and resolution', () => {
     expect(resolveConfig({}).idleReview.maxTokens).toBe(16_384)
     expect(resolveConfig({ idleReview: { maxTokens: 8_192 } }).idleReview.maxTokens).toBe(8_192)
   })
+  it('accepts hour-scale idleReviewMs up to 24 hours and rejects out-of-range values', () => {
+    expect(resolveConfig({ idleReviewMs: 7_200_000 }).idleReviewMs).toBe(7_200_000)
+    expect(resolveConfig({ idleReviewMs: 86_400_000 }).idleReviewMs).toBe(86_400_000)
+    expect(Config({ idleReviewMs: 86_400_000 }).idleReviewMs).toBe(86_400_000)
+    expect(() => resolveConfig({ idleReviewMs: 4_999 })).toThrow('idleReviewMs')
+    expect(() => resolveConfig({ idleReviewMs: 86_400_001 })).toThrow('idleReviewMs')
+    expect(() => Config({ idleReviewMs: 86_400_001 })).toThrow()
+  })
   it('materializes conservative defaults', () => {
     expect(resolveConfig({})).toMatchObject({
       storageScope: 'global',

@@ -187,6 +187,7 @@ export const coreEn: Record<CoreMnemonKey, string> = {
   'config.reviewTeamPauseHint': 'Skips review while Agent Teams runs',
   'config.reviewTeamScoped': 'Scoped task Agent review',
   'config.reviewTeamScopedHint': 'A scoped task Agent reviews, without Teams tools',
+  'config.review.idleReviewMs': 'Idle wait before review (seconds)',
   'config.review.minIntervalMs': 'Minimum review interval (seconds)',
   'config.review.maxPerSession': 'Maximum attempts per session',
   'config.review.maxContextChars': 'Spawn checkpoint character budget',
