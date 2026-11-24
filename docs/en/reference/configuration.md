@@ -181,7 +181,7 @@ The setting applies to newly created subagents. Each child captures the current 
 
 Choose **Freeze at session start** (`runtimeMemory.snapshotRefresh: session-start`) to decouple live memory storage from open conversation prefixes:
 
-- each open conversation keeps its initial Runtime snapshot fixed after the Source verifies that the projection and branch visibility are complete while storage changes in the same session, parallel sessions, or idle review;
+- each open conversation keeps its initial Runtime snapshot fixed after the Source verifies that the projection and branch visibility are complete while storage changes in the same session, parallel sessions, or idle review (including routed Project Document and Memory Space revisions that do not alter routes, actions, or authority);
 - new sessions immediately receive the latest Runtime snapshot, and explicit tools (`mnemon_recall`, `mnemon_runtime_memory`, `mnemon_document_search`, `mnemon_view_route`) continue reading and writing live storage;
 - authority, scope, strategy, exclusion, and Git branch visibility boundaries stay fail-closed and still retire and refresh affected snapshots immediately; after successful DSH compaction, Mnemon establishes a fresh snapshot at the next accepted step and freezes it again.
 
