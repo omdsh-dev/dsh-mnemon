@@ -28,13 +28,19 @@ function routedSourceScope(
 ): string | undefined {
   if (grant.consistency !== 'namespace-pinned-live-read' || !record(grant.value)) return undefined
   if (sourceTypeId === 'documents') {
-    if (grant.schema !== 'dsh-mnemon.documents/v1' || typeof grant.value.workspaceRoot !== 'string'
-      || !stringList(grant.value.documentIds) || !stringList(grant.value.archivedDocumentIds)) return undefined
-    return digest([grant.sourceInstanceKey, grant.schema, grant.value.workspaceRoot])
+    const { documentIds, archivedDocumentIds, ...scope } = grant.value
+    if (grant.schema !== 'dsh-mnemon.documents/v1' || typeof scope.workspaceRoot !== 'string'
+      || !stringList(documentIds) || !stringList(archivedDocumentIds)) return undefined
+    return digest([grant.sourceInstanceKey, grant.schema, scope])
   }
+  const { memoryBodyIds, knownMemoryBodyIds, ...scope } = grant.value
   if (grant.schema !== 'dsh-mnemon.memory-spaces/v1'
-    || !stringList(grant.value.memoryBodyIds) || !stringList(grant.value.knownMemoryBodyIds)) return undefined
-  return digest([grant.sourceInstanceKey, grant.schema, grant.consistency])
+    || !stringList(memoryBodyIds) || !stringList(knownMemoryBodyIds)) return undefined
+  const active = new Set(memoryBodyIds)
+  const known = new Set(knownMemoryBodyIds)
+  if (memoryBodyIds.some(id => !known.has(id))) return undefined
+  const inactive = knownMemoryBodyIds.filter(id => !active.has(id)).sort()
+  return digest([grant.sourceInstanceKey, grant.schema, scope, inactive])
 }
 
 export function readMemorySnapshotState(value: unknown): MemorySnapshotState | undefined {

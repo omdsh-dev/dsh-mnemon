@@ -584,6 +584,14 @@ describe('memory snapshot authority boundaries', () => {
       (candidate: ComposableMemoryView) => { candidate.routes.splice(1, 1) },
       (candidate: ComposableMemoryView) => { candidate.readGrants.splice(2, 1) },
       (candidate: ComposableMemoryView) => { candidate.routes.splice(2, 1) },
+      (candidate: ComposableMemoryView) => {
+        candidate.readGrants[2]!.value = { memoryBodyIds: [], knownMemoryBodyIds: ['space-1'] }
+      },
+      (candidate: ComposableMemoryView) => {
+        candidate.readGrants[1]!.value = {
+          workspaceRoot: '/synthetic/workspace', documentIds: [], archivedDocumentIds: [], access: { namespace: 'narrowed' },
+        }
+      },
       (candidate: ComposableMemoryView) => { candidate.readGrants[1]!.value = { workspaceRoot: '/synthetic/workspace', documentIds: 'bad', archivedDocumentIds: [] } as never },
       (candidate: ComposableMemoryView) => { candidate.readGrants[0]!.value = { namespace: ['synthetic-one'], opaque: 'narrowed' } },
     ]) {

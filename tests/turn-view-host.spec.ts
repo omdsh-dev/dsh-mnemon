@@ -1293,8 +1293,13 @@ it('keeps session-start frozen snapshots intact when Project Documents or Memory
     await f.graph.source('documents').mutate('mutate', {
       action: 'create', title: 'Synthetic idle review note', content: 'Synthetic document created after session start.',
     })
-    const secondSpace = await f.memorySpace()
-    await f.graph.source('memory-spaces').mutate('body-update', {
+    const spaces = f.graph.source('memory-spaces')
+    const secondSpace = await spaces.mutate<{ id: string }>('body-create', {
+      name: 'Synthetic second space', description: 'Synthetic catalog addition.',
+      providerId: 'holographic', active: true, connection: { dataPath: join(f.root, 'second-routed-facts.json') },
+    })
+    expect(secondSpace.id).not.toBe(firstSpace.id)
+    await spaces.mutate('body-update', {
       memoryBodyId: secondSpace.id, description: 'Synthetic updated space description.',
     })
 
@@ -1309,10 +1314,14 @@ it('keeps session-start frozen snapshots intact when Project Documents or Memory
     expect(handle.agent.session.surface.contentGeneration).toBe(initialGeneration)
     expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'developer/message' && event.data.message.source.kind === 'dsh-mnemon' && event.data.message.source.form === 'memory-snapshot-retired')).toHaveLength(0)
 
-    await f.graph.source('memory-spaces').mutate('body-update', { memoryBodyId: firstSpace.id, active: false })
-    await f.graph.source('memory-spaces').mutate('body-update', { memoryBodyId: secondSpace.id, active: false })
+    await spaces.mutate('body-update', { memoryBodyId: firstSpace.id, active: false })
     await f.turn(handle.agent)
-    expect(handle.agent.session.surface.contentGeneration).toBeGreaterThan(initialGeneration)
+    const afterScopeChange = handle.agent.session.surface.contentGeneration
+    expect(afterScopeChange).toBeGreaterThan(initialGeneration)
+
+    await spaces.mutate('body-update', { memoryBodyId: secondSpace.id, active: false })
+    await f.turn(handle.agent)
+    expect(handle.agent.session.surface.contentGeneration).toBeGreaterThan(afterScopeChange)
     expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'developer/message' && event.data.message.source.kind === 'dsh-mnemon' && event.data.message.source.form === 'memory-snapshot-retired').length).toBeGreaterThan(0)
   } finally {
     await handle.dispose()
