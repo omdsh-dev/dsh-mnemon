@@ -1,4 +1,4 @@
-import { css, useT } from './presentation.ts'
+import { css, MnemonTooltip, useT } from './presentation.ts'
 import type { JSX } from 'react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { CATEGORIES, type Category, type Insight, type MemoryReadSource } from '../contracts.ts'
@@ -113,7 +113,7 @@ export function ExplorePage(props: { client: MemorySpacesPageClient; agentClient
       <ReadSourcePanel title={t('search.sourcesTitle')} sources={sources} />
       <div className={css.asyncResults}>
       {searching && <SectionSpinner label={searchKind === 'agent' ? t('search.agentSearching') : t('search.searching')} />}
-      {agentAnswer !== null && <section className={css.agentAnswer} aria-label={t('search.agentAnswer')}><div className={css.agentAnswerHeading}><div><span>{t('search.agentAnswerHint')}</span><h3>{t('search.agentAnswer')}</h3></div></div><p>{agentAnswer.answer}</p>{agentAnswer.citations.length > 0 && <div className={css.agentCitations}><small>{t('search.citations')}</small>{agentAnswer.citations.map((citation, index) => <span key={citation} title={citation}>{index + 1}. {citationLabel(citation)}</span>)}</div>}</section>}
+      {agentAnswer !== null && <section className={css.agentAnswer} aria-label={t('search.agentAnswer')}><div className={css.agentAnswerHeading}><div><span>{t('search.agentAnswerHint')}</span><h3>{t('search.agentAnswer')}</h3></div></div><p>{agentAnswer.answer}</p>{agentAnswer.citations.length > 0 && <div className={css.agentCitations}><small>{t('search.citations')}</small>{agentAnswer.citations.map((citation, index) => <MnemonTooltip key={citation} label={citation} side="top"><span>{index + 1}. {citationLabel(citation)}</span></MnemonTooltip>)}</div>}</section>}
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       {!searched && <EmptyState glyph="⌕" title={t('search.startTitle')}>{t('search.startText')}</EmptyState>}
       {searched && !searching && results.length === 0 && error === null && <EmptyState glyph="0" title={t('search.emptyTitle')}>{t('search.emptyText')}</EmptyState>}

@@ -7,6 +7,7 @@ import type { MnemonClientContext } from './dsh-context.ts'
 import type { MnemonKey } from './locales.ts'
 import { useDocumentVisible } from './document-visibility.ts'
 import { MnemonChangeSignal } from './change-signal.ts'
+import { MnemonTooltip } from './tooltip.tsx'
 import css from './SkillTurnTail.module.css'
 
 export const SKILLS_PAGE = 'skills/library'
@@ -191,11 +192,11 @@ export const SkillTurnTail = memo(function SkillTurnTail({ turn, seq, sessionId,
     <span className={css.mark} aria-hidden="true"><IconSkillOutlineRegular size={14} /></span>
     <span className={css.label}>{t('skillTail.label')}</span>
     <span className={css.items}>
-      {used.map(skill => <button key={skill.name} type="button" className={css.item} title={t('skillTail.openSkill', { name: skill.name })} onClick={() => open(`name:${skill.name}`)}>{skill.name}</button>)}
+      {used.map(skill => <MnemonTooltip key={skill.name} label={t('skillTail.openSkill', { name: skill.name })} side="bottom"><button type="button" className={css.item} onClick={() => open(`name:${skill.name}`)}>{skill.name}</button></MnemonTooltip>)}
       {reviewing && <span className={css.state} role="status"><TextShimmer active>{t('skillTail.reviewing')}</TextShimmer></span>}
-      {!reviewing && suggestions.length > 0 && <button type="button" className={css.item} data-tone="accent" title={t('skillTail.openSuggestions')}
-        onClick={() => open(suggestions.length === 1 ? `suggestion:${suggestions[0]!.id}` : 'evolution:pending')}>{t('skillTail.suggested', { count: suggestions.length })}</button>}
-      {!reviewing && failed && <span className={css.state} data-tone="error" title={review.error}>{t('skillTail.failed')}</span>}
+      {!reviewing && suggestions.length > 0 && <MnemonTooltip label={t('skillTail.openSuggestions')} side="bottom"><button type="button" className={css.item} data-tone="accent"
+        onClick={() => open(suggestions.length === 1 ? `suggestion:${suggestions[0]!.id}` : 'evolution:pending')}>{t('skillTail.suggested', { count: suggestions.length })}</button></MnemonTooltip>}
+      {!reviewing && failed && <MnemonTooltip label={review.error} side="bottom" maxWidth={360}><span className={css.state} data-tone="error">{t('skillTail.failed')}</span></MnemonTooltip>}
     </span>
   </div>
 })

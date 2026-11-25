@@ -67,7 +67,6 @@ export function mountMnemonSidebarEntry(
   const syncLabel = (): void => {
     const text = t('tab.label')
     if (entry.getAttribute('aria-label') !== text) entry.setAttribute('aria-label', text)
-    if (entry.title !== text) entry.title = text
     if (label.textContent !== text) label.textContent = text
   }
 

@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { createElement, useMemo, type JSX } from 'react'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import * as mnemonClient from 'dsh-mnemon/client'
-import { memoryPageStyles, memorySidebarStyles, useT as useSharedT, useLocale, type MnemonKey } from 'dsh-mnemon/client'
+import { memoryPageStyles, memorySidebarStyles, useT as useSharedT, useLocale, type MnemonKey, type MnemonTooltipProps } from 'dsh-mnemon/client'
 import type labels from 'dsh-mnemon-source-runtime/presentation/locales.json'
 import copy from '../../presentation/locales.json' with { type: 'json' }
 import page from '../../presentation/page.module.css'
@@ -9,6 +10,25 @@ import sidebar from '../../presentation/sidebar.module.css'
 export type SourceKey = keyof typeof labels.zh
 export const css: Readonly<Record<string, string>> = { ...memoryPageStyles, ...page }
 export const sidebarCss: Readonly<Record<string, string>> = { ...memorySidebarStyles, ...sidebar }
+
+export function MnemonTooltip(props: MnemonTooltipProps): JSX.Element {
+  const Impl = 'MnemonTooltip' in mnemonClient
+    ? (mnemonClient as { MnemonTooltip?: (value: MnemonTooltipProps) => JSX.Element }).MnemonTooltip
+    : undefined
+  if (Impl !== undefined) return createElement(Impl, props)
+  const label = props.label?.trim() ?? ''
+  return createElement(Tooltip, {
+    label,
+    side: props.side ?? 'top',
+    ...(props.align === undefined ? {} : { align: props.align }),
+    ...(props.delayMs === undefined ? {} : { delayMs: props.delayMs }),
+    ...(props.focusDelayMs === undefined ? {} : { focusDelayMs: props.focusDelayMs }),
+    ...(props.maxWidth === undefined ? {} : { maxWidth: props.maxWidth }),
+    disabled: props.disabled === true || label === '' || typeof ResizeObserver !== 'function',
+    portal: props.portal !== false,
+    children: props.children,
+  })
+}
 
 const SHIPPED_LOCALES = ['en', 'zh', 'ja', 'es', 'fr', 'de', 'ru', 'pt'] as const
 type ShippedLocale = typeof SHIPPED_LOCALES[number]

@@ -5,6 +5,7 @@ import { MnemonClient } from './api.ts'
 import { Reveal } from './feedback.tsx'
 import type { MnemonTranslate } from './locales.ts'
 import { message, SidebarModal, useT } from './page-kit.tsx'
+import { MnemonTooltip } from './tooltip.tsx'
 import { clearStarterUpdate, recordStarterUpdate, type StarterUpdateRecord } from './starter-update.ts'
 import css from './MnemonView.module.css'
 
@@ -186,8 +187,8 @@ export function VersionDialog(props: {
         return <article key={component.id} data-outdated={component.outdated || undefined}>
           <header><div><strong>{component.name}</strong><span>{versionModeLabel(t, component.installMode, component.id === 'mnemon')}</span></div><em data-state={state}>{t(`versions.${state}`)}</em></header>
           <div className={css.versionNumbers}><div><small>{t('versions.installed')}</small><code>{component.current ?? '—'}</code></div><span>→</span><div><small>{t('versions.latest')}</small><code>{component.latest ?? '—'}</code></div></div>
-          {component.id === 'mnemon' && component.executablePath !== undefined && <small className={css.versionLocation} title={component.executablePath}><span>{t('versions.executable')}</span><code>{component.executablePath}</code></small>}
-          {component.id === 'dsh-mnemon' && component.installPath !== undefined && <small className={css.versionLocation} title={component.installPath}><span>{dshInstallLabel(t, component)}</span><code>{component.installPath}</code></small>}
+          {component.id === 'mnemon' && component.executablePath !== undefined && <MnemonTooltip label={component.executablePath} side="top" maxWidth={420} onlyWhenClipped clippedSelector="code"><small className={css.versionLocation}><span>{t('versions.executable')}</span><code>{component.executablePath}</code></small></MnemonTooltip>}
+          {component.id === 'dsh-mnemon' && component.installPath !== undefined && <MnemonTooltip label={component.installPath} side="top" maxWidth={420} onlyWhenClipped clippedSelector="code"><small className={css.versionLocation}><span>{dshInstallLabel(t, component)}</span><code>{component.installPath}</code></small></MnemonTooltip>}
           {component.restartRequired && <p className={css.versionNotice} role="status">{t('versions.restartRequired')}</p>}
           {component.checkError !== undefined && <p className={css.versionNotice}>{t('versions.latestUnavailable')}</p>}
           <footer><p>{versionHint(t, component)}</p>{updateButton(component)}</footer>

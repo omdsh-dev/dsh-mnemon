@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type JSX } from 'react'
 import { Button, Checkbox, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SelectField, SidebarModal } from 'dsh-mnemon/client'
 import type { SkillRootKind, TrashEntry, TrashRestoreInput, TrashRestorePreview } from '../contracts.ts'
-import { css, errorText, stamp, useT } from './presentation.ts'
+import { css, errorText, MnemonTooltip, stamp, useT } from './presentation.ts'
 import { Busy, Confirm, Empty, Field, SkillIcon, SkillPath } from './shared.tsx'
 import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
 
@@ -59,15 +59,15 @@ export function TrashPage(props: { context: SkillsPageContext; location: SkillsL
         <span className={css.skRowText}>
           <strong>{entry.name}</strong>
           <small>{t('trash.meta', { time: stamp(entry.trashedAt), size: size(entry.bytes) })}</small>
-          {entry.originalPath !== undefined && <small title={entry.originalPath}><code><SkillPath path={entry.originalPath} /></code></small>}
+          {entry.originalPath !== undefined && <small><code><SkillPath path={entry.originalPath} /></code></small>}
           <span className={css.skTrashTags}>
             {entry.root !== undefined && <Tag tone="quiet">{t(`root.${entry.root}`)}</Tag>}
             <Tag tone="quiet">{t(entry.kind === 'file' ? 'trash.file' : 'trash.bundle')}</Tag>
           </span>
         </span>
         <span className={css.skTrashActions}>
-          <Button variant="outline" size="sm" disabled={!context.writable || busy} title={t('trash.restoreHint')}
-            onClick={() => void restore(entry)}>{t('trash.restore')}</Button>
+          <MnemonTooltip label={t('trash.restoreHint')} side="top"><Button variant="outline" size="sm" disabled={!context.writable || busy}
+            onClick={() => void restore(entry)}>{t('trash.restore')}</Button></MnemonTooltip>
           <Button variant="ghost" size="sm" disabled={!context.writable || busy} onClick={() => setPurging(entry)}>{t('trash.purge')}</Button>
         </span>
       </li>)}

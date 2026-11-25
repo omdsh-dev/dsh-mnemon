@@ -26,6 +26,15 @@ import { liveSettingsScope, readySnapshot, settingsScope } from './helpers/setti
 
 afterEach(cleanup)
 
+globalThis.ResizeObserver ??= class {
+  constructor(private readonly callback: ResizeObserverCallback) {}
+  observe(target: Element): void {
+    this.callback([{ target, borderBoxSize: [{ inlineSize: 0, blockSize: 0 }] } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver)
+  }
+  unobserve(): void {}
+  disconnect(): void {}
+} as unknown as typeof ResizeObserver
+
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>(next => { resolve = next })
@@ -420,8 +429,9 @@ describe('MnemonSettingsCard', () => {
       '调研归档未激活已嵌入 0/0（0%）',
       '损坏的空间无法读取：database disk image is malformed',
     ])
-    // The marker is not part of the name, which is what shortens in a narrow card.
-    expect(within(rows()[2]!).getByText('调研归档').getAttribute('title')).toBe('调研归档')
+    const spaceLabel = within(rows()[2]!).getByText('调研归档')
+    expect(spaceLabel.getAttribute('title')).toBeNull()
+    expect(spaceLabel.textContent).toBe('调研归档')
     // Only a space that lacks vectors is marked and can be filled in.
     expect(rows().map(item => item.hasAttribute('data-missing'))).toEqual([false, true, false, false])
     expect(screen.getByText('没有向量的记忆不参与语义匹配；点空间旁的「补齐」即可生成缺少的向量。')).toBeTruthy()

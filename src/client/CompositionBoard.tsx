@@ -6,6 +6,7 @@ import { componentCopy, isExperimental, nameList } from './component-copy.ts'
 import { ComponentDetails, ComponentPage, MainChoice, type ComponentDetailsProps, type ComponentState } from './component-details.tsx'
 import { componentModel, enhancementApplies, layerOf, mainPlan, relationsOf, sourceOf, switchPlan, unmetRequirements, type MemoryComponentModel, type SwitchPlan } from './component-model.ts'
 import { ActionButton, Callout, Reveal, TARGET } from './feedback.tsx'
+import { MnemonTooltip } from './tooltip.tsx'
 import type { MnemonKey, MnemonTranslate } from './locales.ts'
 import css from './MnemonSettingsCard.module.css'
 import { useLocalePreference } from './page-kit.tsx'
@@ -59,9 +60,11 @@ export function PageLink(props: { label: string; onOpen: () => void }): JSX.Elem
 }
 
 export function SettingsGear(props: { label: string; onOpen: () => void }): JSX.Element {
-  return <button type="button" className={css.boardIconButton} aria-haspopup="dialog" aria-label={props.label} title={props.label} onClick={props.onOpen}>
-    <IconSettingsOutlineRegular size={16} />
-  </button>
+  return <MnemonTooltip label={props.label} side="top">
+    <button type="button" className={css.boardIconButton} aria-haspopup="dialog" aria-label={props.label} onClick={props.onOpen}>
+      <IconSettingsOutlineRegular size={16} />
+    </button>
+  </MnemonTooltip>
 }
 
 export function ComponentChips(props: { label?: string | undefined; chips: readonly { key: string; name: string; on: boolean; title: string; open: (() => void) | undefined }[] }): JSX.Element | null {
@@ -69,10 +72,10 @@ export function ComponentChips(props: { label?: string | undefined; chips: reado
   return <span className={css.boardLinks}>
     {props.label !== undefined && <span className={css.boardLinksLabel}>{props.label}</span>}
     {props.chips.map(chip => chip.open === undefined
-      ? <span key={chip.key} className={css.boardLink} title={chip.title} data-on={chip.on ? '' : undefined}><IconLinkOutlineRegular size={12} />{chip.name}</span>
-      : <button key={chip.key} type="button" className={css.boardLink} aria-haspopup="dialog" title={chip.title} data-on={chip.on ? '' : undefined} onClick={chip.open}>
+      ? <MnemonTooltip key={chip.key} label={chip.title} side="top"><span className={css.boardLink} data-on={chip.on ? '' : undefined}><IconLinkOutlineRegular size={12} />{chip.name}</span></MnemonTooltip>
+      : <MnemonTooltip key={chip.key} label={chip.title} side="top"><button type="button" className={css.boardLink} aria-haspopup="dialog" data-on={chip.on ? '' : undefined} onClick={chip.open}>
         <IconLinkOutlineRegular size={12} />{chip.name}
-      </button>)}
+      </button></MnemonTooltip>)}
   </span>
 }
 

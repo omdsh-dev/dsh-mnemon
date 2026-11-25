@@ -12,6 +12,7 @@ import {
 import { createPortal } from 'react-dom'
 import { appearanceClass } from './view-styles.ts'
 import { IconCloseOutlineRegular } from './ui-icons.ts'
+import { MnemonTooltip } from './tooltip.tsx'
 import css from './MnemonView.module.css'
 import sidebarCss from './MnemonSidebarView.module.css'
 
@@ -380,7 +381,7 @@ export function MnemonDialog(props: MnemonDialogProps): JSX.Element | null {
         <div ref={backdropRef} className={appearanceClass(css.modalBackdrop, sidebarCss.modalBackdrop)} onPointerDown={event => { if (event.target === event.currentTarget) requestClose() }}>
           <section ref={dialogRef} className={appearanceClass(appearanceClass(css.modal, sidebarCss.modal), props.wide === true ? appearanceClass(css.modalWide, sidebarCss.modalWide) : undefined)} role="dialog" aria-modal="true" aria-busy={props.contentReady === false || props.busy === true ? true : undefined} aria-labelledby={titleId} aria-describedby={props.description === undefined ? undefined : descriptionId} onClickCapture={interceptCloseControl}>
             <div className={css.modalDragHandle} data-dialog-drag-handle="" aria-hidden="true" onPointerDown={beginDrag} onLostPointerCapture={event => { if (dragRef.current?.pointerId === event.pointerId) resetDrag() }}><span /></div>
-            <header><div><h2 id={titleId}>{props.title}</h2>{props.description !== undefined && <p id={descriptionId}>{props.description}</p>}</div><button ref={closeButtonRef} type="button" className={css.iconButton} disabled={props.busy} onClick={requestClose} aria-label={props.closeLabel} title={props.closeLabel}><IconCloseOutlineRegular size={16} /></button></header>
+            <header><div><h2 id={titleId}>{props.title}</h2>{props.description !== undefined && <p id={descriptionId}>{props.description}</p>}</div><MnemonTooltip label={props.closeLabel} side="bottom" align="end"><button ref={closeButtonRef} type="button" className={css.iconButton} disabled={props.busy} onClick={requestClose} aria-label={props.closeLabel}><IconCloseOutlineRegular size={16} /></button></MnemonTooltip></header>
             <div className={css.modalBody}>{props.children}</div>
             {props.footer !== undefined && <footer className={css.modalFooter}>{props.footer}</footer>}
           </section>

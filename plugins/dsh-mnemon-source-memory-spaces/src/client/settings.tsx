@@ -1,4 +1,4 @@
-import { css as pageCss, languageChain, settingsTranslate, SourceTranslation, supportsSettingsSection, useT, type DshLocale } from './presentation.ts'
+import { css as pageCss, languageChain, MnemonTooltip, settingsTranslate, SourceTranslation, supportsSettingsSection, useT, type DshLocale } from './presentation.ts'
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type JSX, type ReactNode } from 'react'
 import { Button, IconChevronDownOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
@@ -608,7 +608,7 @@ function EmbeddingSpaces(props: {
     <small id="mnemon-embedding-spaces">{t('config.embeddingSpaces')}</small>
     <ul aria-labelledby="mnemon-embedding-spaces">
       {props.spaces.map(space => <li key={space.memoryBodyId} data-missing={missing(space) ? '' : undefined} data-failed={space.error === undefined ? undefined : ''}>
-        <span className={css.embeddingSpaceName} title={space.name}>{space.name}</span>
+        <MnemonTooltip label={space.name} side="top" onlyWhenClipped><span className={css.embeddingSpaceName}>{space.name}</span></MnemonTooltip>
         {!space.active && <span className={css.embeddingSpaceState}>{t('common.inactive')}</span>}
         <span className={css.embeddingSpaceCount}>{space.error === undefined
           ? t('config.embeddingSpaceCounts', { embedded: space.embedded, total: space.totalInsights, coverage: space.coverage })

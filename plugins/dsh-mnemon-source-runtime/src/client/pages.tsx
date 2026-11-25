@@ -1,4 +1,4 @@
-import { css, sidebarCss, useT } from './presentation.ts'
+import { css, MnemonTooltip, sidebarCss, useT } from './presentation.ts'
 import type { JSX } from 'react'
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { type RuntimeMemoryEntry, type RuntimeMemoryImportance, type RuntimeMemorySnapshot, type RuntimeMemoryTarget } from '../contracts.ts'
@@ -124,7 +124,7 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
     const key = entryKey(entry)
     const isRemoving = removing === key
     return <article key={key} className={css.runtimeEntry} data-importance={entry.importance} data-target={entry.target} data-focused={focused(entry) || undefined}>
-      <div className={css.runtimeEntryMeta}>{showTarget ? <div className={css.runtimeEntryBadges}><span className={css.runtimeEntryTarget}>{entry.target === 'user' ? 'USER.md' : 'MEMORY.md'}</span><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span>{entry.pinned === true && <span className={css.runtimeEntryBranch}>{t('runtime.pinned')}</span>}{entry.branches !== undefined && entry.branches.length > 0 && <span className={css.runtimeEntryBranch} title={t('runtime.branchBadge')}>{entry.branches.join(', ')}</span>}</div> : <><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span>{entry.pinned === true && <span className={css.runtimeEntryBranch}>{t('runtime.pinned')}</span>}{entry.branches !== undefined && entry.branches.length > 0 && <span className={css.runtimeEntryBranch} title={t('runtime.branchBadge')}>{entry.branches.join(', ')}</span>}</>}<time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString(locale)}</time></div>
+      <div className={css.runtimeEntryMeta}>{showTarget ? <div className={css.runtimeEntryBadges}><span className={css.runtimeEntryTarget}>{entry.target === 'user' ? 'USER.md' : 'MEMORY.md'}</span><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span>{entry.pinned === true && <span className={css.runtimeEntryBranch}>{t('runtime.pinned')}</span>}{entry.branches !== undefined && entry.branches.length > 0 && <MnemonTooltip label={t('runtime.branchBadge')} side="top"><span className={css.runtimeEntryBranch}>{entry.branches.join(', ')}</span></MnemonTooltip>}</div> : <><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span>{entry.pinned === true && <span className={css.runtimeEntryBranch}>{t('runtime.pinned')}</span>}{entry.branches !== undefined && entry.branches.length > 0 && <MnemonTooltip label={t('runtime.branchBadge')} side="top"><span className={css.runtimeEntryBranch}>{entry.branches.join(', ')}</span></MnemonTooltip>}</>}<time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString(locale)}</time></div>
       {<p>{entry.content}</p>}
 
       {props.writeEnabled && (
@@ -197,7 +197,7 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
           <div className={css.bodyDeleteSummary}>
             <p className={css.bodyDeleteContent}>{removingEntry.content}</p>
             <span>{t(`runtime.importance.${removingEntry.importance}` as MnemonKey)}</span>
-            {removingEntry.branches !== undefined && removingEntry.branches.length > 0 && <span className={css.runtimeEntryBranch} title={t('runtime.branchBadge')}>{removingEntry.branches.join(', ')}</span>}
+            {removingEntry.branches !== undefined && removingEntry.branches.length > 0 && <MnemonTooltip label={t('runtime.branchBadge')} side="top"><span className={css.runtimeEntryBranch}>{removingEntry.branches.join(', ')}</span></MnemonTooltip>}
           </div>
         </div>
       </SidebarModal>}

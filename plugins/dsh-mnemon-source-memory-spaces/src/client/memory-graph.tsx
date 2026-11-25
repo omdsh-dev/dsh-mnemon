@@ -1,4 +1,4 @@
-import { css, useT } from './presentation.ts'
+import { css, MnemonTooltip, useT } from './presentation.ts'
 import type { JSX } from 'react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { normalizeEntityKey, type MemorySpaceView, type MemoryGraphNode, type MemoryGraphSnapshot } from '../contracts.ts'
@@ -451,8 +451,8 @@ export const MemoryGraph = /* @__PURE__ */ memo(function MemoryGraph(props: Memo
   return (
     <>
       <div className={css.graphCanvasControls} role="toolbar" aria-label={t('graph.layoutAria')}>
-        <span role="status" aria-label={t('graph.layoutStatus', { layout: layoutLabel })} title={t('graph.draggable', { layout: layoutLabel })}><i />{layoutLabel}</span>
-        {props.onQuietChange !== undefined && <button type="button" aria-pressed={props.quiet === true} data-active={props.quiet || undefined} title={t('graph.quietHint')} onClick={() => props.onQuietChange?.(!props.quiet)}>{t('graph.quietAction')}</button>}
+        <MnemonTooltip label={t('graph.draggable', { layout: layoutLabel })} side="bottom"><span role="status" aria-label={t('graph.layoutStatus', { layout: layoutLabel })}><i />{layoutLabel}</span></MnemonTooltip>
+        {props.onQuietChange !== undefined && <MnemonTooltip label={t('graph.quietHint')} side="bottom" maxWidth={320}><button type="button" aria-pressed={props.quiet === true} data-active={props.quiet || undefined} onClick={() => props.onQuietChange?.(!props.quiet)}>{t('graph.quietAction')}</button></MnemonTooltip>}
         <button type="button" data-active={layoutMode === 'natural' || undefined} onClick={() => animateTo(naturalLayout, 'natural')}>{t('graph.naturalAction')}</button>
         <button type="button" data-active={layoutMode === 'uniform' || undefined} onClick={() => animateTo(uniformLayout, 'uniform')}>{t('graph.uniformAction')}</button>
       </div>
