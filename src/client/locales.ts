@@ -8,14 +8,9 @@ import {
   type LocalizedTextInput,
   type MnemonLocaleId,
 } from './localized-text.ts'
-import { coreDe } from './locales/de.ts'
+import { coreLocales, type CoreMnemonKey } from './locales/catalog.ts'
 import { coreEn } from './locales/en.ts'
-import { coreEs } from './locales/es.ts'
-import { coreFr } from './locales/fr.ts'
-import { coreJa } from './locales/ja.ts'
-import { corePt } from './locales/pt.ts'
-import { coreRu } from './locales/ru.ts'
-import { zh, type CoreMnemonKey } from './locales/zh.ts'
+import { zh } from './locales/zh.ts'
 
 export {
   isMnemonLocaleId,
@@ -33,42 +28,34 @@ export type MnemonKey = CoreMnemonKey | (string & {})
 
 export const en: Record<MnemonKey, string> = coreEn as unknown as Record<MnemonKey, string>
 
-export const mnemonLocales: Readonly<Record<MnemonLocaleId, Record<MnemonKey, string>>> = {
-  en,
-  zh: zh as unknown as Record<MnemonKey, string>,
-  ja: coreJa as unknown as Record<MnemonKey, string>,
-  es: coreEs as unknown as Record<MnemonKey, string>,
-  fr: coreFr as unknown as Record<MnemonKey, string>,
-  de: coreDe as unknown as Record<MnemonKey, string>,
-  ru: coreRu as unknown as Record<MnemonKey, string>,
-  pt: corePt as unknown as Record<MnemonKey, string>,
-}
+export const mnemonLocales: Readonly<Record<MnemonLocaleId, Record<MnemonKey, string>>> =
+  coreLocales as unknown as Readonly<Record<MnemonLocaleId, Record<MnemonKey, string>>>
 
 export type MnemonTranslate = (key: MnemonKey, params?: Record<string, unknown>) => string
 
-function interpolate(dictionary: Record<string, string>, key: MnemonKey, params?: Record<string, unknown>): string {
-  const template = dictionary[key] ?? en[key] ?? key
+function interpolate(locale: MnemonLocaleId, key: MnemonKey, params?: Record<string, unknown>): string {
+  const template = mnemonLocales[locale][key] ?? mnemonLocales.en[key] ?? key
   if (params === undefined) return template
   return template.replace(/\{(\w+)\}/g, (match, name: string) => name in params ? String(params[name]) : match)
 }
 
 export function translateZh(key: MnemonKey, params?: Record<string, unknown>): string {
-  return interpolate(zh, key, params)
+  return interpolate('zh', key, params)
 }
 
 export function translateEn(key: MnemonKey, params?: Record<string, unknown>): string {
-  return interpolate(en, key, params)
+  return interpolate('en', key, params)
 }
 
 const TRANSLATORS: Readonly<Record<MnemonLocaleId, MnemonTranslate>> = {
   en: translateEn,
   zh: translateZh,
-  ja: (key, params) => interpolate(mnemonLocales.ja, key, params),
-  es: (key, params) => interpolate(mnemonLocales.es, key, params),
-  fr: (key, params) => interpolate(mnemonLocales.fr, key, params),
-  de: (key, params) => interpolate(mnemonLocales.de, key, params),
-  ru: (key, params) => interpolate(mnemonLocales.ru, key, params),
-  pt: (key, params) => interpolate(mnemonLocales.pt, key, params),
+  ja: (key, params) => interpolate('ja', key, params),
+  es: (key, params) => interpolate('es', key, params),
+  fr: (key, params) => interpolate('fr', key, params),
+  de: (key, params) => interpolate('de', key, params),
+  ru: (key, params) => interpolate('ru', key, params),
+  pt: (key, params) => interpolate('pt', key, params),
 }
 
 const BUILT_IN_TRANSLATORS: ReadonlySet<MnemonTranslate> = new Set(Object.values(TRANSLATORS))

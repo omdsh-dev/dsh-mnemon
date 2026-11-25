@@ -3,7 +3,7 @@ import { createContext, useContext } from 'react'
 import { IconSearchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { translateZh, type LocalePreference, type MnemonTranslate } from './locales.ts'
 import { MnemonDialog, type MnemonDialogProps } from './MnemonDialog.tsx'
-import { appearanceClass } from './view-styles.ts'
+import { appearanceClass, mergeStyleMaps } from './view-styles.ts'
 import sidebarCss from './MnemonSidebarView.module.css'
 import css from './MnemonView.module.css'
 import runtimeCss from 'dsh-mnemon-source-runtime/presentation/page.module.css'
@@ -93,5 +93,5 @@ export function EmptyState(props: { glyph: string; title: string; children: stri
   )
 }
 
-export const memoryPageStyles: Readonly<Record<string, string>> = { ...css, ...runtimeCss, ...documentsCss, ...spacesCss }
-export const memorySidebarStyles: Readonly<Record<string, string>> = { ...sidebarCss, ...runtimeSidebarCss, ...documentsSidebarCss, ...spacesSidebarCss }
+export const memoryPageStyles: Readonly<Record<string, string>> = /* @__PURE__ */ mergeStyleMaps(css, runtimeCss, documentsCss, spacesCss)
+export const memorySidebarStyles: Readonly<Record<string, string>> = /* @__PURE__ */ mergeStyleMaps(sidebarCss, runtimeSidebarCss, documentsSidebarCss, spacesSidebarCss)

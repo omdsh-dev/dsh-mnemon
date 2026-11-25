@@ -4,10 +4,40 @@ import { memoryPageStyles, memorySidebarStyles, useLocale, useT as useSharedT, t
 import copy from '../../presentation/locales.json' with { type: 'json' }
 import page from '../../presentation/page.module.css'
 
+function mergeStyleMap(
+  base: Readonly<Record<string, string>>,
+  own: Readonly<Record<string, string>>,
+): Readonly<Record<string, string>> {
+  let ownAnchor: string | null | undefined
+  return /* @__PURE__ */ new Proxy<Record<string, string>>({}, {
+    get(_target, prop) {
+      if (typeof prop !== 'string') return undefined
+      if (ownAnchor === undefined) ownAnchor = Object.keys(own)[0] ?? null
+      if (ownAnchor !== null) void own[ownAnchor]
+      if (Object.hasOwn(own, prop)) {
+        if (Object.hasOwn(base, prop)) void base[prop]
+        return own[prop]
+      }
+      return base[prop]
+    },
+    has(_target, prop) {
+      return typeof prop === 'string' && (Object.hasOwn(own, prop) || prop in base)
+    },
+    ownKeys() {
+      return Array.from(new Set([...Reflect.ownKeys(base), ...Reflect.ownKeys(own)]))
+    },
+    getOwnPropertyDescriptor(_target, prop) {
+      if (typeof prop !== 'string') return undefined
+      const descriptor = Object.getOwnPropertyDescriptor(own, prop) ?? Object.getOwnPropertyDescriptor(base, prop)
+      return descriptor === undefined ? undefined : { ...descriptor, configurable: true }
+    },
+  })
+}
+
 export type SkillsKey = keyof typeof copy.zh
 export type SkillsTranslate = (key: SkillsKey, params?: Record<string, unknown>) => string
 
-export const css: Readonly<Record<string, string>> = { ...memoryPageStyles, ...page }
+export const css: Readonly<Record<string, string>> = /* @__PURE__ */ mergeStyleMap(memoryPageStyles, page)
 export const sidebarCss: Readonly<Record<string, string>> = memorySidebarStyles
 
 export function supportsSettingsSection(section: 'models' | 'market'): boolean {
