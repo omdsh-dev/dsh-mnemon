@@ -79,7 +79,7 @@ worker 内调用同名工具时直接进入服务层，不再递归委派。
 
 空闲审查可以搜索档案并调用 `mnemon_document_create`，不能调用 `mnemon_document_manage` 或 `mnemon_view_action`。已有档案覆盖候选时跳过；有新增知识时，新建一份独立档案并引用相关已有档案 ID。Source 的 `create` Action 接收 `title`、`content`，以及可选的 `description`、`sourcePaths`、`sessionIds`；拒绝 `action`、`id` 等额外字段。容量不足时拒绝创建，不归档已有档案。已有的用户档案和 Agent 创建档案都受此保护；显式编辑继续使用原有管理路径。
 
-`mnemon_runtime_memory` 的 `target=memory` 写入支持可选 `branches` 数组（git 分支名）。带分支范围的条目只在会话 workspace 处于所列分支上时投影进每回合 Runtime 快照；无分支标签的条目始终投影。`replace` 时提供 `branches` 修改范围，传空数组清除范围，省略则保持当前范围；该参数对 `target=user` 会被拒绝。
+`mnemon_runtime_memory` 在 `action=add` 时要求 `content`，在 `action=replace` 时要求 `old_text` 与 `content`，在 `action=remove` 时要求 `old_text`（Source 的 `mutate` Action 对应字段为 `oldText`）；缺漏或空白时会返回包含当前 `action`、缺失字段与一行 JSON 示例的错误。它的 `target=memory` 写入同时支持可选 `branches` 数组（git 分支名）。带分支范围的条目只在会话 workspace 处于所列分支上时投影进每回合 Runtime 快照；无分支标签的条目始终投影。`replace` 时提供 `branches` 修改范围，传空数组清除范围，省略则保持当前范围；该参数对 `target=user` 会被拒绝。
 
 ## 工具准入建议
 

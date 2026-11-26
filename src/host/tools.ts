@@ -360,6 +360,35 @@ function registerDocumentTools(ctx: HostContextShape, { requireSource, config, s
   } as never))
 }
 
+function missingRuntimeText(value: unknown): boolean {
+  return typeof value !== 'string' || value.trim() === ''
+}
+
+function assertRuntimeToolRequiredFields(args: {
+  action: 'add' | 'replace' | 'remove'
+  target: RuntimeMemoryTarget
+  content?: string
+  old_text?: string
+}): void {
+  if (args.target !== 'memory' && args.target !== 'user') return
+  if (args.action === 'add') {
+    if (missingRuntimeText(args.content)) {
+      throw new Error(`content is required for action=add (example: ${JSON.stringify({ action: 'add', target: args.target, content: '...' })})`)
+    }
+    return
+  }
+  if (args.action === 'replace') {
+    const missingOldText = missingRuntimeText(args.old_text)
+    const missingContent = missingRuntimeText(args.content)
+    if (!missingOldText && !missingContent) return
+    const subject = missingOldText && missingContent ? 'old_text and content are' : missingOldText ? 'old_text is' : 'content is'
+    throw new Error(`${subject} required for action=replace (example: ${JSON.stringify({ action: 'replace', target: args.target, old_text: '...', content: '...' })})`)
+  }
+  if (args.action === 'remove' && missingRuntimeText(args.old_text)) {
+    throw new Error(`old_text is required for action=remove (example: ${JSON.stringify({ action: 'remove', target: args.target, old_text: '...' })})`)
+  }
+}
+
 function registerRuntimeTools(ctx: HostContextShape, { requireSource, config, composableTurn }: ToolHelpers, coordinator: MnemonSubagentCoordinator): void {
   ctx.tools.register(definition({
     name: 'mnemon_runtime_memory',
@@ -367,10 +396,10 @@ function registerRuntimeTools(ctx: HostContextShape, { requireSource, config, co
     parameters: {
       type: 'object',
       properties: {
-        action: { type: 'string', enum: ['add', 'replace', 'remove'], description: 'add a new entry, replace one uniquely matched entry, or remove one uniquely matched entry.' },
+        action: { type: 'string', enum: ['add', 'replace', 'remove'], description: 'add (requires content), replace (requires old_text and content), or remove (requires old_text) one uniquely matched entry.' },
         target: { type: 'string', enum: ['memory', 'user'], description: 'user for user identity/preferences; memory for compact user-stated rules needed for future work, or an explicitly requested Runtime destination.' },
-        content: { type: 'string', description: 'Compact entry content. Required for add and replace.' },
-        old_text: { type: 'string', description: 'Full content of the existing entry, or a unique substring. A unique full-content match takes precedence within the selected target. Required for replace and remove.' },
+        content: { type: 'string', description: 'Required for action=add and action=replace. Compact non-empty entry text to store.' },
+        old_text: { type: 'string', description: 'Required for action=replace and action=remove. Full content of the existing entry, or a unique substring (full-content match takes precedence within the selected target).' },
         importance: { type: 'string', enum: ['critical', 'normal', 'low'], description: 'critical for explicit must/always/never rules; low for lower-priority eligible durable entries; normal by default. Importance does not make transient facts eligible.' },
         branches: { type: 'array', items: { type: 'string' }, description: 'Optional git branch names restricting where a target=memory entry is injected. Omit for cross-branch facts; on replace an empty list clears the scope and an omitted list keeps it. For target=user, omit or pass []; non-empty branches are rejected.' },
       },
@@ -382,6 +411,7 @@ function registerRuntimeTools(ctx: HostContextShape, { requireSource, config, co
       if (!config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
       requireSource(exec, 'runtime', 'write')
       composableTurn(exec)
+      assertRuntimeToolRequiredFields(args)
       const request = {
         action: args.action,
         target: args.target,
