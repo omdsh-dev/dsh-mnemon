@@ -41,6 +41,7 @@ dsh-mnemon 为 DeepSeek Harness 提供三类记忆：每一轮都会用到的**�
 
 ## 最新变化
 
+- [v0.5.56](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.56) · 统一 Mnemon Web UI 的 DSH 提示气泡，运行时记忆调用缺少参数时给出字段说明与示例。
 - [v0.5.55](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.55) · 缩小前端体积，支持最多 24 小时的闲时复盘等待，并让会话冻结快照在项目档案和记忆空间的日常更新中保持稳定。
 - [v0.5.51](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.51)：支持项目档案与记忆空间独立全局共享、可选 BM25 索引召回及空闲审查稳定性修复。
 - [v0.5.50](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.50)：重新整理设置层级，优化窄窗口布局和记忆空间图谱，并减少技能页的重复读取。
