@@ -40,7 +40,7 @@ describe('memory tool table', () => {
    */
   function modelVisible(tool: ToolDefinition) {
     const deferred = (tool as { deferLoading?: unknown }).deferLoading === true
-    return { name: tool.name, description: tool.description, parameters: tool.parameters, ...(deferred ? { deferLoading: true } : {}), output: tool.output.schema }
+    return { name: tool.name, description: tool.description, parameters: tool.parameters, ...(deferred ? { deferLoading: true as const } : {}), output: tool.output.schema }
   }
 
   it('describes hot-memory eligibility without treating transient facts as low priority (#655)', () => {
