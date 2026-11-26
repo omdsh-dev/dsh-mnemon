@@ -1,4 +1,4 @@
-import { css, useT } from './presentation.ts'
+import { css, MnemonTooltip, useT } from './presentation.ts'
 import { useState, type JSX } from 'react'
 import { memorySettingsStyles, SelectField } from 'dsh-mnemon/client'
 import type { MemoryProviderConfigField } from '../contracts.ts'
@@ -47,6 +47,7 @@ function SettingsField(props: ProviderFieldProps): JSX.Element {
   const displayValue = showingSavedMask
     ? secretVisible ? t('config.providerSecretStoredValue') : SAVED_SECRET_MASK
     : fieldValue
+  const secretToggleLabel = t(secretVisible ? 'config.providerSecretHide' : 'config.providerSecretShow')
   const input = field.input === 'boolean'
     ? <label className={settings.providerBoolean}><input aria-label={label} type="checkbox" checked={Boolean(props.value)} disabled={disabled} onChange={event => props.onChange(event.target.checked)} /><span>{label}</span></label>
     : field.input === 'select'
@@ -58,7 +59,7 @@ function SettingsField(props: ProviderFieldProps): JSX.Element {
       }} onChange={event => {
         const value = showingSavedMask ? event.target.value.replace(SAVED_SECRET_MASK, '').replace(t('config.providerSecretStoredValue'), '') : event.target.value
         props.onChange(value)
-      }} />{secret && <button type="button" className={settings.providerSecretVisibility} aria-label={t(secretVisible ? 'config.providerSecretHide' : 'config.providerSecretShow')} title={t(secretVisible ? 'config.providerSecretHide' : 'config.providerSecretShow')} aria-pressed={secretVisible} disabled={disabled} onClick={() => setSecretVisible(value => !value)}><SecretVisibilityIcon visible={secretVisible} /></button>}</div></label>
+      }} />{secret && <MnemonTooltip label={secretToggleLabel} side="top"><button type="button" className={settings.providerSecretVisibility} aria-label={secretToggleLabel} aria-pressed={secretVisible} disabled={disabled} onClick={() => setSecretVisible(value => !value)}><SecretVisibilityIcon visible={secretVisible} /></button></MnemonTooltip>}</div></label>
   return <div className={settings.providerFieldControl} data-input={field.input}>
     {input}
   </div>

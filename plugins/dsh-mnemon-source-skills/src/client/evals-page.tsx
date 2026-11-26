@@ -3,7 +3,7 @@ import { IconSettingsOutlineRegular, Tag } from '@deepseek-ai/dsh-client-ui-prim
 import { SearchField, SelectField } from 'dsh-mnemon/client'
 import type { CatalogView, EvalCase } from '../contracts.ts'
 import { modelOptionPick, modelOptionValue, useModelChoice } from './model-choice.tsx'
-import { css, points, relative, supportsSettingsSection, useT } from './presentation.ts'
+import { css, MnemonTooltip, points, relative, supportsSettingsSection, useT } from './presentation.ts'
 import { Busy, Empty, SkillIcon } from './shared.tsx'
 import { SkillTests } from './skill-tests.tsx'
 import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
@@ -79,7 +79,7 @@ export function EvalsPage(props: { context: SkillsPageContext; location: SkillsL
   const modelBar = <div className={css.skPaneBar}>
     {!modelSettingsAvailable && <SelectField<string> label={t('tests.model')} triggerDetail inline size="sm" value={modelOptionValue(choice.preferences.runModel)} disabled={!context.writable || choice.models === null} onChange={value => choice.saveRunModel(modelOptionPick(value))} options={choice.options} />}
     <SelectField<string> label={t('tests.modelCard')} triggerDetail inline size="sm" value={modelOptionValue(runOverride)} disabled={!context.writable || choice.models === null} onChange={saveSkillRun} options={choice.cardOptions} />
-    {modelSettingsAvailable && <button type="button" className={css.skIconButton} onClick={() => context.openSettings!('models')} aria-label={t('common.settings')} title={t('common.settings')}><IconSettingsOutlineRegular size={15} /></button>}
+    {modelSettingsAvailable && <MnemonTooltip label={t('common.settings')} side="bottom"><button type="button" className={css.skIconButton} onClick={() => context.openSettings!('models')} aria-label={t('common.settings')}><IconSettingsOutlineRegular size={15} /></button></MnemonTooltip>}
   </div>
   return <div className={`${css.skSplit} ${css.skSkillsSplit}`}>
     <aside className={css.skList}>
@@ -98,7 +98,7 @@ export function EvalsPage(props: { context: SkillsPageContext; location: SkillsL
                 : row.off > 0 ? t('evals.off', { count: row.off }) : row.description}</small>
             </span>
           </button>
-          {row.lastScore !== undefined && <b className={css.skScore} data-tone={scoreTone(row.lastScore)} title={t('tests.lastScore', { score: points(row.lastScore) })}>{points(row.lastScore)}</b>}
+          {row.lastScore !== undefined && <MnemonTooltip label={t('tests.lastScore', { score: points(row.lastScore) })} side="top"><b className={css.skScore} data-tone={scoreTone(row.lastScore)}>{points(row.lastScore)}</b></MnemonTooltip>}
         </div>)}
       </section>)}
     </aside>

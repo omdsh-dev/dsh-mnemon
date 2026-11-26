@@ -8,7 +8,7 @@ import type { MarketAudit, MarketItem, MarketPreview, MarketRegistry, MarketSear
 import { splitFrontmatter } from '../fence.ts'
 import { localized as text, type MarketLocalePreference } from '../market-localization.ts'
 import { detectSource, type DetectedSource } from '../source-kind.ts'
-import { compactCount, css, errorText, relative, supportsSettingsSection, useLocalePreference, useT, type SkillsTranslate } from './presentation.ts'
+import { compactCount, css, errorText, MnemonTooltip, relative, supportsSettingsSection, useLocalePreference, useT, type SkillsTranslate } from './presentation.ts'
 import { Busy, Clamp, Empty, MoreMenu, SkillIcon, SkillMarkdown } from './shared.tsx'
 import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
 
@@ -118,7 +118,7 @@ export function MarketPage(props: { context: SkillsPageContext; location: Skills
       <SearchField label={t('market.search')} placeholder={t('market.searchPlaceholder')} value={query} onChange={event => setQuery(event.target.value)} />
       {view.categories.length > 0 && <SelectField size="sm" hideLabel label={t('market.category')} value={category} onChange={setCategory} options={[{ value: '', label: t('market.allCategories') }, ...view.categories.map(entry => ({ value: entry.id, label: text(entry.label, localePreference) }))]} />}
       <Button variant="outline" size="sm" onClick={() => { if (context.openSettings !== undefined && supportsSettingsSection('market')) context.openSettings('market'); else setSourcesOpen(true) }}>{t('market.sources', { count: view.registries.filter(registry => registry.enabled).length })}</Button>
-      <button type="button" className={css.skIconButton} disabled={refreshing || !context.writable} data-busy={refreshing ? '' : undefined} onClick={() => void refresh()} aria-label={t('market.refresh')} title={t('market.refresh')}><IconRefreshOutlineRegular size={16} /></button>
+      <MnemonTooltip label={t('market.refresh')} side="bottom" align="end"><button type="button" className={css.skIconButton} disabled={refreshing || !context.writable} data-busy={refreshing ? '' : undefined} onClick={() => void refresh()} aria-label={t('market.refresh')}><IconRefreshOutlineRegular size={16} /></button></MnemonTooltip>
     </header>
     {detected !== undefined && <div className={css.skMarketAdd}>
       <SourceIcon kind={detected.kind} />
@@ -184,7 +184,7 @@ function Audits(props: { audits: readonly MarketAudit[] }): JSX.Element | null {
   return <div className={css.skAudits}>
     <div>
       <span className={css.skAuditsLabel}>{t('market.audits')}</span>
-      {sorted.map(audit => <span key={audit.provider} className={css.skAudit} data-status={audit.status} title={audit.summary}>{t(`market.audit.${audit.status}`)}<small>{audit.provider}</small></span>)}
+      {sorted.map(audit => <MnemonTooltip key={audit.provider} label={audit.summary} side="top" maxWidth={360}><span className={css.skAudit} data-status={audit.status}>{t(`market.audit.${audit.status}`)}<small>{audit.provider}</small></span></MnemonTooltip>)}
     </div>
     {concern?.summary !== undefined && <Clamp text={concern.summary} lines={2} />}
   </div>
@@ -328,8 +328,8 @@ function SourcesDialog(props: { context: SkillsPageContext; view: MarketView; on
         {props.view.registries.map(registry => <li key={registry.id} data-off={registry.enabled ? undefined : ''}>
           <SourceIcon kind={registry.kind} />
           <div className={css.skSourceText}>
-            <strong title={registry.location}><span>{sourceName(registry, localePreference, t)}</span>{registry.builtin && <Tag tone="quiet">{t('sources.builtin')}</Tag>}</strong>
-            {registry.error !== undefined ? <em title={registry.error}>{registry.error}</em> : <small>{sourceMeta(t, registry)}</small>}
+            <MnemonTooltip label={registry.location} side="top" maxWidth={420}><strong><span>{sourceName(registry, localePreference, t)}</span>{registry.builtin && <Tag tone="quiet">{t('sources.builtin')}</Tag>}</strong></MnemonTooltip>
+            {registry.error !== undefined ? <MnemonTooltip label={registry.error} side="top" maxWidth={360} onlyWhenClipped><em>{registry.error}</em></MnemonTooltip> : <small>{sourceMeta(t, registry)}</small>}
           </div>
           <div className={css.skSourceActions}>
             {registry.kind !== 'search' && <MoreMenu label={t('common.more')} disabled={busy !== null || !context.writable}

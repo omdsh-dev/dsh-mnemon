@@ -5,13 +5,15 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, Reveal, SidebarModal } from 'dsh-mnemon/client'
 import type { EvolutionSignal, RunStatus, SuggestionStatus, TrajectoryAnnotation, TrajectoryStep } from '../contracts.ts'
-import { css, useT, type SkillsKey, type SkillsTranslate } from './presentation.ts'
+import { css, MnemonTooltip, useT, type SkillsKey, type SkillsTranslate } from './presentation.ts'
 
 const canRenderMarkdown = typeof MarkdownText === 'function' || (typeof MarkdownText === 'object' && MarkdownText !== null)
 const canRenderPathLabel = typeof PathLabel === 'function' || (typeof PathLabel === 'object' && PathLabel !== null)
 
 export function SkillPath(props: { path: string }): JSX.Element {
-  return canRenderPathLabel ? <PathLabel path={props.path} /> : <>{props.path}</>
+  return canRenderPathLabel
+    ? <PathLabel path={props.path} />
+    : <MnemonTooltip label={props.path} side="top" maxWidth={420} onlyWhenClipped><span>{props.path}</span></MnemonTooltip>
 }
 
 const SIGNAL_TONE: Record<EvolutionSignal, TagTone> = {
@@ -134,9 +136,9 @@ export function MoreMenu(props: { label: string; items: readonly MoreItem[]; dis
   return <Menu open={open} autoFocus onClose={() => setOpen(false)} align="end" portal
     items={props.items.map(item => ({ id: item.id, label: item.label, ...(item.danger === true ? { danger: true } : {}), ...(item.disabled === true ? { disabled: true } : {}) }))}
     onSelect={id => { setOpen(false); props.onSelect(id) }}
-    anchor={<button type="button" className={css.skIconButton} aria-label={props.label} title={props.label} aria-haspopup="menu" aria-expanded={open} disabled={props.disabled} onClick={() => setOpen(value => !value)}>
+    anchor={<MnemonTooltip label={props.label} side="bottom" disabled={open}><button type="button" className={css.skIconButton} aria-label={props.label} aria-haspopup="menu" aria-expanded={open} disabled={props.disabled} onClick={() => setOpen(value => !value)}>
       <IconEllipsisOutlineRegular size={16} />
-    </button>} />
+    </button></MnemonTooltip>} />
 }
 
 const STEP_GLYPH: Record<TrajectoryStep['kind'], string> = { user: '›', assistant: '‹', tool: '⚙', skill: '✦' }
@@ -170,7 +172,7 @@ export function StepTimeline(props: {
             <div className={css.skStepHead}>
               <strong>{step.kind === 'tool' ? step.tool?.name ?? t('timeline.tool') : t(`timeline.${step.kind}` as SkillsKey)}</strong>
               {step.kind === 'skill' && step.skill !== undefined && <code>{step.skill.by === 'user' ? `/${step.skill.name}` : step.skill.name}</code>}
-              {step.kind === 'tool' && step.tool?.input !== undefined && <code title={step.tool.input}>{step.tool.input}</code>}
+              {step.kind === 'tool' && step.tool?.input !== undefined && <MnemonTooltip label={step.tool.input} side="top" maxWidth={360} onlyWhenClipped><code>{step.tool.input}</code></MnemonTooltip>}
               {failed && <Tag tone="danger">{t('timeline.failed')}</Tag>}
             </div>
             {step.kind !== 'skill' && step.text !== '' && <p>{step.text}</p>}

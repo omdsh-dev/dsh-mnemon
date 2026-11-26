@@ -8,6 +8,7 @@ import type { MnemonClientContext } from './dsh-context.ts'
 import css from './MnemonTurnTail.module.css'
 import { IconChevronDownOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { MemoryIcon } from './memory-icon.tsx'
+import { MnemonTooltip } from './tooltip.tsx'
 
 interface MnemonTurnTailProps {
   turn: unknown
@@ -137,10 +138,12 @@ export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, seq, sessionI
                 {used.length > 0 && (
                   <span className={css.items}>
                     {used.slice(0, ITEMS_PER_TOOL).map(item => (
-                      <button key={item.key} type="button" className={css.item} title={item.text} onClick={event => openPage(item.page, item.seed, event)}>
-                        <span className={css.itemText}>{item.text}</span>
-                        {item.place !== undefined && <span className={css.itemPlace}>{item.place}</span>}
-                      </button>
+                      <MnemonTooltip key={item.key} label={item.text} side="bottom" maxWidth={360} onlyWhenClipped clippedSelector="[data-turn-item-text]">
+                        <button type="button" className={css.item} onClick={event => openPage(item.page, item.seed, event)}>
+                          <span className={css.itemText} data-turn-item-text="">{item.text}</span>
+                          {item.place !== undefined && <span className={css.itemPlace}>{item.place}</span>}
+                        </button>
+                      </MnemonTooltip>
                     ))}
                     {used.length > ITEMS_PER_TOOL && <span className={css.itemMore}>{t('turnTail.more', { count: used.length - ITEMS_PER_TOOL })}</span>}
                   </span>

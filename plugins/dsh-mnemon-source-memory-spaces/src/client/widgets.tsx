@@ -1,4 +1,4 @@
-import { css, sidebarCss, useT } from './presentation.ts'
+import { css, MnemonTooltip, sidebarCss, useT } from './presentation.ts'
 import type { JSX } from 'react'
 import { useState } from 'react'
 import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -88,7 +88,7 @@ export function insightKey(insight: Insight): string {
 }
 
 export function MemoryProviderBadge(props: { providerId: MemoryProviderId; label: string }): JSX.Element {
-  return <span className={css.providerBadge} data-provider={props.providerId} title={props.label}>{props.label}</span>
+  return <MnemonTooltip label={props.label} side="top" onlyWhenClipped><span className={css.providerBadge} data-provider={props.providerId}>{props.label}</span></MnemonTooltip>
 }
 
 export function ReadSourcePanel(props: {
@@ -102,21 +102,21 @@ export function ReadSourcePanel(props: {
   const t = useT()
   if (props.sources.length === 0) return null
   if (props.compact === true && props.onSelect === undefined) {
-    return <section className={css.readSourcesCompact} aria-label={props.title} title={props.hint}>
-      <span className={css.readSourcesCompactTitle}>{props.title}</span>
+    return <section className={css.readSourcesCompact} aria-label={props.title}>
+      <MnemonTooltip label={props.hint} side="top" maxWidth={360}><span className={css.readSourcesCompactTitle}>{props.title}</span></MnemonTooltip>
       <div className={css.readSourcesCompactList}>
         {props.sources.map(source => {
           const modeLabel = t(`readSources.mode.${source.mode}` as MnemonKey)
           const statusLabel = t(`readSources.status.${source.status}` as MnemonKey, { count: source.itemCount })
           const edgeSuffix = source.edgeCount === undefined || source.edgeCount === 0 ? '' : ` · ${t('readSources.edges', { count: source.edgeCount })}`
           const tooltip = [source.providerLabel, modeLabel, `${statusLabel}${edgeSuffix}`, source.hint].filter(Boolean).join(' · ')
-          return <article key={source.memoryBodyId} className={css.readSourcePill} data-provider={source.providerId} data-mode={source.mode} data-status={source.status} title={tooltip}>
+          return <MnemonTooltip key={source.memoryBodyId} label={tooltip} side="top" maxWidth={360}><article className={css.readSourcePill} data-provider={source.providerId} data-mode={source.mode} data-status={source.status}>
             <span className={css.readSourceSignal} aria-hidden="true" />
             <strong>{source.memoryBodyName}</strong>
             <MemoryProviderBadge providerId={source.providerId} label={source.providerLabel} />
             <small>{modeLabel}</small>
             <em>{statusLabel}{edgeSuffix}</em>
-          </article>
+          </article></MnemonTooltip>
         })}
       </div>
     </section>
@@ -131,8 +131,8 @@ export function ReadSourcePanel(props: {
   return <section className={css.readSources} aria-label={props.title}>
     <header><div><strong>{props.title}</strong>{props.hint !== undefined && <p>{props.hint}</p>}</div>{props.onSelect !== undefined && <button type="button" aria-pressed={props.selectedBodyId === undefined} data-selected={props.selectedBodyId === undefined ? '' : undefined} onClick={() => props.onSelect?.(undefined)}>{t('readSources.all')}</button>}</header>
     <div>{props.sources.map(source => props.onSelect === undefined
-      ? <article key={source.memoryBodyId} className={css.readSourceCard} data-provider={source.providerId} data-mode={source.mode} data-status={source.status} title={source.hint}>{content(source)}</article>
-      : <button key={source.memoryBodyId} type="button" className={css.readSourceCard} data-provider={source.providerId} data-mode={source.mode} data-status={source.status} aria-pressed={props.selectedBodyId === source.memoryBodyId} data-selected={props.selectedBodyId === source.memoryBodyId || undefined} title={source.hint} onClick={() => props.onSelect?.(props.selectedBodyId === source.memoryBodyId ? undefined : source.memoryBodyId)}>{content(source)}</button>,
+      ? <MnemonTooltip key={source.memoryBodyId} label={source.hint} side="top" maxWidth={360}><article className={css.readSourceCard} data-provider={source.providerId} data-mode={source.mode} data-status={source.status}>{content(source)}</article></MnemonTooltip>
+      : <MnemonTooltip key={source.memoryBodyId} label={source.hint} side="top" maxWidth={360}><button type="button" className={css.readSourceCard} data-provider={source.providerId} data-mode={source.mode} data-status={source.status} aria-pressed={props.selectedBodyId === source.memoryBodyId} data-selected={props.selectedBodyId === source.memoryBodyId || undefined} onClick={() => props.onSelect?.(props.selectedBodyId === source.memoryBodyId ? undefined : source.memoryBodyId)}>{content(source)}</button></MnemonTooltip>,
     )}</div>
   </section>
 }

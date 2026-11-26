@@ -13,6 +13,15 @@ import { liveSettingsScope, settingsScope } from './helpers/settings-scope.ts'
 
 afterEach(cleanup)
 
+globalThis.ResizeObserver ??= class {
+  constructor(private readonly callback: ResizeObserverCallback) {}
+  observe(target: Element): void {
+    this.callback([{ target, borderBoxSize: [{ inlineSize: 0, blockSize: 0 }] } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver)
+  }
+  unobserve(): void {}
+  disconnect(): void {}
+} as unknown as typeof ResizeObserver
+
 const checked = (element: HTMLElement) => element.getAttribute('aria-checked') === 'true'
 const disabled = (element: HTMLElement) => (element as HTMLButtonElement).disabled
 
@@ -211,10 +220,17 @@ describe('memory composition board', () => {
     const { connection } = fixture([threeTier, { ...needy, ...on }, source('runtime'), source('memory-spaces')])
     render(<Composition connection={connection} language="en" system={system({ runtime: true, 'memory-spaces': true })} t={translateEn} />)
     await waitFor(() => expect(within(row('Memory Spaces')).getByText('Running')).toBeTruthy())
-    // Each row names what it relates to at a glance; the page says which way.
-    expect(within(row('Memory Spaces')).getByTitle('“Active capture” depends on it').textContent).toBe('Active capture')
-    expect(within(row('Active capture')).getByTitle('Needs “Memory Spaces”').textContent).toBe('Memory Spaces')
-    expect(within(row('Runtime Memory')).queryByTitle(/depends on it|Needs/u)).toBeNull()
+    const spacesChip = within(row('Memory Spaces')).getByRole('button', { name: 'Active capture' })
+    expect(spacesChip.getAttribute('title')).toBeNull()
+    fireEvent.mouseEnter(spacesChip)
+    expect(screen.getByRole('tooltip').textContent).toBe('“Active capture” depends on it')
+    fireEvent.mouseLeave(spacesChip)
+    const captureChip = within(row('Active capture')).getByRole('button', { name: 'Memory Spaces' })
+    expect(captureChip.getAttribute('title')).toBeNull()
+    fireEvent.mouseEnter(captureChip)
+    expect(screen.getByRole('tooltip').textContent).toBe('Needs “Memory Spaces”')
+    fireEvent.mouseLeave(captureChip)
+    expect(within(row('Runtime Memory')).queryByRole('button', { name: /Active capture|Memory Spaces/u })).toBeNull()
     const spaces = openDetails('Memory Spaces')
     expect(within(spaces).getByText('Shipped')).toBeTruthy()
     expect(within(spaces).getByText('dsh-mnemon-source-memory-spaces')).toBeTruthy()

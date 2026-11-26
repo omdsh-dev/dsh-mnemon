@@ -3,7 +3,7 @@ import { Button, DiffBlock, IconSettingsOutlineRegular, IconSparkleRegular, Segm
 import { appearanceClass, SelectField } from 'dsh-mnemon/client'
 import type { AutoAdoptionEvent, BacktestRun, DraftView, ModelRoute, SkillDraft, SkillRootKind, SkillSuggestion, SuggestionStatus, SuggestionView, Trajectory } from '../contracts.ts'
 import { modelOptionPick, modelOptionValue, useModelChoice } from './model-choice.tsx'
-import { css, points, relative, stamp, supportsSettingsSection, useT } from './presentation.ts'
+import { css, MnemonTooltip, points, relative, stamp, supportsSettingsSection, useT } from './presentation.ts'
 import { ActionTag, Busy, Clamp, Confirm, diffLabels, Empty, Fold, MoreList, MoreMenu, SkillMarkdown, SkillPath, StatusTag, StepTimeline, useLink } from './shared.tsx'
 import { EvidenceView } from './evidence-page.tsx'
 import { RunDetail } from './skill-tests.tsx'
@@ -122,8 +122,8 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
         { value: 'done', label: t('evolution.done') },
         { value: 'evidence', label: t('evolution.evidence') },
       ]} />
-    {canReview && <button type="button" className={css.skIconButton} disabled={reviewing || !context.writable} onClick={() => void reviewNow()}
-      aria-label={t('evolution.reviewNow')} title={t('evolution.reviewNow')} data-pulse={reviewing ? '' : undefined}><IconSparkleRegular size={16} /></button>}
+    {canReview && <MnemonTooltip label={t('evolution.reviewNow')} side="bottom"><button type="button" className={css.skIconButton} disabled={reviewing || !context.writable} onClick={() => void reviewNow()}
+      aria-label={t('evolution.reviewNow')} data-pulse={reviewing ? '' : undefined}><IconSparkleRegular size={16} /></button></MnemonTooltip>}
   </header>
   if (filter === 'evidence') return <EvidenceView context={context} location={location} listHeader={listHeader} />
   const currentId = current?.kind === 'suggestion' ? current.id : undefined
@@ -146,7 +146,7 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
   const modelBar = <div className={css.skPaneBar}>
     {!modelSettingsAvailable && <SelectField<string> label={t('evolution.model')} triggerDetail inline size="sm" value={modelOptionValue(choice.preferences.model)} disabled={!context.writable || choice.models === null} onChange={value => choice.saveDraftModel(modelOptionPick(value))} options={choice.options} />}
     <SelectField<string> label={t('evolution.modelCard')} triggerDetail inline size="sm" value={modelOptionValue(currentOverride)} disabled={!context.writable || !canOverride || choice.models === null} onChange={saveSuggestionModel} options={choice.cardOptions} />
-    {modelSettingsAvailable && !showOffEmpty && <button type="button" className={css.skIconButton} onClick={() => context.openSettings!('models')} aria-label={t('common.settings')} title={t('common.settings')}><IconSettingsOutlineRegular size={15} /></button>}
+    {modelSettingsAvailable && !showOffEmpty && <MnemonTooltip label={t('common.settings')} side="bottom"><button type="button" className={css.skIconButton} onClick={() => context.openSettings!('models')} aria-label={t('common.settings')}><IconSettingsOutlineRegular size={15} /></button></MnemonTooltip>}
   </div>
   return <div className={appearanceClass(css.skSplit, css.skEvolutionSplit)}>
     <aside className={css.skList}>
@@ -198,7 +198,7 @@ function ListItem(props: { item: Item; selected: boolean; onSelect: () => void }
     <div><ActionTag action={suggestion.action} /><strong>{suggestion.skillName}</strong>{suggestion.status !== 'pending' && <StatusTag status={suggestion.status} />}</div>
     <p>{suggestion.summary}</p>
     {suggestion.triage !== undefined && <small>{t(`triage.${suggestion.triage.classification}`)} · {t('triage.facts', suggestion.triage as unknown as Record<string, unknown>)}</small>}
-    <footer><time>{relative(t, suggestion.updatedAt)}</time>{suggestion.sourceSessionTitle !== undefined && <span title={suggestion.sourceSessionTitle}>{suggestion.sourceSessionTitle}</span>}</footer>
+    <footer><time>{relative(t, suggestion.updatedAt)}</time>{suggestion.sourceSessionTitle !== undefined && <MnemonTooltip label={suggestion.sourceSessionTitle} side="top" maxWidth={320} onlyWhenClipped><span>{suggestion.sourceSessionTitle}</span></MnemonTooltip>}</footer>
   </button>
 }
 
@@ -263,7 +263,7 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
         <span className={css.skMeta}>{meta.map(part => <span key={part}>{part}</span>)}</span>
       </div>
       {suggestion.status === 'pending' && <div className={css.skDetailActions}>
-        <Button variant="primary" size="sm" disabled={!context.writable || busy || !canDraft || view.skill?.readOnly === true} title={canDraft ? undefined : t('evolution.noAgent')} onClick={() => void act(() => context.client.generateDraft({ suggestionId: suggestion.id, ...route }))}>{t('evolution.draft')}</Button>
+        <MnemonTooltip label={canDraft ? undefined : t('evolution.noAgent')} side="top" maxWidth={320}><span style={{ display: 'inline-grid', minWidth: 0 }} tabIndex={canDraft ? undefined : 0}><Button variant="primary" size="sm" disabled={!context.writable || busy || !canDraft || view.skill?.readOnly === true} onClick={() => void act(() => context.client.generateDraft({ suggestionId: suggestion.id, ...route }))}>{t('evolution.draft')}</Button></span></MnemonTooltip>
         <Button variant="ghost" size="sm" disabled={!context.writable || busy} onClick={() => void act(async () => { await context.client.dismissSuggestion(suggestion.id); context.notice(t('evolution.dismissed')) })}>{t('evolution.dismiss')}</Button>
         <Button variant="ghost" size="sm" disabled={!context.writable || busy} onClick={() => setDeleting(true)}>{t('common.delete')}</Button>
       </div>}

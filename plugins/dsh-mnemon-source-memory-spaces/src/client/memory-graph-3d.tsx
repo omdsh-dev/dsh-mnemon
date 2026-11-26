@@ -1,4 +1,4 @@
-import { css, useT } from './presentation.ts'
+import { css, MnemonTooltip, useT } from './presentation.ts'
 import type { JSX } from 'react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { type MemoryGraphEdge, type MemoryGraphNode, type MemoryGraphSnapshot } from '../contracts.ts'
@@ -591,10 +591,10 @@ export const MemoryGraph3D = /* @__PURE__ */ memo(function MemoryGraph3D(props: 
   return (
     <>
       <div className={css.graphCanvasControls} role="toolbar" aria-label={t('graph.orbitAria')}>
-        <span title={t('graph.orbitHint')}><i />{t('graph.orbitShort')}</span>
-        {props.onQuietChange !== undefined && <button type="button" aria-pressed={props.quiet === true} data-active={props.quiet || undefined} title={t('graph.quietHint')} onClick={() => props.onQuietChange?.(!props.quiet)}>{t('graph.quietAction')}</button>}
-        <button type="button" aria-label={t('graph.zoomInAction')} title={t('graph.zoomInAction')} onClick={() => adjustZoom(-160)}>+</button>
-        <button type="button" aria-label={t('graph.zoomOutAction')} title={t('graph.zoomOutAction')} onClick={() => adjustZoom(160)}>−</button>
+        <MnemonTooltip label={t('graph.orbitHint')} side="bottom"><span><i />{t('graph.orbitShort')}</span></MnemonTooltip>
+        {props.onQuietChange !== undefined && <MnemonTooltip label={t('graph.quietHint')} side="bottom" maxWidth={320}><button type="button" aria-pressed={props.quiet === true} data-active={props.quiet || undefined} onClick={() => props.onQuietChange?.(!props.quiet)}>{t('graph.quietAction')}</button></MnemonTooltip>}
+        <MnemonTooltip label={t('graph.zoomInAction')} side="bottom"><button type="button" aria-label={t('graph.zoomInAction')} onClick={() => adjustZoom(-160)}>+</button></MnemonTooltip>
+        <MnemonTooltip label={t('graph.zoomOutAction')} side="bottom"><button type="button" aria-label={t('graph.zoomOutAction')} onClick={() => adjustZoom(160)}>−</button></MnemonTooltip>
         <button type="button" onClick={() => setCamera(DEFAULT_CAMERA)}>{t('graph.resetViewAction')}</button>
       </div>
       <canvas

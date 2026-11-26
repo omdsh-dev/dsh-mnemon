@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { cloneElement, createElement, useMemo, type JSX, type ReactElement } from 'react'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import * as mnemonClient from 'dsh-mnemon/client'
-import { memoryPageStyles, memorySidebarStyles, useLocale, useT as useSharedT, type MnemonKey } from 'dsh-mnemon/client'
+import { memoryPageStyles, memorySidebarStyles, useLocale, useT as useSharedT, type MnemonKey, type MnemonTooltipProps } from 'dsh-mnemon/client'
 import copy from '../../presentation/locales.json' with { type: 'json' }
 import page from '../../presentation/page.module.css'
 
@@ -9,6 +10,30 @@ export type SkillsTranslate = (key: SkillsKey, params?: Record<string, unknown>)
 
 export const css: Readonly<Record<string, string>> = { ...memoryPageStyles, ...page }
 export const sidebarCss: Readonly<Record<string, string>> = memorySidebarStyles
+
+export function MnemonTooltip(props: MnemonTooltipProps): JSX.Element {
+  const Impl = 'MnemonTooltip' in mnemonClient
+    ? (mnemonClient as { MnemonTooltip?: (value: MnemonTooltipProps) => JSX.Element }).MnemonTooltip
+    : undefined
+  if (Impl !== undefined) return createElement(Impl, props)
+  const label = props.label?.trim() ?? ''
+  if (props.onlyWhenClipped === true) {
+    return cloneElement(props.children as ReactElement<{ title?: string | undefined }>, {
+      title: props.disabled === true || label === '' ? undefined : label,
+    })
+  }
+  return createElement(Tooltip, {
+    label,
+    side: props.side ?? 'top',
+    ...(props.align === undefined ? {} : { align: props.align }),
+    ...(props.delayMs === undefined ? {} : { delayMs: props.delayMs }),
+    ...(props.focusDelayMs === undefined ? {} : { focusDelayMs: props.focusDelayMs }),
+    ...(props.maxWidth === undefined ? {} : { maxWidth: props.maxWidth }),
+    disabled: props.disabled === true || label === '' || typeof ResizeObserver !== 'function',
+    portal: props.portal !== false,
+    children: props.children,
+  })
+}
 
 export function supportsSettingsSection(section: 'models' | 'market'): boolean {
   if (!('supportsMemoryComponentSettingsSection' in mnemonClient)) return false

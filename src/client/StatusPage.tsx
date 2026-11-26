@@ -8,6 +8,7 @@ import { NATIVE_PROVIDER_ID, ProviderIcon } from './memory-spaces-client.ts'
 import { Button, PathLabel } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './MnemonView.module.css'
 import { useT, humanBytes, PageHeader } from './page-kit.tsx'
+import { MnemonTooltip } from './tooltip.tsx'
 
 export type LayerState = 'on' | 'off' | 'stopped' | 'memory-off'
 
@@ -101,7 +102,7 @@ function NativeProviderRow({ status }: { status: StatusView }): JSX.Element {
     <div className={css.providerHealthCopy}>
       <strong>{t('config.nativeName')}</strong>
       <small>{t(`status.providerState.${state}` as MnemonKey)} · <span>{version}</span></small>
-      {error !== '' && <p title={error}>{error}</p>}
+      {error !== '' && <MnemonTooltip label={error} side="top" maxWidth={360} onlyWhenClipped><p>{error}</p></MnemonTooltip>}
     </div>
     <div className={css.providerHealthMeta}>
       <span className={css.providerHealthSignal} aria-hidden="true" />
@@ -129,7 +130,7 @@ function ProviderHealth({ status, services, onOpenConfiguration }: { status: Sta
         <div className={css.providerHealthCopy}>
           <strong>{service.label}</strong>
           <small>{t(`status.providerState.${service.status}` as MnemonKey)}</small>
-          {service.error !== undefined && <p title={service.error}>{service.error}</p>}
+          {service.error !== undefined && <MnemonTooltip label={service.error} side="top" maxWidth={360} onlyWhenClipped><p>{service.error}</p></MnemonTooltip>}
         </div>
         <div className={css.providerHealthMeta}>
           <span className={css.providerHealthSignal} aria-hidden="true" />
@@ -167,7 +168,7 @@ function StorageDomains(props: {
     <section className={css.storageDomains} aria-label={t('status.storageDomains')}>
       <div className={css.statusSectionHeader}>
         <div><h3>{t('status.storageDomains')}</h3><p>{t('status.storageDomainsText')}</p></div>
-        <span className={css.phaseBadge} title={t('status.storageFootnote')}>{storageScopeLabel(t, props.selectedKind)}</span>
+        <MnemonTooltip label={t('status.storageFootnote')} side="top" align="end"><span className={css.phaseBadge}>{storageScopeLabel(t, props.selectedKind)}</span></MnemonTooltip>
       </div>
       {props.catalog === undefined ? <div className={css.storageUnavailable}>{t('status.storageWaiting')}</div> : props.selected?.root === undefined ? <div className={css.storageUnavailable}><strong>{storageScopeLabel(t, props.selectedKind)}</strong><p>{props.selectedKind === 'custom' ? t('status.storageCustomUnset') : t('status.storageWorkspaceUnavailable')}</p></div> : <>
         <div className={css.storageRoot}>

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 
 import { Button, DiffBlock, IconChevronDownOutlineRegular, Switch, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SearchField, SelectField, SidebarModal } from 'dsh-mnemon/client'
 import { type CatalogView, type SkillDocument, type SkillInvocation, type SkillRootKind, type SkillSummary, type SkillVersion } from '../contracts.ts'
-import { css, errorText, points, stamp, useT } from './presentation.ts'
+import { css, errorText, MnemonTooltip, points, stamp, useT } from './presentation.ts'
 import { Busy, Confirm, diffLabels, Empty, Field, Fold, FoldLink, MoreMenu, SkillIcon, SkillMarkdown, SkillPath, useLink } from './shared.tsx'
 import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
 
@@ -62,7 +62,7 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
       {groups.filter(group => group.skills.length > 0).map(group => {
         const expanded = query.trim() !== '' || !collapsed.has(group.root.kind)
         return <section key={group.root.kind} className={css.skListGroup}>
-          <h5><button type="button" className={css.skGroupToggle} aria-expanded={expanded} disabled={query.trim() !== ''} title={group.root.path}
+          <h5><MnemonTooltip label={group.root.path} side="bottom" maxWidth={420}><button type="button" className={css.skGroupToggle} aria-expanded={expanded} disabled={query.trim() !== ''}
             onClick={() => setCollapsed(current => {
               const next = new Set(current)
               if (next.has(group.root.kind)) next.delete(group.root.kind)
@@ -72,13 +72,13 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
             <IconChevronDownOutlineRegular size={12} className={css.skGroupChevron} aria-hidden="true" />
             <span className={css.skGroupLabel}>{t(`root.${group.root.kind}`)}<small><SkillPath path={group.root.path} /></small></span>
             <span className={css.skGroupCount}>{group.skills.length}</span>
-          </button></h5>
+          </button></MnemonTooltip></h5>
           {expanded && <div className={css.skGroupBody}>{group.skills.map(skill => <SkillRow key={skill.key} context={context} skill={skill} stats={catalog.stats[skill.name]} selected={selected === skill.key} onSelect={() => setSelected(skill.key)} />)}</div>}
         </section>
       })}
       {catalog.problems.length > 0 && <details className={css.skProblems}>
         <summary>{t('skills.problems', { count: catalog.problems.length })}</summary>
-        <ul>{catalog.problems.map(problem => <li key={problem.path}><code title={problem.path}>{problem.path.split(/[\\/]/u).slice(-2).join('/')}</code><span>{problem.reason}</span></li>)}</ul>
+        <ul>{catalog.problems.map(problem => <li key={problem.path}><MnemonTooltip label={problem.path} side="top" maxWidth={420}><code>{problem.path.split(/[\\/]/u).slice(-2).join('/')}</code></MnemonTooltip><span>{problem.reason}</span></li>)}</ul>
       </details>}
     </aside>
     <div ref={paneRef} className={css.skPane}>
@@ -122,7 +122,7 @@ function SkillRow(props: { context: SkillsPageContext; skill: SkillSummary; stat
       <span className={css.skRowText}>
         <strong>
           <span>{skill.name}</span>
-          {skill.shadowedBy === undefined && (stats?.open ?? 0) > 0 && <i className={css.skDot} title={t('skills.waitingCount', { count: stats!.open })} />}
+          {skill.shadowedBy === undefined && (stats?.open ?? 0) > 0 && <MnemonTooltip label={t('skills.waitingCount', { count: stats!.open })} side="top"><i className={css.skDot} role="img" aria-label={t('skills.waitingCount', { count: stats!.open })} /></MnemonTooltip>}
           {(skill.linked || skill.readOnly) && <Tag tone="quiet">{t(skill.readOnly ? 'skills.linked' : 'skills.linkedEditable')}</Tag>}
           {skill.shadowedBy !== undefined ? <Tag tone="quiet">{t('skills.shadowed')}</Tag> : on && invocation !== 'both' && <Tag tone="outline">{t(`invocation.${invocation}Short`)}</Tag>}
         </strong>
@@ -130,7 +130,7 @@ function SkillRow(props: { context: SkillsPageContext; skill: SkillSummary; stat
       </span>
     </button>
     <div className={css.skRowActions}>
-      {usable && <Button variant="outline" size="sm" className={css.skUse} title={t('skills.useHint', { name: skill.name })} onClick={() => context.useSkill(skill.name)}>{t('skills.use')}</Button>}
+      {usable && <MnemonTooltip label={t('skills.useHint', { name: skill.name })} side="top"><Button variant="outline" size="sm" className={css.skUse} onClick={() => context.useSkill(skill.name)}>{t('skills.use')}</Button></MnemonTooltip>}
       <Switch checked={on} label={t('skills.toggle', { name: skill.name })} disabled={busy || !context.writable || skill.readOnly === true} onChange={next => void toggle(next)} />
     </div>
   </div>
@@ -176,7 +176,7 @@ function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stat
       <div>
         <h3>{skill.name}</h3>
         <p>{skill.description}</p>
-        <span className={css.skMeta}><span>{t(`root.${skill.root}`)}</span><code title={skill.path}><SkillPath path={skill.path} /></code></span>
+        <span className={css.skMeta}><span>{t(`root.${skill.root}`)}</span><code><SkillPath path={skill.path} /></code></span>
       </div>
       <div className={css.skDetailActions}>
         {usable && <Button variant="outline" size="sm" onClick={() => context.useSkill(skill.name)}>{t('skills.use')}</Button>}
@@ -201,7 +201,7 @@ function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stat
       <Fold key={`${skill.key}:versions`} title={t('versions.title')} meta={String(skill.versions.length)}>
         {skill.versions.length === 0 ? <p className={css.skMuted}>{t('versions.empty')}</p> : <ul className={css.skVersions}>{skill.versions.map(version => <li key={version.id}>
           <Tag tone={version.reason === 'evolution' ? 'success' : 'outline'}>{t(`versions.reason.${version.reason}`)}</Tag>
-          <time title={version.createdAt}>{stamp(version.createdAt)}</time>
+          <MnemonTooltip label={version.createdAt} side="top"><time>{stamp(version.createdAt)}</time></MnemonTooltip>
           {version.hash === skill.hash && <Tag tone="neutral">{t('versions.current')}</Tag>}
           <span />
           {version.hash !== skill.hash && <>

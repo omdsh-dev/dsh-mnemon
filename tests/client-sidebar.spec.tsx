@@ -564,11 +564,14 @@ describe('Mnemon canonical workspace launcher', () => {
     const locale = { getSnapshot: () => snapshot, subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) } }
     const translate = (key: string) => key === 'tab.label' ? active === 'zh' ? '记忆系统' : 'Memory System' : key
     currentDispose = mountFallbackEntry(context(locale) as never, translate as never, new MnemonWorkspaceController())
-    expect(document.querySelector('[data-dsh-mnemon-entry]')?.textContent).toBe('记忆系统')
+    const launcher = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')
+    expect(launcher?.textContent).toBe('记忆系统')
+    expect(launcher?.title).toBe('记忆系统')
     active = 'en'
     snapshot = { active, locales: [] as const, revision: 1 }
     for (const listener of listeners) listener()
-    await waitFor(() => expect(document.querySelector('[data-dsh-mnemon-entry]')?.textContent).toBe('Memory System'))
+    await waitFor(() => expect(launcher?.textContent).toBe('Memory System'))
+    expect(launcher?.title).toBe('Memory System')
   })
 })
 

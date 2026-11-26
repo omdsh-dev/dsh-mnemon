@@ -31,6 +31,7 @@ import { WorkbenchStatusContext } from './component-status.tsx'
 import { useDocumentVisible } from './document-visibility.ts'
 import { MNEMON_COMPONENT_STATUS_SLOT } from './component-ui.tsx'
 import { Callout, Reveal, useToast } from './feedback.tsx'
+import { MnemonTooltip } from './tooltip.tsx'
 import feedbackCss from './MnemonFeedback.module.css'
 import { Button, StateDot, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SelectField } from './page-controls.tsx'
@@ -572,10 +573,10 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
           {surface === 'sidebar' && <>
             <span className={css.storageMode} aria-label={t('workspace.storageModeAria', { mode: storageModeText })}><span>{t('workspace.storageMode')}</span><strong>{storageModeText}</strong></span>
             {workspacePicker}
-            {canAlignWorkspace && <div className={appearanceClass(css.workspaceMismatch, sidebarCss.workspaceMismatch)} role="status" aria-label={`${t('workspace.mismatchTitle')}. ${workspaceDifference}`} title={workspaceDifference}><span>{t('workspace.mismatchShort')}</span><button type="button" onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button></div>}
+            {canAlignWorkspace && <MnemonTooltip label={workspaceDifference} side="bottom" maxWidth={380}><div className={appearanceClass(css.workspaceMismatch, sidebarCss.workspaceMismatch)} role="status" aria-label={`${t('workspace.mismatchTitle')}. ${workspaceDifference}`}><span>{t('workspace.mismatchShort')}</span><button type="button" onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button></div></MnemonTooltip>}
           </>}
         </div>
-        <div className={appearanceClass(css.headerActions, sidebarCss.headerActions)}>{headerActions}<div className={appearanceClass(css.statusCluster, sidebarCss.statusCluster)}>{!focused && <CompositionStatus tone={statusTone} label={connectionLabel} strategy={composingLabel} layers={headerLayers} onOpen={openConfiguration} />}<button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshPage} aria-label={t('common.refresh')} title={t('common.refresh')}><IconRefreshOutlineRegular size={16} /></button></div>{openSettings !== undefined && <button type="button" className={css.iconButton} onClick={openSettings} aria-label={t('header.configure')} title={t('header.configure')}><IconSettingsOutlineRegular size={16} /></button>}</div>
+        <div className={appearanceClass(css.headerActions, sidebarCss.headerActions)}>{headerActions}<div className={appearanceClass(css.statusCluster, sidebarCss.statusCluster)}>{!focused && <CompositionStatus tone={statusTone} label={connectionLabel} strategy={composingLabel} layers={headerLayers} onOpen={openConfiguration} />}<MnemonTooltip label={t('common.refresh')} side="bottom"><button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshPage} aria-label={t('common.refresh')}><IconRefreshOutlineRegular size={16} /></button></MnemonTooltip></div>{openSettings !== undefined && <MnemonTooltip label={t('header.configure')} side="bottom" align="end"><button type="button" className={css.iconButton} onClick={openSettings} aria-label={t('header.configure')}><IconSettingsOutlineRegular size={16} /></button></MnemonTooltip>}</div>
       </header>
       <Reveal>{sourceCatalogState.contextKey === surfaceScopeKey && sourceCatalogState.error !== null && <div className={css.alert} role="alert">{sourceCatalogState.error}</div>}</Reveal>
       <Reveal>{(statusError !== null || status?.healthy === false && notice === undefined) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}</Reveal>

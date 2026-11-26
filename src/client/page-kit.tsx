@@ -3,6 +3,7 @@ import { createContext, useContext } from 'react'
 import { IconSearchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { translateZh, type LocalePreference, type MnemonTranslate } from './locales.ts'
 import { MnemonDialog, type MnemonDialogProps } from './MnemonDialog.tsx'
+import { MnemonTooltip } from './tooltip.tsx'
 import { appearanceClass } from './view-styles.ts'
 import sidebarCss from './MnemonSidebarView.module.css'
 import css from './MnemonView.module.css'
@@ -63,11 +64,11 @@ export function PageHeader(props: { title: string; description: string; meta?: s
 }
 
 export function PageSpinner({ label }: { label: string }): JSX.Element {
-  return <span className={css.pageSpinner} role="status" aria-label={label} title={label}><i aria-hidden="true" /></span>
+  return <MnemonTooltip label={label} side="bottom"><span className={css.pageSpinner} role="status" aria-label={label}><i aria-hidden="true" /></span></MnemonTooltip>
 }
 
 export function SectionSpinner({ label }: { label: string }): JSX.Element {
-  return <span className={css.sectionSpinner} role="status" aria-label={label} title={label}><i aria-hidden="true" /></span>
+  return <MnemonTooltip label={label} side="bottom"><span className={css.sectionSpinner} role="status" aria-label={label}><i aria-hidden="true" /></span></MnemonTooltip>
 }
 
 export function ProgressiveFooter(props: { visible: number; total: number; pageSize: number; compact?: boolean; onMore: () => void }): JSX.Element | null {

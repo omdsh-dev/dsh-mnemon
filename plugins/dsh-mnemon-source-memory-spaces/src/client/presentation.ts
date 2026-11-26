@@ -1,6 +1,7 @@
-import { createContext, createElement, useContext, useMemo, type JSX, type ReactNode } from 'react'
+import { cloneElement, createContext, createElement, useContext, useMemo, type JSX, type ReactElement, type ReactNode } from 'react'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import * as mnemonClient from 'dsh-mnemon/client'
-import { memoryPageStyles, memorySidebarStyles, useT as useSharedT, useLocale, type MnemonKey } from 'dsh-mnemon/client'
+import { memoryPageStyles, memorySidebarStyles, useT as useSharedT, useLocale, type MnemonKey, type MnemonTooltipProps } from 'dsh-mnemon/client'
 import type labels from 'dsh-mnemon-source-memory-spaces/presentation/locales.json'
 import copy from '../../presentation/locales.json' with { type: 'json' }
 import page from '../../presentation/page.module.css'
@@ -21,6 +22,30 @@ export function SafeReveal(props: { children: ReactNode; className?: string | un
   if (Impl !== undefined) return createElement(Impl, props)
   if (props.children === null || props.children === undefined || props.children === false) return null
   return props.className === undefined ? createElement('div', null, props.children) : createElement('div', { className: props.className }, props.children)
+}
+
+export function MnemonTooltip(props: MnemonTooltipProps): JSX.Element {
+  const Impl = 'MnemonTooltip' in mnemonClient
+    ? (mnemonClient as { MnemonTooltip?: (value: MnemonTooltipProps) => JSX.Element }).MnemonTooltip
+    : undefined
+  if (Impl !== undefined) return createElement(Impl, props)
+  const label = props.label?.trim() ?? ''
+  if (props.onlyWhenClipped === true) {
+    return cloneElement(props.children as ReactElement<{ title?: string | undefined }>, {
+      title: props.disabled === true || label === '' ? undefined : label,
+    })
+  }
+  return createElement(Tooltip, {
+    label,
+    side: props.side ?? 'top',
+    ...(props.align === undefined ? {} : { align: props.align }),
+    ...(props.delayMs === undefined ? {} : { delayMs: props.delayMs }),
+    ...(props.focusDelayMs === undefined ? {} : { focusDelayMs: props.focusDelayMs }),
+    ...(props.maxWidth === undefined ? {} : { maxWidth: props.maxWidth }),
+    disabled: props.disabled === true || label === '' || typeof ResizeObserver !== 'function',
+    portal: props.portal !== false,
+    children: props.children,
+  })
 }
 
 type Translate = (key: SourceKey | MnemonKey, params?: Record<string, unknown>) => string

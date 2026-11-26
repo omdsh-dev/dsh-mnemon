@@ -16,6 +16,15 @@ import { installClientFrameStyles } from './helpers/client-frame-styles.ts'
 import { liveSettingsScope, settingsScope as staticSettingsScope } from './helpers/settings-scope.ts'
 import { dispatchMnemonAnchor } from '../src/client/anchor.ts'
 
+globalThis.ResizeObserver ??= class {
+  constructor(private readonly callback: ResizeObserverCallback) {}
+  observe(target: Element): void {
+    this.callback([{ target, borderBoxSize: [{ inlineSize: 0, blockSize: 0 }] } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver)
+  }
+  unobserve(): void {}
+  disconnect(): void {}
+} as unknown as typeof ResizeObserver
+
 describe('MnemonWorkbench', () => {
   afterEach(cleanup)
   async function selectWorkspaceTab(name: string): Promise<void> {
@@ -1248,7 +1257,11 @@ describe('MnemonWorkbench', () => {
     const navigation = screen.getByRole('tablist', { name: 'Mnemon 页面' })
     fireEvent.click(within(navigation).getByRole('tab', { name: '运行时记忆' }))
     expect(await screen.findByText('feat/branch-ui 分支上决定用 v2 渲染管线')).toBeTruthy()
-    expect(screen.getByText('feat/branch-ui', { selector: '[title]' })).toBeTruthy()
+    const branchBadge = screen.getByText('feat/branch-ui')
+    expect(branchBadge.getAttribute('title')).toBeNull()
+    fireEvent.mouseEnter(branchBadge)
+    expect(screen.getByRole('tooltip').textContent).toBe('分支限定')
+    fireEvent.mouseLeave(branchBadge)
     fireEvent.click(await screen.findByRole('button', { name: '新建' }))
     const runtimeDialog = screen.getByRole('dialog', { name: '添加运行时记忆' })
     expect(within(runtimeDialog).getByRole('textbox', { name: '适用分支' })).toBeTruthy()
@@ -1268,7 +1281,10 @@ describe('MnemonWorkbench', () => {
     expect(screen.getByText('Mnemon 默认')).toBeTruthy()
     const deleteButton = screen.getByRole('button', { name: '删除项目记忆空间' })
     expect(deleteButton.hasAttribute('disabled')).toBe(true)
-    expect(deleteButton.getAttribute('title')).toContain('至少一个原生 Store')
+    expect(deleteButton.getAttribute('title')).toBeNull()
+    fireEvent.mouseEnter(deleteButton.parentElement!)
+    expect(screen.getByRole('tooltip').textContent).toContain('至少一个原生 Store')
+    fireEvent.mouseLeave(deleteButton.parentElement!)
   })
 
   it('keeps the Memory Space directory interactive while the live graph is still pending', async () => {
@@ -2062,8 +2078,11 @@ describe('MnemonWorkbench', () => {
 
     await waitFor(() => expect(screen.getByRole('region', { name: 'Agent 查询结果' })).toBeTruthy())
     expect(screen.getByText('项目选择 SQLite，以满足单文件部署。')).toBeTruthy()
-    // A citation names the recalled memory it points at; its identifier stays on hover.
-    expect(screen.getByTitle('project/memory-12345678').textContent).toBe('1. 项目选择 SQLite，因为需要单文件部署。')
+    const citation = screen.getByText('1. 项目选择 SQLite，因为需要单文件部署。')
+    expect(citation.getAttribute('title')).toBeNull()
+    fireEvent.mouseEnter(citation)
+    expect(screen.getByRole('tooltip').textContent).toBe('project/memory-12345678')
+    fireEvent.mouseLeave(citation)
     expect(screen.getByText('原始召回内容')).toBeTruthy()
     expect(screen.getByText('项目选择 SQLite，因为需要单文件部署。')).toBeTruthy()
     expect(call).toHaveBeenCalledWith(expect.anything(), 'agent-search', expect.objectContaining({ query: 'SQLite' }))
