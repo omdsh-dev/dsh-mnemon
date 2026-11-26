@@ -1,9 +1,6 @@
 import {
   cloneElement,
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  useState,
+  forwardRef,
   type FocusEvent,
   type JSX,
   type MouseEvent,
@@ -38,83 +35,48 @@ export interface MnemonTooltipProps {
 
 type ElementWithRef = ReactElement<TooltipAnchorProps> & { ref?: Ref<HTMLElement> | null }
 
-function assignRef(ref: Ref<HTMLElement> | null | undefined, value: HTMLElement | null): void {
-  if (typeof ref === 'function') ref(value)
-  else if (ref !== undefined && ref !== null) (ref as { current: HTMLElement | null }).current = value
+function isElementClipped(anchor: HTMLElement, selector: string | undefined): boolean {
+  const target = selector === undefined ? anchor : anchor.querySelector<HTMLElement>(selector) ?? anchor
+  return target.scrollWidth > target.clientWidth + 1 || target.scrollHeight > target.clientHeight + 1
 }
 
-function isElementClipped(element: HTMLElement): boolean {
-  return element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1
+interface ClippingAnchorProps extends TooltipAnchorProps {
+  child: ReactElement<TooltipAnchorProps>
+  clippedSelector: string | undefined
 }
 
-function ClippedTooltip(props: MnemonTooltipProps & { label: string; disabled: boolean }): JSX.Element {
-  const anchorRef = useRef<HTMLElement | null>(null)
-  const [clipped, setClipped] = useState(false)
-  const child = props.children as ElementWithRef
-  const childRef = child.ref
-
-  const measure = useCallback((): void => {
-    const anchor = anchorRef.current
-    if (anchor === null) {
-      setClipped(false)
-      return
-    }
-    const target = props.clippedSelector === undefined ? anchor : anchor.querySelector<HTMLElement>(props.clippedSelector) ?? anchor
-    setClipped(isElementClipped(target))
-  }, [props.clippedSelector])
-
-  const mergedRef = useCallback((element: HTMLElement | null) => {
-    anchorRef.current = element
-    assignRef(childRef, element)
-  }, [childRef])
-
-  useLayoutEffect(() => {
-    if (props.disabled) {
-      setClipped(false)
-      return
-    }
-    measure()
-    const anchor = anchorRef.current
-    if (anchor === null || typeof ResizeObserver === 'undefined') return
-    const target = props.clippedSelector === undefined ? anchor : anchor.querySelector<HTMLElement>(props.clippedSelector) ?? anchor
-    const observer = new ResizeObserver(measure)
-    observer.observe(anchor)
-    if (target !== anchor) observer.observe(target)
-    return () => { observer.disconnect() }
-  }, [measure, props.clippedSelector, props.disabled, props.label])
-
-  const anchor = cloneElement(child, {
-    ref: mergedRef,
+const ClippingAnchor = forwardRef<HTMLElement, ClippingAnchorProps>(function ClippingAnchor(
+  { child, clippedSelector, onMouseEnter, onFocus, ...anchor }, ref,
+) {
+  return cloneElement(child, {
+    ...anchor,
+    ref,
     onMouseEnter: event => {
       child.props.onMouseEnter?.(event)
-      if (!props.disabled) measure()
+      if (isElementClipped(event.currentTarget, clippedSelector)) onMouseEnter?.(event)
     },
     onFocus: event => {
       child.props.onFocus?.(event)
-      if (!props.disabled) measure()
+      if (isElementClipped(event.currentTarget, clippedSelector)) onFocus?.(event)
     },
   })
-
-  return (
-    <Tooltip
-      label={props.label}
-      side={props.side ?? 'top'}
-      {...(props.align === undefined ? {} : { align: props.align })}
-      {...(props.delayMs === undefined ? {} : { delayMs: props.delayMs })}
-      {...(props.focusDelayMs === undefined ? {} : { focusDelayMs: props.focusDelayMs })}
-      {...(props.maxWidth === undefined ? {} : { maxWidth: props.maxWidth })}
-      disabled={props.disabled || !clipped}
-      portal={props.portal !== false}
-    >
-      {anchor}
-    </Tooltip>
-  )
-}
+})
 
 export function MnemonTooltip(props: MnemonTooltipProps): JSX.Element {
   const label = props.label?.trim() ?? ''
   const disabled = props.disabled === true || label === '' || typeof ResizeObserver !== 'function'
-  if (props.onlyWhenClipped === true) return <ClippedTooltip {...props} label={label} disabled={disabled} />
+  const child = props.children as ElementWithRef
+  const anchor = props.onlyWhenClipped !== true ? child : (
+    <ClippingAnchor
+      child={child}
+      clippedSelector={props.clippedSelector}
+      ref={child.ref}
+      aria-describedby={child.props['aria-describedby']}
+      onMouseLeave={child.props.onMouseLeave}
+      onClick={child.props.onClick}
+      onBlur={child.props.onBlur}
+    />
+  )
   return (
     <Tooltip
       label={label}
@@ -126,7 +88,7 @@ export function MnemonTooltip(props: MnemonTooltipProps): JSX.Element {
       disabled={disabled}
       portal={props.portal !== false}
     >
-      {props.children}
+      {anchor}
     </Tooltip>
   )
 }

@@ -154,6 +154,30 @@ describe('DSH Tooltip adoption across Mnemon Web UI', () => {
     expect(screen.queryByRole('tooltip')).toBeNull()
   })
 
+  it('checks current overflow on the first hover and focus after the text bounds change', () => {
+    const onFocus = vi.fn()
+    render(
+      <MnemonTooltip label="Full name" onlyWhenClipped clippedSelector="[data-label]">
+        <button type="button" aria-describedby="existing-help" onFocus={onFocus}>
+          <span data-label data-testid="text">Full name</span>
+        </button>
+      </MnemonTooltip>,
+    )
+    const button = screen.getByRole('button', { name: 'Full name' })
+    const text = screen.getByTestId('text')
+    setOverflow(text, { scrollWidth: 240, clientWidth: 80 })
+    fireEvent.mouseEnter(button)
+    expect(screen.getByRole('tooltip').textContent).toBe('Full name')
+    fireEvent.mouseLeave(button)
+
+    setOverflow(text, { scrollWidth: 80, clientWidth: 80 })
+    fireEvent.keyDown(window, { key: 'Tab' })
+    fireEvent.focus(button)
+    expect(onFocus).toHaveBeenCalledOnce()
+    expect(button.getAttribute('aria-describedby')).toBe('existing-help')
+    expect(screen.queryByRole('tooltip')).toBeNull()
+  })
+
   it('uses DSH Tooltip instead of native title on MnemonWorkbench header actions', async () => {
     const connection = createMinimalStatusConnection()
     const scope = settingsScope<Config>({ status: 'ready', value: {}, writable: true, mode: 'host' })

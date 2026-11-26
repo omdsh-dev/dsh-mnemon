@@ -1,4 +1,4 @@
-import { createContext, createElement, useContext, useMemo, type JSX, type ReactNode } from 'react'
+import { cloneElement, createContext, createElement, useContext, useMemo, type JSX, type ReactElement, type ReactNode } from 'react'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import * as mnemonClient from 'dsh-mnemon/client'
 import { memoryPageStyles, memorySidebarStyles, useT as useSharedT, useLocale, type MnemonKey, type MnemonTooltipProps } from 'dsh-mnemon/client'
@@ -30,6 +30,11 @@ export function MnemonTooltip(props: MnemonTooltipProps): JSX.Element {
     : undefined
   if (Impl !== undefined) return createElement(Impl, props)
   const label = props.label?.trim() ?? ''
+  if (props.onlyWhenClipped === true) {
+    return cloneElement(props.children as ReactElement<{ title?: string | undefined }>, {
+      title: props.disabled === true || label === '' ? undefined : label,
+    })
+  }
   return createElement(Tooltip, {
     label,
     side: props.side ?? 'top',
