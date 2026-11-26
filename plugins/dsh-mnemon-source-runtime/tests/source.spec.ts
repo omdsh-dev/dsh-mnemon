@@ -238,6 +238,31 @@ describe('standalone runtime Source', () => {
       expect(runner.inspect().evaluation.sourceInstanceKeys).toHaveLength(0)
     } finally { await runner.dispose() }
   })
+
+  it('describes per-action required fields in mutate inputSchema and rejects missing fields with examples (#746)', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-required-action-'))
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'work', config: { dataDir: directory } })
+      const turn = await runner.beginTurn({ scope: { storage: 'custom' } })
+      const offer = turn.view.actionOffers.find(value => value.sourceInstanceKey === 'source:work')!
+      const schema = offer.inputSchema as { properties: Record<string, { description?: string }> }
+      expect(schema.properties.action?.description).toContain('requires content')
+      expect(schema.properties.action?.description).toContain('requires oldText and content')
+      expect(schema.properties.action?.description).toContain('requires oldText')
+      expect(schema.properties.content?.description).toContain('Required for action=add and action=replace')
+      expect(schema.properties.oldText?.description).toContain('Required for action=replace and action=remove')
+      await expect(turn.executeAction(offer.id, { action: 'add', target: 'memory', importance: 'critical', branches: ['main'] }, () => true))
+        .rejects.toThrow('content is required for action=add (example: {"action":"add","target":"memory","content":"..."})')
+      await expect(turn.executeAction(offer.id, { action: 'remove', target: 'memory' }, () => true))
+        .rejects.toThrow('oldText is required for action=remove (example: {"action":"remove","target":"memory","oldText":"..."})')
+      turn.release()
+    } finally {
+      await runner.dispose()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
 })
 
 it('keeps complete pins before ordinary USER content and rejects a projection smaller than its pin reservation', async () => {

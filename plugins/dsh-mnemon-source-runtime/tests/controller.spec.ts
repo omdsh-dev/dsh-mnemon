@@ -279,6 +279,28 @@ describe('RuntimeMemoryController', () => {
     expect(paths.map(path => readFileSync(path, 'utf8'))).toEqual(before)
   })
 
+  it('includes action context and a JSON example when required mutation fields are missing (#746)', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Keep SQLite local-first.' })
+    const paths = [controller.sourcePath, controller.memoryPath, controller.userPath]
+    const before = paths.map(path => readFileSync(path, 'utf8'))
+
+    await expect(controller.mutate({ action: 'add', target: 'memory', importance: 'critical', branches: ['main'] }))
+      .rejects.toThrow('content is required for action=add (example: {"action":"add","target":"memory","content":"..."})')
+    await expect(controller.mutate({ action: 'add', target: 'user', content: '  ' }))
+      .rejects.toThrow('content is required for action=add (example: {"action":"add","target":"user","content":"..."})')
+    await expect(controller.mutate({ action: 'replace', target: 'memory', oldText: 'Keep SQLite local-first.' }))
+      .rejects.toThrow('content is required for action=replace (example: {"action":"replace","target":"memory","oldText":"...","content":"..."})')
+    await expect(controller.mutate({ action: 'replace', target: 'user', content: 'Updated preference.' }))
+      .rejects.toThrow('oldText is required for action=replace (example: {"action":"replace","target":"user","oldText":"...","content":"..."})')
+    await expect(controller.mutate({ action: 'replace', target: 'memory' }))
+      .rejects.toThrow('oldText and content are required for action=replace (example: {"action":"replace","target":"memory","oldText":"...","content":"..."})')
+    await expect(controller.mutate({ action: 'remove', target: 'memory' }))
+      .rejects.toThrow('oldText is required for action=remove (example: {"action":"remove","target":"memory","oldText":"..."})')
+
+    expect(paths.map(path => readFileSync(path, 'utf8'))).toEqual(before)
+  })
+
   it('reads a malformed stored branch scope or origin as absent instead of breaking the projection', async () => {
     const { directory, controller } = fixture()
     const at = '2026-08-13T08:00:00.000Z'

@@ -19,6 +19,7 @@ import {
 } from './defaults.ts'
 import type { RuntimeMemoryStorage } from './config.ts'
 import type {
+  RuntimeMemoryAction,
   RuntimeMemoryCompactedEntry,
   RuntimeMemoryEntry,
   RuntimeMemoryEntryOrigin,
@@ -150,9 +151,20 @@ function scopeBranch(branch: string | undefined): string | undefined {
   return value === undefined || value === '' ? undefined : value
 }
 
-function normalizeContent(value: string | undefined, field: string): string {
+function missingMutationFieldError(action: RuntimeMemoryAction, target: RuntimeMemoryTarget, missing: 'content' | 'oldText' | 'both'): string {
+  if (action === 'add') {
+    return `content is required for action=add (example: ${JSON.stringify({ action: 'add', target, content: '...' })})`
+  }
+  if (action === 'replace') {
+    const subject = missing === 'both' ? 'oldText and content are' : `${missing} is`
+    return `${subject} required for action=replace (example: ${JSON.stringify({ action: 'replace', target, oldText: '...', content: '...' })})`
+  }
+  return `oldText is required for action=remove (example: ${JSON.stringify({ action: 'remove', target, oldText: '...' })})`
+}
+
+function normalizeContent(value: string | undefined, field: string, missingHint?: string): string {
   const content = value?.trim().replace(/\s+/gu, ' ') ?? ''
-  if (content === '') throw new Error(`${field} is required`)
+  if (content === '') throw new Error(missingHint ?? `${field} is required`)
   if (content.includes('§')) throw new Error(`${field} must not contain the reserved § entry delimiter`)
   const bytes = Buffer.byteLength(content, 'utf8')
   if (bytes > RUNTIME_ENTRY_MAX_BYTES) throw new Error(`${field} is too large (${bytes} bytes; max ${RUNTIME_ENTRY_MAX_BYTES})`)
@@ -250,7 +262,7 @@ function prepareMutation(
 
   if (request.action === 'add') {
     if (selection !== undefined) throw new Error('matchBranches applies to replace and remove only')
-    const content = normalizeContent(request.content, 'content')
+    const content = normalizeContent(request.content, 'content', missingMutationFieldError('add', request.target, 'content'))
     const duplicate = entries.find(entry => entry.target === request.target && entry.content === content)
     if (duplicate !== undefined) {
       return {
@@ -277,7 +289,15 @@ function prepareMutation(
     }
   }
 
-  const oldText = normalizeContent(request.oldText, 'oldText')
+  if (request.action === 'replace') {
+    const missingOldText = (request.oldText?.trim() ?? '') === ''
+    const missingContent = (request.content?.trim() ?? '') === ''
+    if (missingOldText || missingContent) {
+      throw new Error(missingMutationFieldError('replace', request.target, missingOldText && missingContent ? 'both' : missingOldText ? 'oldText' : 'content'))
+    }
+  }
+
+  const oldText = normalizeContent(request.oldText, 'oldText', missingMutationFieldError(request.action, request.target, 'oldText'))
   const substringMatches = entries
     .map((entry, index) => entry.target === request.target && entry.content.includes(oldText) && matchesSelectedBranches(entry, selection) ? index : -1)
     .filter(index => index >= 0)
@@ -294,7 +314,7 @@ function prepareMutation(
     const ranks = { low: 0, normal: 1, critical: 2 }
     const requested = request.importance ?? previous.importance
     const importance = preserveImportance && ranks[requested] < ranks[previous.importance] ? previous.importance : requested
-    const content = normalizeContent(request.content, 'content')
+    const content = normalizeContent(request.content, 'content', missingMutationFieldError('replace', request.target, 'content'))
     const pendingEntry: RuntimeMemoryEntry = {
       ...previous,
       content,

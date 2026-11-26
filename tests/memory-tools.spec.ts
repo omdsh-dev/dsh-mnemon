@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { assertObjectJsonSchema, renderToolsSdk, renderToolsSdkPy } from '@deepseek-ai/dsh-tools'
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { MnemonAnchorPage } from '../src/client/anchor.ts'
 import { TurnActivityProjection } from '../src/host/activity.ts'
@@ -49,6 +50,33 @@ describe('memory tool table', () => {
     expect(tool.description).toContain('explicitly chooses Runtime')
     expect(JSON.stringify(tool.parameters)).not.toContain('low for transient facts')
     expect(JSON.stringify(tool.parameters)).not.toContain('project, environment, decisions, and lessons')
+  })
+
+  it('documents per-action required fields in mnemon_runtime_memory while keeping DSH schema compatibility (#746)', () => {
+    const tool = registered().find(item => item.name === 'mnemon_runtime_memory')!
+    expect(() => assertObjectJsonSchema(tool.parameters)).not.toThrow()
+    const parameters = tool.parameters as {
+      type: string
+      required: string[]
+      properties: Record<string, { description?: string }>
+    }
+    expect(parameters.type).toBe('object')
+    expect(parameters.required).toEqual(['action', 'target'])
+    expect(parameters.properties.action?.description).toContain('requires content')
+    expect(parameters.properties.action?.description).toContain('requires old_text and content')
+    expect(parameters.properties.action?.description).toContain('requires old_text')
+    expect(parameters.properties.content?.description).toContain('Required for action=add and action=replace')
+    expect(parameters.properties.old_text?.description).toContain('Required for action=replace and action=remove')
+    const sdkEntry = { name: tool.name, description: tool.description, parameters: tool.parameters, output: tool.output.schema }
+    const tsSdk = renderToolsSdk([sdkEntry])
+    const pySdk = renderToolsSdkPy([sdkEntry])
+    expect(tsSdk).toContain('mnemon_runtime_memory: {')
+    expect(tsSdk).toContain('content?: string;')
+    expect(tsSdk).toContain('old_text?: string;')
+    expect(tsSdk).not.toContain('mnemon_runtime_memory: unknown;')
+    expect(pySdk).toContain('class MnemonRuntimeMemoryArgs(TypedDict):')
+    expect(pySdk).toContain('content: NotRequired[str]')
+    expect(pySdk).toContain('old_text: NotRequired[str]')
   })
 
   it('has a row for every memory tool the Host registers, in registration order, and for nothing else', () => {
@@ -736,5 +764,52 @@ describe('Mnemon root/child tool split', () => {
     await expect(registered.find(tool => tool.name === 'mnemon_memory_bodies')!.execute({} as never, { agent: parent(), signal })).rejects.toThrow('does not allow automatic maintenance')
     expect(coordinator.recall).not.toHaveBeenCalled()
     expect(coordinator.runtime).not.toHaveBeenCalled()
+  })
+
+  it('rejects missing conditional runtime tool fields with action context and a JSON example (#746)', async () => {
+    const f = await compositionFixture()
+    releases.push(f.dispose)
+    const root = parent()
+    root.session.header!.cwd = f.workspace
+    await f.graph.composableTurns.beginTurn('root:runtime-required', agentScope(root, f.config), 'test')
+    const registered: ToolDefinition[] = []
+    const coordinator = { runtime: vi.fn(async () => ({ success: true })) } as unknown as MnemonSubagentCoordinator
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool); return () => {} } } } as unknown as HostContextShape, f.live, coordinator, f.extensions)
+    const hot = registered.find(tool => tool.name === 'mnemon_runtime_memory')!
+    const signal = new AbortController().signal
+
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ action: 'add', target: 'memory', importance: 'critical', branches: ['master'] },
+        'content is required for action=add (example: {"action":"add","target":"memory","content":"..."})'],
+      [{ action: 'add', target: 'user', content: '   ' },
+        'content is required for action=add (example: {"action":"add","target":"user","content":"..."})'],
+      [{ action: 'replace', target: 'memory', old_text: 'Existing rule' },
+        'content is required for action=replace (example: {"action":"replace","target":"memory","old_text":"...","content":"..."})'],
+      [{ action: 'replace', target: 'user', content: 'Updated rule' },
+        'old_text is required for action=replace (example: {"action":"replace","target":"user","old_text":"...","content":"..."})'],
+      [{ action: 'replace', target: 'memory' },
+        'old_text and content are required for action=replace (example: {"action":"replace","target":"memory","old_text":"...","content":"..."})'],
+      [{ action: 'remove', target: 'memory' },
+        'old_text is required for action=remove (example: {"action":"remove","target":"memory","old_text":"..."})'],
+      [{ action: 'remove', target: 'user', old_text: ' \t ' },
+        'old_text is required for action=remove (example: {"action":"remove","target":"user","old_text":"..."})'],
+    ]
+    for (const [args, expected] of cases) {
+      expect(() => hot.execute(args as never, { agent: root, signal })).toThrow(expected)
+    }
+    expect(coordinator.runtime).not.toHaveBeenCalled()
+
+    await hot.execute({ action: 'remove', target: 'memory', old_text: 'Existing rule' } as never, { agent: root, signal })
+    expect(coordinator.runtime).toHaveBeenCalledWith(root, { action: 'remove', target: 'memory', oldText: 'Existing rule' }, signal)
+    f.graph.composableTurns.endTurn('root:runtime-required')
+
+    const readOnly = await compositionFixture({ writeEnabled: false })
+    releases.push(readOnly.dispose)
+    const readOnlyTools: ToolDefinition[] = []
+    registerTools({ tools: { register: (tool: ToolDefinition) => { readOnlyTools.push(tool); return () => {} } } } as unknown as HostContextShape, readOnly.live, coordinator, readOnly.extensions)
+    expect(() => readOnlyTools.find(tool => tool.name === 'mnemon_runtime_memory')!.execute(
+      { action: 'add', target: 'memory' } as never,
+      { agent: root, signal },
+    )).toThrow('dsh-mnemon is configured read-only')
   })
 })

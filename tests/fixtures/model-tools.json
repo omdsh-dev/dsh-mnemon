@@ -312,7 +312,7 @@
             "replace",
             "remove"
           ],
-          "description": "add a new entry, replace one uniquely matched entry, or remove one uniquely matched entry."
+          "description": "add (requires content), replace (requires old_text and content), or remove (requires old_text) one uniquely matched entry."
         },
         "target": {
           "type": "string",
@@ -324,11 +324,11 @@
         },
         "content": {
           "type": "string",
-          "description": "Compact entry content. Required for add and replace."
+          "description": "Required for action=add and action=replace. Compact non-empty entry text to store."
         },
         "old_text": {
           "type": "string",
-          "description": "Full content of the existing entry, or a unique substring. A unique full-content match takes precedence within the selected target. Required for replace and remove."
+          "description": "Required for action=replace and action=remove. Full content of the existing entry, or a unique substring (full-content match takes precedence within the selected target)."
         },
         "importance": {
           "type": "string",

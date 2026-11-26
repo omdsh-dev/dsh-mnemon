@@ -66,10 +66,10 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
         required: ['action', 'target'],
         additionalProperties: false,
         properties: {
-          action: { type: 'string', enum: ['add', 'replace', 'remove'] },
+          action: { type: 'string', enum: ['add', 'replace', 'remove'], description: 'add (requires content), replace (requires oldText and content), or remove (requires oldText).' },
           target: { type: 'string', enum: ['memory', 'user'] },
-          content: { type: 'string' },
-          oldText: { type: 'string', description: 'Full content of the existing entry, or a unique substring, excluding the generated metadata line. A unique full-content match takes precedence within the selected target. Required for replace and remove.' },
+          content: { type: 'string', description: 'Required for action=add and action=replace. Compact non-empty entry text to store.' },
+          oldText: { type: 'string', description: 'Required for action=replace and action=remove. Full content of the existing entry, or a unique substring, excluding the generated metadata line. A unique full-content match takes precedence within the selected target.' },
           importance: { type: 'string', enum: ['critical', 'normal', 'low'] },
           branches: { type: 'array' },
         },
