@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { assertObjectJsonSchema, renderToolsSdk, renderToolsSdkPy } from '@deepseek-ai/dsh-tools'
+import * as dshTools from '@deepseek-ai/dsh-tools'
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { MnemonAnchorPage } from '../src/client/anchor.ts'
 import { TurnActivityProjection } from '../src/host/activity.ts'
@@ -19,6 +19,7 @@ import { modelMemoryWake, presentMemoryWake, unofferedViewId } from '../src/host
 import { compositionFixture } from './fixtures/composition.ts'
 import { toolContributions } from './fixtures/tool-contributions.ts'
 import { cleanupSubagentFixtures, parent, releases } from './fixtures/subagent-coordinator.ts'
+import { requireDsh } from './helpers/installed-dsh.ts'
 
 describe('memory tool table', () => {
   const fixtures: Awaited<ReturnType<typeof compositionFixture>>[] = []
@@ -52,9 +53,9 @@ describe('memory tool table', () => {
     expect(JSON.stringify(tool.parameters)).not.toContain('project, environment, decisions, and lessons')
   })
 
-  it('documents per-action required fields in mnemon_runtime_memory while keeping DSH schema compatibility (#746)', () => {
+  it('documents per-action required fields in mnemon_runtime_memory while keeping DSH schema compatibility (#746)', async () => {
     const tool = registered().find(item => item.name === 'mnemon_runtime_memory')!
-    expect(() => assertObjectJsonSchema(tool.parameters)).not.toThrow()
+    expect(() => dshTools.assertObjectJsonSchema(tool.parameters)).not.toThrow()
     const parameters = tool.parameters as {
       type: string
       required: string[]
@@ -67,9 +68,12 @@ describe('memory tool table', () => {
     expect(parameters.properties.action?.description).toContain('requires old_text')
     expect(parameters.properties.content?.description).toContain('Required for action=add and action=replace')
     expect(parameters.properties.old_text?.description).toContain('Required for action=replace and action=remove')
-    const sdkEntry = { name: tool.name, description: tool.description, parameters: tool.parameters, output: tool.output.schema }
-    const tsSdk = renderToolsSdk([sdkEntry])
-    const pySdk = renderToolsSdkPy([sdkEntry])
+    const codeMode: Pick<typeof dshTools, 'renderToolsSdk' | 'renderToolsSdkPy'> = typeof dshTools.renderToolsSdk === 'function'
+      ? dshTools
+      : await import(requireDsh.resolve('@deepseek-ai/dsh-tool-executor-ptc'))
+    const sdkEntry = modelVisible(tool)
+    const tsSdk = codeMode.renderToolsSdk([sdkEntry])
+    const pySdk = codeMode.renderToolsSdkPy([sdkEntry])
     expect(tsSdk).toContain('mnemon_runtime_memory: {')
     expect(tsSdk).toContain('content?: string;')
     expect(tsSdk).toContain('old_text?: string;')
