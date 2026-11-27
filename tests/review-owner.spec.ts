@@ -24,7 +24,11 @@ function fixture(options: { resume?: boolean } = {}) {
   }
   if (options.resume !== false) {
     agents.resume = vi.fn(async (input: { resumeSessionId: string }) => {
-      if (!stored.has(input.resumeSessionId)) throw new Error('session is not stored')
+      if (!stored.has(input.resumeSessionId)) {
+        const absent = new Error(`session "${input.resumeSessionId}" not found`)
+        absent.name = 'SessionPersistenceNotFoundError'
+        throw absent
+      }
       resumed.push(input.resumeSessionId)
       return handle()
     })
@@ -40,6 +44,14 @@ describe('reusable idle review owner', () => {
     await acquireReviewOwner(f.host, meta, agentOptions, new AbortController().signal, setup)
     expect(f.created).toEqual([REVIEW_OWNER_ID])
     expect(f.resumed).toEqual([REVIEW_OWNER_ID])
+  })
+
+  it('propagates a resume failure that is not an absent session', async () => {
+    const f = fixture()
+    f.host.agents.resume = vi.fn(async () => { throw new Error('persistence is locked') })
+    await expect(acquireReviewOwner(f.host, meta, agentOptions, new AbortController().signal, setup))
+      .rejects.toThrow('persistence is locked')
+    expect(f.created).toEqual([])
   })
 
   it('unarchives the stored owner before the next review', async () => {

@@ -53,12 +53,19 @@ export async function acquireReviewOwner(
   if (typeof agents.resume === 'function') {
     try {
       return await agents.resume({ resumeSessionId: REVIEW_OWNER_ID, agentOptions, signal, setup })
-    } catch {
-      // Not stored yet on this Host: create the owner under its stable identity.
+    } catch (error) {
+      // Only an absent session means "create it"; any other failure must not be
+      // retried as a create, which would collide on the stored identity.
+      if (!isAbsentSession(error)) throw error
     }
     return await agents.create({ sessionId: REVIEW_OWNER_ID, meta, agentOptions, signal, setup })
   }
   // Without a resume capability the stable identity cannot be reopened, so keep
   // the previous one-session-per-review behaviour rather than collide with it.
   return await agents.create({ sessionId: `mnemon-review-owner-v1-${randomUUID()}`, meta, agentOptions, signal, setup })
+}
+
+/** Whether a resume failure reports an absent stored session rather than a real fault. */
+function isAbsentSession(error: unknown): boolean {
+  return error instanceof Error && error.name === 'SessionPersistenceNotFoundError'
 }
