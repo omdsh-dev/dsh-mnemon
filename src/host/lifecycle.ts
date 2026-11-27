@@ -21,6 +21,7 @@ import type { DocumentMutation } from 'dsh-mnemon-source-documents/contracts'
 import { delegatedTaskLine, IdleReviewError, MnemonSubagentCoordinator, type IsolatedReviewRequest } from './subagent.ts'
 import { attachContinuationTurns } from './continuation-turn.ts'
 import { archiveOrphanedIdleReviews, archiveTaskSession, isIdleReviewOwner } from './task-session-cleanup.ts'
+import { acquireReviewOwner, REVIEW_OWNER_ID } from './review-owner.ts'
 import { scoreReviewActivity } from './review-activity.ts'
 import { confineReadOnlyPolicy, idleReviewBlockReason } from './review-tools.ts'
 import { TurnActivityProjection, type TurnMemoryActivitySnapshot } from './activity.ts'
@@ -1714,8 +1715,8 @@ export class MnemonLifecycle {
     agentOptions: NonNullable<CreateHostAgentOptions['agentOptions']>, cwd: string, prompt: Array<{ type: 'text'; text: string }>,
     mountPreset: (ctx: HostAgentContext) => Promise<void>, setup: (child: HostAgent) => void,
   ): Promise<{ stopReason: string; detail?: string }> {
-    const ownerId = `mnemon-review-owner-v1-${randomUUID()}`
-    const owner = await this.ctx.agents.create({ sessionId: ownerId, meta, agentOptions, signal: request.signal, setup: mountPreset })
+    const ownerId = REVIEW_OWNER_ID
+    const owner = await acquireReviewOwner(this.ctx, meta, agentOptions, request.signal, mountPreset)
     let run: HostSubagentRun | undefined
     try {
       run = await withReservedChild(owner.agent, () => startSubagent(this.ctx.subagents, this.ctx.agents, request.provider, {

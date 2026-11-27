@@ -203,12 +203,21 @@ export interface CreateHostAgentOptions {
   setup?: (agentCtx: HostAgentContext, agent?: HostAgent) => unknown | Promise<unknown>
 }
 
+/** Resume options for a persisted session; mirrors the DSH `agents.resume` contract. */
+export interface ResumeHostAgentOptions {
+  readonly resumeSessionId: string
+  readonly agentOptions?: CreateHostAgentOptions['agentOptions']
+  readonly signal?: AbortSignal
+  readonly setup?: CreateHostAgentOptions['setup']
+}
+
 export interface HostAgentsService {
   get(id: string): HostAgent | undefined
   isOwnedBy?(id: string, parent: HostAgent): boolean
   roots?(): HostAgent[]
   list?(): HostAgent[]
   create(options: CreateHostAgentOptions): Promise<HostAgentHandle>
+  resume?(options: ResumeHostAgentOptions): Promise<HostAgentHandle>
 }
 
 export interface HostWorkspace {
@@ -223,6 +232,7 @@ export interface HostWorkspaceRegistry {
   list(): HostWorkspace[]
   readonly archivedSessionIds?: readonly string[]
   archiveSession?(sessionId: string, options?: { stopActivity?: boolean }): Promise<void>
+  unarchiveSession?(sessionId: string): Promise<void>
 }
 
 export interface HostSubagentResult {
