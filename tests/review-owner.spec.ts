@@ -49,10 +49,13 @@ describe('reusable idle review owner', () => {
     expect(f.unarchiveSession).toHaveBeenCalledWith(REVIEW_OWNER_ID)
   })
 
-  it('degrades to one owner per review when the Host cannot resume', async () => {
+  it('keeps one owner per review on a Host without resume instead of colliding on the stable id', async () => {
     const f = fixture({ resume: false })
     await acquireReviewOwner(f.host, meta, agentOptions, new AbortController().signal, setup)
     await acquireReviewOwner(f.host, meta, agentOptions, new AbortController().signal, setup)
-    expect(f.created).toEqual([REVIEW_OWNER_ID, REVIEW_OWNER_ID])
+    expect(f.created).toHaveLength(2)
+    expect(new Set(f.created).size).toBe(2)
+    for (const id of f.created) expect(id).toMatch(/^mnemon-review-owner-v1-/u)
+    expect(f.created).not.toContain(REVIEW_OWNER_ID)
   })
 })

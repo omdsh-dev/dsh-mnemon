@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { CreateHostAgentOptions, HostAgentContext, HostAgentHandle, HostWorkspaceRegistry, ResumeHostAgentOptions } from './dsh.ts'
 
 /**
@@ -24,8 +25,10 @@ export interface ReviewOwnerHost {
  *
  * The session is unarchived before use so a resumed owner is a normal session
  * again, and it is created on the first run only. When the Host cannot resume a
- * persisted session, the owner is created instead, which degrades to the
- * previous one-session-per-run behaviour but never fails a review.
+ * persisted session the owner is created under the stable identity; a Host with
+ * no resume capability keeps the previous one-session-per-review behaviour,
+ * because creating the stable identity twice would fail with
+ * `SessionAlreadyExistsError`.
  * @param host - Host context exposing the agent registry and workspace registry.
  * @param meta - owner session metadata, including cwd and preset.
  * @param agentOptions - provider and output controls for the owner.
@@ -46,13 +49,16 @@ export async function acquireReviewOwner(
   if (registry?.archivedSessionIds?.includes(REVIEW_OWNER_ID) === true) {
     await registry.unarchiveSession?.(REVIEW_OWNER_ID)
   }
+  if (typeof agents.create !== 'function') throw new Error('Host agent registry cannot create the idle review owner')
   if (typeof agents.resume === 'function') {
     try {
       return await agents.resume({ resumeSessionId: REVIEW_OWNER_ID, agentOptions, signal, setup })
     } catch {
-      // The owner is not stored yet, or this Host cannot resume it: create it.
+      // Not stored yet on this Host: create the owner under its stable identity.
     }
+    return await agents.create({ sessionId: REVIEW_OWNER_ID, meta, agentOptions, signal, setup })
   }
-  if (typeof agents.create !== 'function') throw new Error('Host agent registry cannot create the idle review owner')
-  return await agents.create({ sessionId: REVIEW_OWNER_ID, meta, agentOptions, signal, setup })
+  // Without a resume capability the stable identity cannot be reopened, so keep
+  // the previous one-session-per-review behaviour rather than collide with it.
+  return await agents.create({ sessionId: `mnemon-review-owner-v1-${randomUUID()}`, meta, agentOptions, signal, setup })
 }
